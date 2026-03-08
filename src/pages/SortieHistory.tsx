@@ -982,10 +982,10 @@ export default function SortieHistory() {
   <body>
     <div class="receipt-container">
       <div class="header">
-        <div class="shop-name"><strong>ETS. DIEU MERCI</strong></div>
-        <div class="shop-details"><strong>Av Manono Coin Munama N°39, C. Kenya, Lubumbashi</strong></div>
-        <div class="shop-details">TEL: <strong>+243 977 771 421 / +243 853 549 102</strong></div>
-        <div class="shop-details"><strong>RCCM: 14-A-017885</strong></div>
+        <div class="shop-name"><strong>Boutique C'EST DIEU QUI PARTAGE</strong></div>
+        <div class="shop-details"><strong>Av du 1er Janvier N°13, C. Makiso, Kisangani</strong></div>
+        <div class="shop-details">TEL: <strong>+243 974 199 054 / +243 853 429 399</strong></div>
+        <div class="shop-details"><strong>RCCM/KIS : 22-A-267</strong></div>
       </div>
       
       <div class="section-divider"></div>

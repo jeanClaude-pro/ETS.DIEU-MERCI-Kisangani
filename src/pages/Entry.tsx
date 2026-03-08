@@ -931,10 +931,10 @@ export default function Entry() {
       
       // Enhanced receipt data
       const newReceiptData = {
-        shopName: "ETS. DIEU MERCI",
-        shopAddress: "Av Manono Coin Munama N°39, C. Kenya, Lubumbashi",
-        shopNumber: "+243 977 771 421 / +243 853 549 102",
-        shopRegistration: "RCCM: 14-A-017885",
+        shopName: "Boutique C'EST DIEU QUI PARTAGE",
+        shopAddress: "Av du 1er Janvier N°13, C. Makiso, Kisangani",
+        shopNumber: "+243 974 199 054 / +243 853 429 399",
+        shopRegistration: "RCCM/KIS : 22-A-267",
         amount: parseFloat(form.amount),
         source: form.source,
         category: form.category,

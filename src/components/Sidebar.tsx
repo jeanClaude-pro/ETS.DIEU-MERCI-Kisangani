@@ -427,7 +427,7 @@ export default function Sidebar() {
                   </div>
                   <div>
                     <h1 className="text-lg font-bold text-white">
-                      ETS. DIEU MERCI
+                      DIEU QUI PARTAGE
                     </h1>
                     <p className="text-xs text-gray-400">Kisangani</p>
                   </div>
@@ -747,13 +747,13 @@ export default function Sidebar() {
                         transition={{ duration: 0.2 }}
                         className="font-medium text-sm"
                       >
-                        Notifications
+                        
                       </motion.span>
                     )}
                   </AnimatePresence>
                   {(isCollapsed && !isMobile) && (
                     <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                      Notifications
+                      
                     </div>
                   )}
                 </Link>
@@ -776,13 +776,13 @@ export default function Sidebar() {
                         transition={{ duration: 0.2 }}
                         className="font-medium text-sm"
                       >
-                        Paramètres
+                        
                       </motion.span>
                     )}
                   </AnimatePresence>
                   {(isCollapsed && !isMobile) && (
                     <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                      Paramètres
+                      
                     </div>
                   )}
                 </Link>

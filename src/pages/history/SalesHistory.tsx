@@ -971,10 +971,10 @@ export default function SalesHistory() {
   <body>
     <div class="receipt-container">
       <div class="header">
-        <div class="shop-name"><strong>ETS. DIEU MERCI</strong></div>
-        <div class="shop-details"><strong>Av Manono Coin Munama N°39, C. Kenya, Lubumbashi</strong></div>
-        <div class="shop-details">TEL: <strong>+243 977 771 421 / +243 853 549 102</strong></div>
-        <div class="shop-details"><strong>RCCM: 14-A-017885</strong></div>
+        <div class="shop-name"><strong>Boutique C'EST DIEU QUI PARTAGE</strong></div>
+        <div class="shop-details"><strong>Av du 1er Janvier N°13, C. Makiso, Kisangani</strong></div>
+        <div class="shop-details">TEL: <strong>+243 974 199 054 / +243 853 429 399</strong></div>
+        <div class="shop-details"><strong>RCCM/KIS : 22-A-267</strong></div>
       </div>
       
       <div class="section-divider"></div>
@@ -1066,15 +1066,15 @@ export default function SalesHistory() {
 
     // Header
     doc.setFontSize(20);
-    doc.text("ETS. DIEU MERCI", 105, 10, { align: "center" });
+    doc.text("Boutique C'EST DIEU QUI PARTAGE", 105, 10, { align: "center" });
     doc.setFontSize(10);
-    doc.text("<<Chez Dan Collection>>", 105, 15, { align: "center" });
+    doc.text("", 105, 15, { align: "center" });
     doc.setFontSize(12);
-    doc.text("RCCM: 14-A-017885", 105, 20, { align: "center" });
-    doc.text("Tél: +243 977 771 421 / +243 853 549 102", 105, 25, {
+    doc.text("RCCM/KIS : 22-A-267", 105, 20, { align: "center" });
+    doc.text("Tél: +243 974 199 054 / +243 853 429 399", 105, 25, {
       align: "center",
     });
-    doc.text("Av Manono Coin Munama N°39,C.Kenya, Lubumbashi", 105, 30, {
+    doc.text("Av du 1er Janvier N°13, C. Makiso, Kisangani", 105, 30, {
       align: "center",
     });
 
