@@ -508,7 +508,7 @@ export default function EntryHistory() {
       <div class="header">
         <div class="shop-name"><strong>Boutique C'EST DIEU QUI PARTAGE</strong></div>
         <div class="shop-details"><strong>Av du 1er Janvier N°13, C. Makiso, Kisangani</strong></div>
-        <div class="shop-details">TEL: <strong>+243 974 199 054 / +243 853 429 399</strong></div>
+        <div class="shop-details">TEL: <strong>0839336794</strong></div>
         <div class="shop-details"><strong>RCCM/KIS : 22-A-267</strong></div>
       </div>
       
@@ -591,7 +591,7 @@ export default function EntryHistory() {
     doc.text("", 105, 15, { align: "center" });
     doc.setFontSize(12);
     doc.text("RCCM/KIS : 22-A-267", 105, 20, { align: "center" });
-    doc.text("Tél: +243 974 199 054 / +243 i853 429 399", 105, 25, { align: "center" });
+    doc.text("Tél: +243 839 336 794", 105, 25, { align: "center" });
     doc.text("Av du 1er Janvier N°13, C. Makiso, Kisangani", 105, 30, { align: "center" });
 
     doc.setFontSize(16);

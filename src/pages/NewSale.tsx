@@ -499,7 +499,7 @@ export default function NewSale() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  // Print function for receipt only
+  // Print function for receipt only - UPDATED for 80mm thermal paper
   const printReceiptOnly = () => {
     const printWindow = window.open("", "_blank", "width=320,height=600");
     if (printWindow) {
@@ -518,86 +518,127 @@ export default function NewSale() {
         font-family: 'Courier New', Courier, monospace; 
         margin: 0; 
         padding: 0; 
-        font-size: 13px;
+        font-size: 12px;
         font-weight: bold;
-        line-height: 1.1;
-        width: 72mm;
+        line-height: 1.2;
+        width: 80mm;
         background-color: white;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
-        display: flex;
-        justify-content: center;
       }
       .receipt-container { 
-        width: 70mm;
+        width: 78mm;
         margin: 0 auto;
-        padding: 0.5mm;
+        padding: 1mm 2mm;
         border: none;
         text-align: center;
       }
       .header { 
         text-align: center; 
-        margin-bottom: 1mm; 
+        margin-bottom: 2mm; 
         padding-bottom: 1mm;
         border-bottom: 2px double #000;
       }
       .shop-name {
-        font-size: 15px;
+        font-size: 14px;
         font-weight: bold;
         margin-bottom: 0.5mm;
         text-transform: uppercase;
       }
       .shop-details {
-        font-size: 11px;
+        font-size: 10px;
         margin-bottom: 0.3mm;
-        line-height: 1;
+        line-height: 1.2;
         font-weight: bold;
       }
       .receipt-info {
-        margin: 1mm 0;
-        padding: 1mm;
+        margin: 2mm 0;
+        padding: 1mm 2mm;
         background-color: #f8f8f8;
         border-left: 3px solid #000;
+        text-align: left;
       }
       .receipt-title {
-        font-size: 13px;
+        font-size: 11px;
         font-weight: bold;
         margin: 1mm 0;
         text-transform: uppercase;
         background-color: #000;
         color: white;
-        padding: 1mm;
+        padding: 1mm 2mm;
         border-radius: 2px;
+        text-align: center;
       }
       .items-section {
-        margin: 1mm 0;
-        padding: 1mm;
+        margin: 0;
+        padding: 0;
         background-color: #fafafa;
-        border: 1px solid #eee;
+        border: none;
+        border-top: none;
+      }
+      .items-col-header {
+        display: flex;
+        justify-content: space-between;
+        background-color: #e0e0e0;
+        padding: 1mm 2mm;
+        font-weight: bold;
+        text-transform: uppercase;
+        font-size: 10px;
+        margin: 0;
+        border-bottom: 1px solid #999;
+      }
+      .col-article {
+        flex: 2;
+        text-align: left;
+      }
+      .col-qte {
+        width: 10mm;
+        text-align: center;
+      }
+      .col-pu {
+        width: 18mm;
+        text-align: right;
+      }
+      .col-pt {
+        width: 18mm;
+        text-align: right;
       }
       .item-row { 
         display: flex;
         justify-content: space-between;
         margin-bottom: 0.5mm;
-        padding: 0 1mm;
+        padding: 0.5mm 2mm;
         border-bottom: 1px dotted #ddd;
+        font-size: 10px;
       }
       .item-name {
+        flex: 2;
         text-align: left;
         font-weight: bold;
-        font-size: 12px;
-        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-right: 1mm;
       }
-      .item-details {
+      .item-quantity {
+        width: 10mm;
+        text-align: center;
+        font-weight: bold;
+      }
+      .item-unit-price {
+        width: 18mm;
         text-align: right;
         font-weight: bold;
-        font-size: 12px;
-        flex: 1;
+      }
+      .item-line-total {
+        width: 18mm;
+        text-align: right;
+        font-weight: bold;
       }
       .total-section { 
         font-weight: bold; 
-        margin-top: 1mm;
-        padding: 1mm;
+        margin-top: 2mm;
+        padding: 1mm 2mm;
         background-color: #f0f0f0;
         border: 1px solid #ddd;
         border-radius: 3px;
@@ -605,47 +646,48 @@ export default function NewSale() {
       .total-row {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 0.3mm;
-        font-size: 13px;
+        margin-bottom: 0.5mm;
+        font-size: 11px;
         padding: 0 1mm;
       }
       .payment-method {
         text-transform: uppercase;
         font-weight: bold;
-        font-size: 13px;
+        font-size: 11px;
         color: #000;
       }
       .footer { 
         text-align: center; 
-        margin-top: 1mm; 
-        font-size: 11px;
+        margin-top: 2mm; 
+        font-size: 10px;
         font-weight: bold;
-        padding: 1mm;
+        padding: 1mm 2mm;
         background-color: #f8f8f8;
         border-top: 1px dashed #000;
       }
       .sales-person {
-        margin-top: 1mm;
+        margin-top: 2mm;
         text-align: center;
         font-weight: bold;
-        font-size: 12px;
-        padding: 1mm;
+        font-size: 10px;
+        padding: 1mm 2mm;
         background-color: #e8e8e8;
         border: 1px solid #ccc;
         border-radius: 2px;
       }
       .customer-info {
-        margin: 1mm 0;
-        padding: 1mm;
+        margin: 2mm 0;
+        padding: 1mm 2mm;
         font-weight: bold;
-        text-align: center;
+        text-align: left;
         background-color: #f5f5f5;
         border: 1px solid #ddd;
         border-radius: 3px;
+        font-size: 10px;
       }
       .customer-field {
         margin-bottom: 0.3mm;
-        font-size: 12px;
+        font-size: 10px;
       }
       .separator {
         border-top: 1px dashed #000;
@@ -653,19 +695,19 @@ export default function NewSale() {
       }
       .cut-line {
         text-align: center;
-        margin: 1mm 0;
+        margin: 2mm 0 0 0;
         font-weight: bold;
-        font-size: 11px;
+        font-size: 10px;
         color: #000;
         letter-spacing: 1px;
       }
       .thank-you {
         font-weight: bold;
         margin: 0.5mm 0;
-        font-size: 12px;
+        font-size: 10px;
       }
       .warning {
-        font-size: 10px;
+        font-size: 9px;
         color: #000;
         margin: 0.3mm 0;
         font-weight: bold;
@@ -678,30 +720,25 @@ export default function NewSale() {
       @media print {
         @page {
           margin: 0 !important;
-          size: 72mm auto !important;
+          size: 80mm auto !important;
         }
         body { 
           margin: 0 !important; 
           padding: 0 !important; 
-          width: 72mm !important;
-          font-size: 13px !important;
+          width: 80mm !important;
+          font-size: 12px !important;
           background: white !important;
           font-weight: bold !important;
           height: auto !important;
-          overflow: hidden !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
-          display: flex !important;
-          justify-content: center !important;
         }
         .receipt-container { 
           border: none !important; 
           box-shadow: none !important; 
           margin: 0 auto !important;
-          padding: 0.5mm !important;
-          width: 70mm !important;
-          page-break-after: avoid !important;
-          page-break-inside: avoid !important;
+          padding: 1mm 2mm !important;
+          width: 78mm !important;
         }
         .cut-line {
           page-break-after: always !important;
@@ -743,15 +780,22 @@ export default function NewSale() {
       
       <div class="receipt-title">ARTICLES ACHETES</div>
       
+      <div class="items-col-header">
+        <span class="col-article">Article</span>
+        <span class="col-qte">Qte</span>
+        <span class="col-pu">PU($)</span>
+        <span class="col-pt">PT($)</span>
+      </div>
+      
       <div class="items-section">
       ${receiptData.items
         .map(
           (item: CartItem) => `
         <div class="item-row">
           <div class="item-name"><strong>${item.name}</strong></div>
-          <div class="item-details">
-            <strong>${item.quantity}PcsX$${item.unitPrice.toFixed(2)}</strong>
-          </div>
+          <div class="item-quantity"><strong>${item.quantity}</strong></div>
+          <div class="item-unit-price"><strong>${item.unitPrice.toFixed(2)}</strong></div>
+          <div class="item-line-total"><strong>${item.total.toFixed(2)}</strong></div>
         </div>
       `
         )
@@ -759,10 +803,7 @@ export default function NewSale() {
       </div>
       
       <div class="total-section">
-        <div class="total-row">
-          <div><strong>SOUS-TOTAL:</strong></div>
-          <div><strong>$${receiptData.total.toFixed(2)}</strong></div>
-        </div>
+       
         <div class="total-row">
           <div><strong>TOTAL:</strong></div>
           <div><strong>$${receiptData.total.toFixed(2)}</strong></div>
@@ -808,7 +849,7 @@ export default function NewSale() {
     }
   };
 
-  // Print function for stub only
+  // Print function for stub only - UPDATED for 80mm thermal paper
   const printStubOnly = () => {
     const printWindow = window.open("", "_blank", "width=320,height=600");
     if (printWindow) {
@@ -827,26 +868,24 @@ export default function NewSale() {
         font-family: 'Courier New', Courier, monospace; 
         margin: 0; 
         padding: 0; 
-        font-size: 13px;
+        font-size: 12px;
         font-weight: bold;
-        line-height: 1.1;
-        width: 72mm;
+        line-height: 1.2;
+        width: 80mm;
         background-color: white;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
-        display: flex;
-        justify-content: center;
       }
       .stub-container { 
-        width: 70mm;
+        width: 78mm;
         margin: 0 auto;
-        padding: 0.5mm;
+        padding: 1mm 2mm;
         border: none;
         text-align: center;
       }
       .header { 
         text-align: center; 
-        margin-bottom: 1mm; 
+        margin-bottom: 2mm; 
         padding-bottom: 1mm;
         border-bottom: 2px double #000;
       }
@@ -857,31 +896,33 @@ export default function NewSale() {
         text-transform: uppercase;
       }
       .shop-details {
-        font-size: 11px;
+        font-size: 10px;
         margin-bottom: 0.3mm;
-        line-height: 1;
+        line-height: 1.2;
         font-weight: bold;
       }
       .receipt-info {
-        margin: 1mm 0;
-        padding: 1mm;
+        margin: 2mm 0;
+        padding: 1mm 2mm;
         background-color: #f8f8f8;
         border-left: 3px solid #000;
+        text-align: left;
       }
       .receipt-title {
-        font-size: 13px;
+        font-size: 11px;
         font-weight: bold;
         margin: 1mm 0;
         text-transform: uppercase;
         background-color: #000;
         color: white;
-        padding: 1mm;
+        padding: 1mm 2mm;
         border-radius: 2px;
+        text-align: center;
       }
       .stub-number {
-        font-size: 13px;
+        font-size: 11px;
         font-weight: bold;
-        margin: 1mm 0;
+        margin: 2mm 0;
         text-transform: uppercase;
         background-color: #333;
         color: white;
@@ -889,34 +930,75 @@ export default function NewSale() {
         border-radius: 3px;
       }
       .items-section {
-        margin: 1mm 0;
-        padding: 1mm;
+        margin: 0;
+        padding: 0;
         background-color: #fafafa;
-        border: 1px solid #eee;
+        border: none;
+        border-top: none;
+      }
+      .items-col-header {
+        display: flex;
+        justify-content: space-between;
+        background-color: #e0e0e0;
+        padding: 1mm 2mm;
+        font-weight: bold;
+        text-transform: uppercase;
+        font-size: 10px;
+        margin: 0;
+        border-bottom: 1px solid #999;
+      }
+      .col-article {
+        flex: 2;
+        text-align: left;
+      }
+      .col-qte {
+        width: 10mm;
+        text-align: center;
+      }
+      .col-pu {
+        width: 18mm;
+        text-align: right;
+      }
+      .col-pt {
+        width: 18mm;
+        text-align: right;
       }
       .item-row { 
         display: flex;
         justify-content: space-between;
         margin-bottom: 0.5mm;
-        padding: 0 1mm;
+        padding: 0.5mm 2mm;
         border-bottom: 1px dotted #ddd;
+        font-size: 10px;
       }
       .item-name {
+        flex: 2;
         text-align: left;
         font-weight: bold;
-        font-size: 12px;
-        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-right: 1mm;
       }
-      .item-details {
+      .item-quantity {
+        width: 10mm;
+        text-align: center;
+        font-weight: bold;
+      }
+      .item-unit-price {
+        width: 18mm;
         text-align: right;
         font-weight: bold;
-        font-size: 12px;
-        flex: 1;
+      }
+      .item-line-total {
+        width: 18mm;
+        text-align: right;
+        font-weight: bold;
       }
       .total-section { 
         font-weight: bold; 
-        margin-top: 1mm;
-        padding: 1mm;
+        margin-top: 2mm;
+        padding: 1mm 2mm;
         background-color: #f0f0f0;
         border: 1px solid #ddd;
         border-radius: 3px;
@@ -924,47 +1006,48 @@ export default function NewSale() {
       .total-row {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 0.3mm;
-        font-size: 13px;
+        margin-bottom: 0.5mm;
+        font-size: 11px;
         padding: 0 1mm;
       }
       .payment-method {
         text-transform: uppercase;
         font-weight: bold;
-        font-size: 13px;
+        font-size: 11px;
       }
       .stub-footer { 
         text-align: center; 
-        margin-top: 1mm; 
-        font-size: 11px;
+        margin-top: 2mm; 
+        font-size: 10px;
         font-weight: bold;
-        padding: 1mm;
+        padding: 1mm 2mm;
         background-color: #e8e8e8;
         border: 1px solid #ccc;
         border-radius: 3px;
       }
       .sales-person {
-        margin-top: 1mm;
+        margin-top: 2mm;
         text-align: center;
         font-weight: bold;
-        font-size: 12px;
-        padding: 1mm;
+        font-size: 10px;
+        padding: 1mm 2mm;
         background-color: #f5f5f5;
         border: 1px solid #ddd;
         border-radius: 2px;
       }
       .customer-info {
-        margin: 1mm 0;
-        padding: 1mm;
+        margin: 2mm 0;
+        padding: 1mm 2mm;
         font-weight: bold;
-        text-align: center;
+        text-align: left;
         background-color: #f5f5f5;
         border: 1px solid #ddd;
         border-radius: 3px;
+        font-size: 10px;
       }
       .customer-field {
         margin-bottom: 0.3mm;
-        font-size: 12px;
+        font-size: 10px;
       }
       .separator {
         border-top: 1px dashed #000;
@@ -972,19 +1055,19 @@ export default function NewSale() {
       }
       .cut-line {
         text-align: center;
-        margin: 1mm 0;
+        margin: 2mm 0 0 0;
         font-weight: bold;
-        font-size: 11px;
+        font-size: 10px;
         color: #000;
         letter-spacing: 1px;
       }
       .thank-you {
         font-weight: bold;
         margin: 0.5mm 0;
-        font-size: 12px;
+        font-size: 10px;
       }
       .warning {
-        font-size: 10px;
+        font-size: 9px;
         color: #000;
         margin: 0.3mm 0;
         font-weight: bold;
@@ -997,30 +1080,25 @@ export default function NewSale() {
       @media print {
         @page {
           margin: 0 !important;
-          size: 72mm auto !important;
+          size: 80mm auto !important;
         }
         body { 
           margin: 0 !important; 
           padding: 0 !important; 
-          width: 72mm !important;
-          font-size: 13px !important;
+          width: 80mm !important;
+          font-size: 12px !important;
           background: white !important;
           font-weight: bold !important;
           height: auto !important;
-          overflow: hidden !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
-          display: flex !important;
-          justify-content: center !important;
         }
         .stub-container { 
           border: none !important; 
           box-shadow: none !important; 
           margin: 0 auto !important;
-          padding: 0.5mm !important;
-          width: 70mm !important;
-          page-break-after: avoid !important;
-          page-break-inside: avoid !important;
+          padding: 1mm 2mm !important;
+          width: 78mm !important;
         }
         .cut-line {
           page-break-after: always !important;
@@ -1060,15 +1138,22 @@ export default function NewSale() {
       
       <div class="receipt-title">ARTICLES VENDUS</div>
       
+      <div class="items-col-header">
+        <span class="col-article">Article</span>
+        <span class="col-qte">Qte</span>
+        <span class="col-pu">PU($)</span>
+        <span class="col-pt">PT($)</span>
+      </div>
+      
       <div class="items-section">
       ${receiptData.items
         .map(
           (item: CartItem) => `
         <div class="item-row">
           <div class="item-name"><strong>${item.name}</strong></div>
-          <div class="item-details">
-            <strong>${item.quantity}PcsX$${item.unitPrice.toFixed(2)}</strong>
-          </div>
+          <div class="item-quantity"><strong>${item.quantity}</strong></div>
+          <div class="item-unit-price"><strong>${item.unitPrice.toFixed(2)}</strong></div>
+          <div class="item-line-total"><strong>${item.total.toFixed(2)}</strong></div>
         </div>
       `
         )
@@ -1224,7 +1309,7 @@ export default function NewSale() {
       const newReceiptData = {
         shopName: "Boutique C'EST DIEU QUI PARTAGE",
         shopAddress: "Av du 1er Janvier N°13, C. Makiso, Kisangani",
-        shopNumber: "+243 974 199 054 / +243 853 429 399",
+        shopNumber: "+243 839 336 794",
         shopRegistration: "RCCM/KIS : 22-A-267",
         customerName: form.customerName,
         customerPhone: form.customerPhone,

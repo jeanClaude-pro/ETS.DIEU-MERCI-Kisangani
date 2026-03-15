@@ -933,7 +933,7 @@ export default function Entry() {
       const newReceiptData = {
         shopName: "Boutique C'EST DIEU QUI PARTAGE",
         shopAddress: "Av du 1er Janvier N°13, C. Makiso, Kisangani",
-        shopNumber: "+243 974 199 054 / +243 853 429 399",
+        shopNumber: "+243 839 336 794",
         shopRegistration: "RCCM/KIS : 22-A-267",
         amount: parseFloat(form.amount),
         source: form.source,

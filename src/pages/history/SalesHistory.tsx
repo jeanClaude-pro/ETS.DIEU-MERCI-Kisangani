@@ -973,7 +973,7 @@ export default function SalesHistory() {
       <div class="header">
         <div class="shop-name"><strong>Boutique C'EST DIEU QUI PARTAGE</strong></div>
         <div class="shop-details"><strong>Av du 1er Janvier N°13, C. Makiso, Kisangani</strong></div>
-        <div class="shop-details">TEL: <strong>+243 974 199 054 / +243 853 429 399</strong></div>
+        <div class="shop-details">TEL: <strong>+243 839 336 794</strong></div>
         <div class="shop-details"><strong>RCCM/KIS : 22-A-267</strong></div>
       </div>
       
