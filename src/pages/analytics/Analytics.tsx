@@ -18,7 +18,9 @@ import {
   Shield,
   FileText,
   RefreshCw,
+  Download,
 } from "lucide-react";
+import jsPDF from "jspdf";
 
 // Define interfaces for the data structures
 interface SaleItem {
@@ -940,6 +942,233 @@ export default function Analytics() {
     }
   };
 
+  const generatePDF = () => {
+    if (!analytics) return;
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 18;
+    const contentWidth = pageWidth - margin * 2;
+    let y = 0;
+
+    const COMPANY_NAME = "Boutique C'EST DIEU QUI PARTAGE";
+    const COMPANY_ADDRESS = "Av du 1er Janvier N°13, C. Makiso, Kisangani";
+    const COMPANY_PHONE = "+243 839 336 794";
+    const COMPANY_RCCM = "RCCM/KIS : 22-A-267";
+
+    const checkPage = (needed: number) => {
+      if (y + needed > pageHeight - 20) {
+        doc.addPage();
+        y = margin;
+      }
+    };
+
+    // ── HEADER BAR ───────────────────────────────────────────────────────────
+    doc.setFillColor(30, 64, 175);
+    doc.rect(0, 0, pageWidth, 48, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.text(COMPANY_NAME, pageWidth / 2, 14, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.text(COMPANY_ADDRESS, pageWidth / 2, 23, { align: 'center' });
+    doc.text(`Tél : ${COMPANY_PHONE}     |     ${COMPANY_RCCM}`, pageWidth / 2, 31, { align: 'center' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('RAPPORT ANALYTIQUE', pageWidth / 2, 41, { align: 'center' });
+
+    y = 57;
+
+    // ── REPORT META ──────────────────────────────────────────────────────────
+    const generatedAt = new Date().toLocaleString('fr-FR', {
+      timeZone: 'Africa/Lubumbashi',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(50, 50, 50);
+    doc.text(`Période : ${getTimeframeLabel()}`, margin, y);
+    doc.text(`Généré le : ${generatedAt} (GMT+2)`, pageWidth - margin, y, { align: 'right' });
+
+    y += 5;
+    doc.setDrawColor(210, 210, 210);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 9;
+
+    // ── SECTION TITLE HELPER ─────────────────────────────────────────────────
+    const drawSection = (title: string) => {
+      checkPage(22);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(30, 64, 175);
+      doc.text(title, margin, y);
+      y += 4;
+      doc.setDrawColor(30, 64, 175);
+      doc.setLineWidth(0.6);
+      doc.line(margin, y, margin + 72, y);
+      doc.setLineWidth(0.2);
+      y += 7;
+    };
+
+    // ── KEY METRICS ──────────────────────────────────────────────────────────
+    drawSection('INDICATEURS CLÉS');
+
+    const metrics = [
+      { label: 'Ventes Totales', value: analytics.totalSales.toString(), highlight: false },
+      { label: 'Revenu Total (USD)', value: formatCurrency(analytics.totalRevenue), highlight: false },
+      { label: "Entrées d'Argent (USD)", value: formatCurrency(analytics.totalEntries), highlight: false },
+      { label: 'Dépenses Validées (USD)', value: formatCurrency(analytics.totalValidatedExpenses), highlight: false },
+      { label: 'Revenu Net (USD)', value: formatCurrency(analytics.netRevenue), highlight: true },
+      { label: 'Clients Servis', value: analytics.totalCustomers.toString(), highlight: false },
+      { label: 'Produits Distincts', value: analytics.totalProducts.toString(), highlight: false },
+    ];
+
+    metrics.forEach((m, i) => {
+      checkPage(9);
+      if (i % 2 === 0) {
+        doc.setFillColor(245, 247, 250);
+        doc.rect(margin, y - 5, contentWidth, 8, 'F');
+      }
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(70, 70, 70);
+      doc.text(m.label, margin + 3, y);
+      doc.setFont('helvetica', 'bold');
+      if (m.highlight) {
+        doc.setTextColor(20, 110, 30);
+      } else {
+        doc.setTextColor(20, 20, 20);
+      }
+      doc.text(m.value, pageWidth - margin - 3, y, { align: 'right' });
+      y += 8;
+    });
+
+    y += 6;
+
+    // ── SALES TREND ──────────────────────────────────────────────────────────
+    const trendData = getChartDataForTimeframe();
+    drawSection('TENDANCES DES VENTES');
+
+    if (trendData.length > 0) {
+      doc.setFillColor(30, 64, 175);
+      doc.rect(margin, y - 5, contentWidth, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.text('Période', margin + 3, y);
+      doc.text('Ventes', margin + contentWidth * 0.62, y, { align: 'center' });
+      doc.text('Revenu', pageWidth - margin - 3, y, { align: 'right' });
+      y += 8;
+
+      trendData.forEach((item: any, i: number) => {
+        checkPage(8);
+        let label = '';
+        if (timeframe === 'day') {
+          label = `${item.dayName || ''} ${item.date || ''}`.trim();
+        } else if (timeframe === 'week') {
+          label = `${item.week} (${item.startDate} – ${item.endDate})`;
+        } else {
+          label = item.monthName || '';
+        }
+        if (label.length > 50) label = label.substring(0, 50) + '…';
+
+        if (i % 2 === 0) {
+          doc.setFillColor(245, 247, 250);
+          doc.rect(margin, y - 5, contentWidth, 7, 'F');
+        }
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(60, 60, 60);
+        doc.text(label, margin + 3, y);
+        doc.setTextColor(30, 30, 30);
+        doc.text(String(item.sales), margin + contentWidth * 0.62, y, { align: 'center' });
+        doc.text(formatCurrency(item.revenue), pageWidth - margin - 3, y, { align: 'right' });
+        y += 7;
+      });
+    } else {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(140, 140, 140);
+      doc.text('Aucune donnée de tendance disponible pour cette période.', margin + 3, y);
+      y += 8;
+    }
+
+    y += 6;
+
+    // ── TOP PRODUCTS ─────────────────────────────────────────────────────────
+    drawSection('ARTICLES VENDUS');
+
+    if (analytics.topProducts.length > 0) {
+      doc.setFillColor(30, 64, 175);
+      doc.rect(margin, y - 5, contentWidth, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.text('Article', margin + 3, y);
+      doc.text('Qté', margin + contentWidth * 0.68, y, { align: 'center' });
+      doc.text('Revenu', pageWidth - margin - 3, y, { align: 'right' });
+      y += 8;
+
+      analytics.topProducts.forEach((product, i) => {
+        checkPage(8);
+        let nameStr = `${i + 1}. ${product.name}`;
+        if (nameStr.length > 48) nameStr = nameStr.substring(0, 48) + '…';
+
+        if (i % 2 === 0) {
+          doc.setFillColor(245, 247, 250);
+          doc.rect(margin, y - 5, contentWidth, 7, 'F');
+        }
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(60, 60, 60);
+        doc.text(nameStr, margin + 3, y);
+        doc.setTextColor(30, 30, 30);
+        doc.text(String(product.quantity), margin + contentWidth * 0.68, y, { align: 'center' });
+        doc.text(formatCurrency(product.revenue), pageWidth - margin - 3, y, { align: 'right' });
+        y += 7;
+      });
+    } else {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(140, 140, 140);
+      doc.text('Aucun article vendu dans cette période.', margin + 3, y);
+      y += 8;
+    }
+
+    // ── FOOTER (all pages) ────────────────────────────────────────────────────
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      const fy = pageHeight - 10;
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.line(margin, fy - 4, pageWidth - margin, fy - 4);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(160, 160, 160);
+      doc.text(COMPANY_NAME, margin, fy);
+      doc.text(`Page ${p} / ${totalPages}`, pageWidth / 2, fy, { align: 'center' });
+      doc.text(COMPANY_RCCM, pageWidth - margin, fy, { align: 'right' });
+    }
+
+    // ── SAVE ─────────────────────────────────────────────────────────────────
+    const safePeriod = getTimeframeLabel()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_]/g, '');
+    const dateStr = new Date().toISOString().split('T')[0];
+    doc.save(`Rapport_Analytique_${safePeriod}_${dateStr}.pdf`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
@@ -1039,6 +1268,14 @@ export default function Analytics() {
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span className="text-sm">Actualiser</span>
+              </button>
+              <button
+                onClick={generatePDF}
+                disabled={loading || !analytics}
+                className="px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg border border-green-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                <span className="text-sm">Télécharger PDF</span>
               </button>
             </div>
           </div>
@@ -1382,91 +1619,43 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Top Products and Customers */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Package className="w-4 h-4 sm:w-5 sm:h-5" />
-              Articles Vendus ({getTimeframeLabel()})
-            </h3>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {analytics.topProducts.length > 0 ? (
-                analytics.topProducts.map((product, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate text-sm sm:text-base">
-                        {index + 1}. {product.name}
-                      </p>
-                      <p className="text-xs sm:text-sm text-gray-600">
-                        {product.quantity} unités vendues
-                      </p>
-                    </div>
-                    <div className="text-right ml-2">
-                      <p className="font-medium text-gray-900 text-sm sm:text-base whitespace-nowrap">
-                        {formatCurrency(product.revenue)}
-                      </p>
-                    </div>
+        {/* Top Products */}
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Package className="w-4 h-4 sm:w-5 sm:h-5" />
+            Articles Vendus ({getTimeframeLabel()})
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[32rem] overflow-y-auto">
+            {analytics.topProducts.length > 0 ? (
+              analytics.topProducts.map((product, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 truncate text-sm sm:text-base">
+                      {index + 1}. {product.name}
+                    </p>
+                    <p className="text-xs sm:text-sm text-gray-600">
+                      {product.quantity} unités vendues
+                    </p>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Package className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
-                  <p className="font-medium text-sm sm:text-base">
-                    Aucun produit vendu
-                  </p>
-                  <p className="text-xs sm:text-sm">dans cette période</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5" />
-              Meilleurs Clients ({getTimeframeLabel()})
-            </h3>
-            <div className="space-y-3">
-              {analytics.topCustomers.length > 0 ? (
-                analytics.topCustomers.map((customer, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-sm flex-shrink-0">
-                        <span className="text-xs sm:text-sm font-medium text-white">
-                          {customer.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate text-sm sm:text-base">
-                          {customer.name}
-                        </p>
-                        <p className="text-xs sm:text-sm text-gray-600">
-                          {customer.purchases} achats
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right ml-2 flex-shrink-0">
-                      <p className="font-medium text-gray-900 text-sm sm:text-base whitespace-nowrap">
-                        {formatCurrency(customer.totalSpent)}
-                      </p>
-                    </div>
+                  <div className="text-right ml-2">
+                    <p className="font-medium text-gray-900 text-sm sm:text-base whitespace-nowrap">
+                      {formatCurrency(product.revenue)}
+                    </p>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Users className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
-                  <p className="font-medium text-sm sm:text-base">
-                    Aucun client
-                  </p>
-                  <p className="text-xs sm:text-sm">dans cette période</p>
                 </div>
-              )}
-            </div>
+              ))
+            ) : (
+              <div className="col-span-full text-center py-8 text-gray-500">
+                <Package className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
+                <p className="font-medium text-sm sm:text-base">
+                  Aucun produit vendu
+                </p>
+                <p className="text-xs sm:text-sm">dans cette période</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

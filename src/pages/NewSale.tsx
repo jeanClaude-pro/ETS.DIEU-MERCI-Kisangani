@@ -20,6 +20,7 @@ interface CartItem {
 }
 
 interface ExchangeRate {
+  _id: string;
   rate: number;
   effectiveFrom: string;
   lastUpdated: string;
@@ -266,10 +267,7 @@ export default function NewSale() {
   const itemTotal = quantity * unitPrice;
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
 
-  const isFormValid =
-    cart.length > 0 &&
-    form.customerName.trim() !== "" &&
-    form.customerPhone.trim() !== "";
+  const isFormValid = cart.length > 0;
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -768,25 +766,23 @@ export default function NewSale() {
         <div class="shop-details">RECU #: <strong>${receiptData.receiptNumber}</strong></div>
       </div>
       
+      ${(receiptData.customerName || receiptData.customerPhone || receiptData.customerEmail) ? `
       <div class="customer-info">
-        <div class="customer-field">CLIENT: <strong>${receiptData.customerName.toUpperCase()}</strong></div>
-        <div class="customer-field">TELEPHONE: <strong>${receiptData.customerPhone}</strong></div>
-        ${
-          receiptData.customerEmail
-            ? `<div class="customer-field">EMAIL: <strong>${receiptData.customerEmail}</strong></div>`
-            : ""
-        }
+        ${receiptData.customerName ? `<div class="customer-field">CLIENT: <strong>${receiptData.customerName.toUpperCase()}</strong></div>` : ''}
+        ${receiptData.customerPhone ? `<div class="customer-field">TELEPHONE: <strong>${receiptData.customerPhone}</strong></div>` : ''}
+        ${receiptData.customerEmail ? `<div class="customer-field">EMAIL: <strong>${receiptData.customerEmail}</strong></div>` : ''}
       </div>
-      
+      ` : ''}
+
       <div class="receipt-title">ARTICLES ACHETES</div>
       
       <div class="items-col-header">
         <span class="col-article">Article</span>
         <span class="col-qte">Qte</span>
-        <span class="col-pu">PU($)</span>
-        <span class="col-pt">PT($)</span>
+        <span class="col-pu">PU(FC)</span>
+        <span class="col-pt">PT(FC)</span>
       </div>
-      
+
       <div class="items-section">
       ${receiptData.items
         .map(
@@ -794,19 +790,22 @@ export default function NewSale() {
         <div class="item-row">
           <div class="item-name"><strong>${item.name}</strong></div>
           <div class="item-quantity"><strong>${item.quantity}</strong></div>
-          <div class="item-unit-price"><strong>${item.unitPrice.toFixed(2)}</strong></div>
-          <div class="item-line-total"><strong>${item.total.toFixed(2)}</strong></div>
+          <div class="item-unit-price"><strong>${Math.round(item.unitPrice * receiptData.exchangeRate).toLocaleString('fr-FR')}</strong></div>
+          <div class="item-line-total"><strong>${Math.round(item.total * receiptData.exchangeRate).toLocaleString('fr-FR')}</strong></div>
         </div>
       `
         )
         .join("")}
       </div>
-      
+
       <div class="total-section">
-       
         <div class="total-row">
-          <div><strong>TOTAL:</strong></div>
-          <div><strong>$${receiptData.total.toFixed(2)}</strong></div>
+          <div><strong>TOTAL FC:</strong></div>
+          <div><strong>${Math.round(receiptData.total * receiptData.exchangeRate).toLocaleString('fr-FR')} FC</strong></div>
+        </div>
+        <div class="total-row">
+          <div><strong>TAUX:</strong></div>
+          <div><strong>1$=${receiptData.exchangeRate.toLocaleString('fr-FR')} FC</strong></div>
         </div>
         <div class="total-row">
           <div><strong>PAIEMENT:</strong></div>
@@ -1131,20 +1130,22 @@ export default function NewSale() {
         SOUCHE N°<strong>${receiptData.stubNumber}</strong>
       </div>
       
+      ${(receiptData.customerName || receiptData.customerPhone) ? `
       <div class="customer-info">
-        <div class="customer-field">CLIENT: <strong>${receiptData.customerName.toUpperCase()}</strong></div>
-        <div class="customer-field">TELEPHONE: <strong>${receiptData.customerPhone}</strong></div>
+        ${receiptData.customerName ? `<div class="customer-field">CLIENT: <strong>${receiptData.customerName.toUpperCase()}</strong></div>` : ''}
+        ${receiptData.customerPhone ? `<div class="customer-field">TELEPHONE: <strong>${receiptData.customerPhone}</strong></div>` : ''}
       </div>
-      
+      ` : ''}
+
       <div class="receipt-title">ARTICLES VENDUS</div>
       
       <div class="items-col-header">
         <span class="col-article">Article</span>
         <span class="col-qte">Qte</span>
-        <span class="col-pu">PU($)</span>
-        <span class="col-pt">PT($)</span>
+        <span class="col-pu">PU(FC)</span>
+        <span class="col-pt">PT(FC)</span>
       </div>
-      
+
       <div class="items-section">
       ${receiptData.items
         .map(
@@ -1152,18 +1153,22 @@ export default function NewSale() {
         <div class="item-row">
           <div class="item-name"><strong>${item.name}</strong></div>
           <div class="item-quantity"><strong>${item.quantity}</strong></div>
-          <div class="item-unit-price"><strong>${item.unitPrice.toFixed(2)}</strong></div>
-          <div class="item-line-total"><strong>${item.total.toFixed(2)}</strong></div>
+          <div class="item-unit-price"><strong>${Math.round(item.unitPrice * receiptData.exchangeRate).toLocaleString('fr-FR')}</strong></div>
+          <div class="item-line-total"><strong>${Math.round(item.total * receiptData.exchangeRate).toLocaleString('fr-FR')}</strong></div>
         </div>
       `
         )
         .join("")}
       </div>
-      
+
       <div class="total-section">
         <div class="total-row">
-          <div><strong>TOTAL VENTE:</strong></div>
-          <div><strong>$${receiptData.total.toFixed(2)}</strong></div>
+          <div><strong>TOTAL FC:</strong></div>
+          <div><strong>${Math.round(receiptData.total * receiptData.exchangeRate).toLocaleString('fr-FR')} FC</strong></div>
+        </div>
+        <div class="total-row">
+          <div><strong>TAUX:</strong></div>
+          <div><strong>1$=${receiptData.exchangeRate.toLocaleString('fr-FR')} FC</strong></div>
         </div>
         <div class="total-row">
           <div><strong>PAIEMENT:</strong></div>
@@ -1282,6 +1287,14 @@ export default function NewSale() {
         total: cartTotal,
         paymentMethod: uiToModelPayment(form.paymentMethod),
         salesPerson: currentUser?.username || "unknown",
+        // Lock the rate that was active at the moment of sale
+        exchangeRateSnapshot: exchangeRate
+          ? {
+              rateId: exchangeRate._id,
+              rate: exchangeRate.rate,
+              effectiveFrom: exchangeRate.effectiveFrom,
+            }
+          : null,
       };
 
       const res = await fetch(`${API_BASE}/sales`, {
@@ -1305,7 +1318,7 @@ export default function NewSale() {
       // Get the sale ID from the API response
       const saleId = data.saleId || data._id;
       
-      // Enhanced receipt data with better formatting - use actual sale ID
+      // Receipt data — prices are in USD internally; the receipt renders them in FC
       const newReceiptData = {
         shopName: "Boutique C'EST DIEU QUI PARTAGE",
         shopAddress: "Av du 1er Janvier N°13, C. Makiso, Kisangani",
@@ -1324,9 +1337,12 @@ export default function NewSale() {
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: "Africa/Lubumbashi",
         }),
-        receiptNumber: saleId, // Use actual sale ID from API
-        stubNumber: saleId, // Use actual sale ID from API for stub as well
+        receiptNumber: saleId,
+        stubNumber: saleId,
+        // Rate frozen at the moment of this sale — all FC amounts on the receipt use this
+        exchangeRate: exchangeRate?.rate ?? 1,
       };
 
       setReceiptData(newReceiptData);
@@ -1615,10 +1631,12 @@ export default function NewSale() {
         </div>
 
         <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4 text-gray-900">Informations du client</h3>
+          <h3 className="text-lg font-semibold mb-4 text-gray-900">
+            Informations du client <span className="text-sm font-normal text-gray-400">(optionnel)</span>
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
-              <label className="block mb-2 font-medium text-gray-700">Nom du client *</label>
+              <label className="block mb-2 font-medium text-gray-700">Nom du client</label>
               <input
                 type="text"
                 name="customerName"
@@ -1626,13 +1644,12 @@ export default function NewSale() {
                 onChange={handleChange}
                 placeholder="Entrer le nom du client"
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
               />
             </div>
 
             <div>
               <label className="block mb-2 font-medium text-gray-700">
-                Numéro de téléphone du client *
+                Numéro de téléphone du client
               </label>
               <input
                 type="tel"
@@ -1641,7 +1658,6 @@ export default function NewSale() {
                 onChange={handleChange}
                 placeholder="Entrer le numéro de téléphone"
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
               />
             </div>
 
@@ -1668,7 +1684,6 @@ export default function NewSale() {
                 value={form.paymentMethod}
                 onChange={handleChange}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
               >
                 <option value="cash">Cash</option>
                 <option value="mpesa">M-Pesa ou Airtel Money (Transfert)</option>

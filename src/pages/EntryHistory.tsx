@@ -65,49 +65,50 @@ interface User {
   permissions?: string[];
 }
 
-// Helper function to get today's date in correct format
-const getTodayDate = (): string => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+// Kisangani is UTC+2 permanently
+const toKisanganiDate = (d = new Date()): Date =>
+  new Date(d.getTime() + 2 * 60 * 60 * 1000);
+
+const getTodayDate = (): string =>
+  toKisanganiDate().toISOString().split('T')[0];
 
 // Helper function to get date range for different timeframes
 const getTimeframeParams = (
-  timeframe: "day" | "week" | "month" | "year", 
-  selectedYear?: number, 
+  timeframe: "day" | "week" | "month" | "year",
+  selectedYear?: number,
   selectedDate?: string
 ) => {
   const params = new URLSearchParams();
-  const today = new Date();
-  
+  const kis = toKisanganiDate();
+
   switch (timeframe) {
     case "day":
       params.set("date", selectedDate || getTodayDate());
       break;
-      
-    case "week":
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
+
+    case "week": {
+      const weekAgo = toKisanganiDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
       params.set("from", weekAgo.toISOString().split('T')[0]);
-      params.set("to", today.toISOString().split('T')[0]);
+      params.set("to", getTodayDate());
       break;
-      
-    case "month":
-      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      params.set("from", firstDayOfMonth.toISOString().split('T')[0]);
-      params.set("to", lastDayOfMonth.toISOString().split('T')[0]);
+    }
+
+    case "month": {
+      const y = kis.getUTCFullYear();
+      const m = String(kis.getUTCMonth() + 1).padStart(2, '0');
+      const lastDay = new Date(y, kis.getUTCMonth() + 1, 0).getDate();
+      params.set("from", `${y}-${m}-01`);
+      params.set("to", `${y}-${m}-${String(lastDay).padStart(2, '0')}`);
       break;
-      
-    case "year":
-      const year = selectedYear || today.getFullYear();
+    }
+
+    case "year": {
+      const year = selectedYear || kis.getUTCFullYear();
       params.set("year", year.toString());
       break;
+    }
   }
-  
+
   return params.toString();
 };
 
@@ -137,7 +138,7 @@ export default function EntryHistory() {
 
   // Timeframe state
   const [timeframe, setTimeframe] = useState<"day" | "week" | "month" | "year">("day");
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState<number>(toKisanganiDate().getUTCFullYear());
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDate());
   const [initialLoad, setInitialLoad] = useState(true);
   const [timeframeDescription, setTimeframeDescription] = useState<string>("");
@@ -310,7 +311,7 @@ export default function EntryHistory() {
   // Get available years from API or default
   const getAvailableYears = (): number[] => {
     // Start with current year
-    const currentYear = new Date().getFullYear();
+    const currentYear = toKisanganiDate().getUTCFullYear();
     const years = [currentYear];
     
     // Add previous years (up to 5 years back)
@@ -360,7 +361,7 @@ export default function EntryHistory() {
     
     if (period === "year") {
       const years = getAvailableYears();
-      setSelectedYear(years[0] || new Date().getFullYear());
+      setSelectedYear(years[0] || toKisanganiDate().getUTCFullYear());
     }
   };
 
@@ -374,12 +375,13 @@ export default function EntryHistory() {
   );
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("fr-FR", {
+    return new Date(dateString).toLocaleString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
       year: "numeric",
-      month: "short",
-      day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Africa/Lubumbashi",
     });
   };
 

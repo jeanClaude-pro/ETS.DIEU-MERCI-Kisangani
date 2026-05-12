@@ -98,27 +98,19 @@ interface User {
   permissions?: string[];
 }
 
-// Helper function to get today's date in correct format
-const getTodayDate = (): string => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
+// Kisangani is UTC+2 permanently
+const toKisanganiDate = (d = new Date()): Date =>
+  new Date(d.getTime() + 2 * 60 * 60 * 1000);
 
-// Helper function to get current month in YYYY-MM format
+const getTodayDate = (): string =>
+  toKisanganiDate().toISOString().split('T')[0];
+
 const getCurrentMonth = (): string => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
+  const d = toKisanganiDate();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 };
 
-// Helper function to get current year
-const getCurrentYear = (): number => {
-  return new Date().getFullYear();
-};
+const getCurrentYear = (): number => toKisanganiDate().getUTCFullYear();
 
 export default function SortieHistory() {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
@@ -419,12 +411,11 @@ export default function SortieHistory() {
         break;
       case "custom":
         if (!newParams.from) {
-          const today = new Date();
-          const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-          newParams.from = firstDay.toISOString().split('T')[0];
+          const kis = toKisanganiDate();
+          newParams.from = `${kis.getUTCFullYear()}-${String(kis.getUTCMonth() + 1).padStart(2, '0')}-01`;
         }
         if (!newParams.to) {
-          newParams.to = new Date().toISOString().split('T')[0];
+          newParams.to = getTodayDate();
         }
         newParams.date = "";
         newParams.year = "";
@@ -465,12 +456,13 @@ export default function SortieHistory() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("fr-FR", {
+    return new Date(dateString).toLocaleString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
       year: "numeric",
-      month: "short",
-      day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Africa/Lubumbashi",
     });
   };
 
@@ -774,24 +766,23 @@ export default function SortieHistory() {
       }).format(expense.amount);
 
       // Format the date directly for the print window
-      const formattedDate = new Date(expense.createdAt).toLocaleDateString(
-        "fr-FR",
-        {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        }
-      );
+      const formattedDate = new Date(expense.createdAt).toLocaleString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Africa/Lubumbashi",
+      });
 
       const validatedDate = expense.validatedAt
-        ? new Date(expense.validatedAt).toLocaleDateString("fr-FR", {
+        ? new Date(expense.validatedAt).toLocaleString("fr-FR", {
+            day: "2-digit",
+            month: "2-digit",
             year: "numeric",
-            month: "short",
-            day: "numeric",
             hour: "2-digit",
             minute: "2-digit",
+            timeZone: "Africa/Lubumbashi",
           })
         : formattedDate;
 

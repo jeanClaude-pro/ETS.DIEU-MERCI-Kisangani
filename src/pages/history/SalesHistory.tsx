@@ -113,27 +113,19 @@ interface SalesResponse {
   performanceNote: string | null;
 }
 
-// Helper function to get today's date in correct format
-const getTodayDate = (): string => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+// Kisangani is UTC+2 permanently — derive local date/time from UTC
+const toKisanganiDate = (d = new Date()): Date =>
+  new Date(d.getTime() + 2 * 60 * 60 * 1000);
 
-// Helper function to get current month in YYYY-MM format
+const getTodayDate = (): string =>
+  toKisanganiDate().toISOString().split('T')[0]; // YYYY-MM-DD in UTC+2
+
 const getCurrentMonth = (): string => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
+  const d = toKisanganiDate();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 };
 
-// Helper function to get current year
-const getCurrentYear = (): number => {
-  return new Date().getFullYear();
-};
+const getCurrentYear = (): number => toKisanganiDate().getUTCFullYear();
 
 export default function SalesHistory() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -404,14 +396,12 @@ export default function SalesHistory() {
         newParams.to = "";
         break;
       case "custom":
-        // Keep existing values or set defaults
         if (!newParams.from) {
-          const today = new Date();
-          const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-          newParams.from = firstDay.toISOString().split('T')[0];
+          const kis = toKisanganiDate();
+          newParams.from = `${kis.getUTCFullYear()}-${String(kis.getUTCMonth() + 1).padStart(2, '0')}-01`;
         }
         if (!newParams.to) {
-          newParams.to = new Date().toISOString().split('T')[0];
+          newParams.to = getTodayDate();
         }
         newParams.date = "";
         newParams.year = "";
@@ -496,12 +486,13 @@ export default function SalesHistory() {
       );
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+    return new Date(dateString).toLocaleString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
       year: "numeric",
-      month: "short",
-      day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Africa/Lubumbashi",
     });
   };
 
