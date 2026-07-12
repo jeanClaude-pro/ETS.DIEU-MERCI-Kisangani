@@ -1,12 +1,11 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Package, Plus, Search, Edit, Trash2, Eye, X } from "lucide-react";
-import { getProductStatus } from "../../utils/constants";
 import { toast } from "react-toastify";
-import type { Product } from "../../types";
-import { units, serverUrl } from "../../utils/constants";
+import type { Product, Region } from "../../types";
+import { getProductStatus, units, serverUrl, REGIONS, REGION_CODE_MAP, formatProductLabel } from "../../utils/constants";
 import CategoriesDropdown from "../../components/CategoriesDropdown";
 
 interface User {
@@ -21,6 +20,7 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedRegion, setSelectedRegion] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -37,6 +37,8 @@ export default function Products() {
     unit: "pcs",
     weight: 0,
     status: "active",
+    region: "China",
+    regionCode: "Cnnn",
   });
 
   // Get current user from localStorage
@@ -165,6 +167,8 @@ export default function Products() {
       unit: "pcs",
       weight: 0,
       status: "active",
+      region: "China",
+      regionCode: "Cnnn",
     });
   };
 
@@ -188,14 +192,18 @@ export default function Products() {
     setShowViewModal(true);
   };
 
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch = product.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchesCategory =
-      !selectedCategory || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const matchesSearch = product.name
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
+      const matchesCategory =
+        !selectedCategory || product.category === selectedCategory;
+      const matchesRegion =
+        !selectedRegion || product.region === selectedRegion;
+      return matchesSearch && matchesCategory && matchesRegion;
+    });
+  }, [products, searchTerm, selectedCategory, selectedRegion]);
 
   // Function to display stock information based on user role
   const renderStockInfo = (product: Product) => {
@@ -316,6 +324,20 @@ export default function Products() {
               setSelectedCategory={setSelectedCategory}
             />
           </div>
+          <div className="sm:w-52">
+            <select
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
+            >
+              <option value="">Toutes les régions</option>
+              {REGIONS.map((r) => (
+                <option key={r.regionCode} value={r.region}>
+                  {r.region} ({r.regionCode})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -365,8 +387,13 @@ export default function Products() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
                             {product.name}
+                            {product.regionCode && (
+                              <span className="inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
+                                {product.regionCode}
+                              </span>
+                            )}
                           </div>
                           <div className="text-sm text-gray-500">
                             {product.brand}
@@ -540,6 +567,31 @@ export default function Products() {
                       <option value="inactive">Inactif</option>
                     </select>
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Région *
+                    </label>
+                    <select
+                      required
+                      value={formData.region || ""}
+                      onChange={(e) => {
+                        const region = e.target.value as Region;
+                        setFormData((prev) => ({
+                          ...prev,
+                          region,
+                          regionCode: REGION_CODE_MAP[region],
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
+                    >
+                      {REGIONS.map((r) => (
+                        <option key={r.regionCode} value={r.region}>
+                          {r.region} ({r.regionCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Pricing & Inventory */}
@@ -656,7 +708,7 @@ export default function Products() {
               <div className="flex items-start gap-6">
                 <div className="flex-1">
                   <h3 className="text-2xl font-bold text-gray-900">
-                    {selectedProduct.name}
+                    {formatProductLabel(selectedProduct)}
                   </h3>
                   <p className="text-gray-600 mt-1">{selectedProduct.brand}</p>
                   <p className="text-gray-700 mt-2">
@@ -697,6 +749,12 @@ export default function Products() {
                       <span className="text-gray-600">Unité:</span>
                       <span className="font-medium">
                         {selectedProduct.unit}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Région:</span>
+                      <span className="font-medium">
+                        {selectedProduct.region} ({selectedProduct.regionCode})
                       </span>
                     </div>
                   </div>

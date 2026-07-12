@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Search,
   FileText,
@@ -21,6 +21,8 @@ import {
   Shield,
 } from "lucide-react";
 import jsPDF from "jspdf";
+import RegionFilterPills from "../../components/RegionFilterPills";
+import type { RegionCodeFilter } from "../../types";
 
 interface SaleItem {
   productId: string;
@@ -29,6 +31,8 @@ interface SaleItem {
   price: number;
   total: number;
   _id: string;
+  region?: "Butembo" | "China";
+  regionCode?: "Bbbb" | "Cnnn";
 }
 
 interface EditHistoryEntry {
@@ -67,6 +71,8 @@ interface Product {
   stock: number;
   price: number;
   sku?: string;
+  region?: "Butembo" | "China";
+  regionCode?: "Bbbb" | "Cnnn";
 }
 
 // User interface for role checking
@@ -109,6 +115,7 @@ interface SalesResponse {
     customerPhone: string;
     status: string;
     type: string;
+    region?: string;
   };
   performanceNote: string | null;
 }
@@ -164,7 +171,8 @@ export default function SalesHistory() {
     month: getCurrentMonth().split('-')[1],
     type: "",
     status: "",
-    customerPhone: ""
+    customerPhone: "",
+    region: ""
   });
 
   // NEW: Edited sales filter state
@@ -281,7 +289,8 @@ export default function SalesHistory() {
     if (queryParams.type) params.append("type", queryParams.type);
     if (queryParams.status) params.append("status", queryParams.status);
     if (queryParams.customerPhone) params.append("customerPhone", queryParams.customerPhone);
-    
+    if (queryParams.region) params.append("region", queryParams.region);
+
     return params.toString();
   };
 
@@ -430,7 +439,8 @@ export default function SalesHistory() {
       month: getCurrentMonth().split('-')[1],
       type: "",
       status: "",
-      customerPhone: ""
+      customerPhone: "",
+      region: ""
     });
     setTimeframeType("today");
     setShowEditedSales(false);
@@ -471,19 +481,28 @@ export default function SalesHistory() {
     }
   };
 
-  const filteredSales = showEditedSales 
-    ? editedSales.filter(sale =>
-        sale.saleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sale.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sale.customer.phone.includes(searchTerm) ||
-        (sale.salesPerson && sale.salesPerson.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
-    : sales.filter(sale =>
-        sale.saleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sale.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sale.customer.phone.includes(searchTerm) ||
-        (sale.salesPerson && sale.salesPerson.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredSales = useMemo(() => {
+    const source = showEditedSales ? editedSales : sales;
+    return source.filter(sale =>
+      sale.saleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sale.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sale.customer.phone.includes(searchTerm) ||
+      (sale.salesPerson && sale.salesPerson.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [showEditedSales, editedSales, sales, searchTerm]);
+
+  // Precompute each sale's region badge once per data/filter change, instead
+  // of re-walking every sale's items on every render inside the row .map().
+  const saleRegionBadges = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const sale of filteredSales) {
+      const codes = Array.from(
+        new Set((sale.items || []).map((item) => item.regionCode).filter((c): c is "Bbbb" | "Cnnn" => Boolean(c)))
       );
+      map.set(sale._id, codes);
+    }
+    return map;
+  }, [filteredSales]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString("fr-FR", {
@@ -616,6 +635,7 @@ export default function SalesHistory() {
         'Customer Email',
         'Sales Person',
         'Items Count',
+        'Region',
         'Subtotal',
         'Total',
         'Payment Method',
@@ -632,14 +652,16 @@ export default function SalesHistory() {
         'Product ID',
         'Quantity',
         'Unit Price',
-        'Item Total'
+        'Item Total',
+        'Region'
       ];
 
       const summaryRows = dataToExport.map(sale => {
-        const latestEdit = sale.editHistory && sale.editHistory.length > 0 
-          ? sale.editHistory[sale.editHistory.length - 1] 
+        const latestEdit = sale.editHistory && sale.editHistory.length > 0
+          ? sale.editHistory[sale.editHistory.length - 1]
           : null;
-        
+        const regionCodes = getSaleRegionCodes(sale);
+
         return [
           `"${sale.saleId}"`,
           `"${sale.customer.name}"`,
@@ -647,6 +669,7 @@ export default function SalesHistory() {
           `"${sale.customer.email || ''}"`,
           `"${sale.salesPerson || 'Not specified'}"`,
           sale.items.length,
+          `"${regionCodes.length > 1 ? 'Mixte' : regionCodes[0] || ''}"`,
           sale.subtotal.toFixed(2),
           sale.total.toFixed(2),
           `"${sale.paymentMethod}"`,
@@ -658,14 +681,15 @@ export default function SalesHistory() {
         ].join(',');
       });
 
-      const itemRows = dataToExport.flatMap(sale => 
+      const itemRows = dataToExport.flatMap(sale =>
         sale.items.map(item => [
           `"${sale.saleId}"`,
           `"${item.name}"`,
           `"${item.productId}"`,
           item.quantity,
           item.price.toFixed(2),
-          item.total.toFixed(2)
+          item.total.toFixed(2),
+          `"${item.regionCode || ''}"`
         ].join(','))
       );
 
@@ -992,7 +1016,7 @@ export default function SalesHistory() {
         .map(
           (item) => `
         <div class="item-row">
-          <div class="item-name"><strong>${item.name}</strong></div>
+          <div class="item-name"><strong>${item.name}${item.regionCode ? ` (${item.regionCode})` : ''}</strong></div>
           <div class="item-details">
             <strong>${item.quantity}PcsX$${item.price.toFixed(2)}</strong>
           </div>
@@ -1104,7 +1128,7 @@ export default function SalesHistory() {
         yPos = 20;
       }
 
-      doc.text(`${index + 1}. ${item.name}`, 20, yPos);
+      doc.text(`${index + 1}. ${item.name}${item.regionCode ? ` (${item.regionCode})` : ''}`, 20, yPos);
       doc.text(
         `Qty: ${item.quantity} x ${formatCurrency(
           item.price
@@ -1238,6 +1262,8 @@ export default function SalesHistory() {
       price: defaultProduct.price,
       total: defaultProduct.price,
       _id: `temp-${Date.now()}`,
+      region: defaultProduct.region,
+      regionCode: defaultProduct.regionCode,
     };
 
     setEditForm((prev) => ({
@@ -1258,6 +1284,8 @@ export default function SalesHistory() {
     updatedItems[index].name = product.name;
     updatedItems[index].price = product.price;
     updatedItems[index].total = product.price * updatedItems[index].quantity;
+    updatedItems[index].region = product.region;
+    updatedItems[index].regionCode = product.regionCode;
 
     setEditForm((prev) => ({
       ...prev,
@@ -1402,6 +1430,34 @@ export default function SalesHistory() {
 
   const { subtotal, total } = calculateTotals();
 
+  // Derive a single region label for a sale from its items (a sale can span both regions)
+  const getSaleRegionCodes = (sale: Sale): string[] => {
+    const codes = new Set(
+      (sale.items || [])
+        .map((item) => item.regionCode)
+        .filter((code): code is "Bbbb" | "Cnnn" => Boolean(code))
+    );
+    return Array.from(codes);
+  };
+
+  const renderSaleRegionBadge = (codes: string[]) => {
+    if (codes.length === 0) {
+      return <span className="text-xs text-gray-400">—</span>;
+    }
+    if (codes.length > 1) {
+      return (
+        <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+          Mixte
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+        {codes[0]}
+      </span>
+    );
+  };
+
   return (
     <div className="space-y-6 p-6 flex-1 overflow-auto">
       <div className="flex items-center justify-between flex-wrap gap-4 overflow-auto">
@@ -1414,6 +1470,12 @@ export default function SalesHistory() {
           </p>
         </div>
         <div className="flex gap-3">
+          {/* Region Filter */}
+          <RegionFilterPills
+            value={queryParams.region as RegionCodeFilter}
+            onChange={(value) => handleQueryParamChange("region", value)}
+          />
+
           {/* NEW: Edited Sales Filter Button */}
           <button
             onClick={() => setShowEditedSales(!showEditedSales)}
@@ -1824,7 +1886,6 @@ export default function SalesHistory() {
               <p className="text-sm">pour la période sélectionnée</p>
             </div>
           ) : (
-            <>
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -1839,6 +1900,9 @@ export default function SalesHistory() {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Articles
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Région
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total
@@ -1881,6 +1945,9 @@ export default function SalesHistory() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {sale.items.length} Article(s)
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {renderSaleRegionBadge(saleRegionBadges.get(sale._id) || [])}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {formatCurrency(sale.total)}
@@ -1982,7 +2049,6 @@ export default function SalesHistory() {
                   ))}
                 </tbody>
               </table>
-            </>
           )}
         </div>
       </div>
@@ -2130,6 +2196,11 @@ export default function SalesHistory() {
                         <div>
                           <h5 className="font-medium text-gray-900">
                             {item.name}
+                            {item.regionCode && (
+                              <span className="ml-2 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
+                                {item.regionCode}
+                              </span>
+                            )}
                           </h5>
                           <p className="text-sm text-gray-600">
                             Nombre de pieces: {item.quantity} ×{" "}
@@ -2561,7 +2632,8 @@ export default function SalesHistory() {
                             >
                               {products.map((product) => (
                                 <option key={product._id} value={product._id}>
-                                  {product.name} -{" "}
+                                  {product.name}
+                                  {product.regionCode ? ` (${product.regionCode})` : ""} -{" "}
                                   {formatCurrency(product.price)} (Stock:{" "}
                                   {product.stock})
                                 </option>

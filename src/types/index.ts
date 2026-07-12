@@ -1,3 +1,8 @@
+export type Region = "Butembo" | "China";
+export type RegionCode = "Bbbb" | "Cnnn";
+/** RegionCode plus "" to represent an unset "all regions" filter selection. */
+export type RegionCodeFilter = "" | RegionCode;
+
 export interface Product {
   _id: string;
   name: string;
@@ -10,6 +15,8 @@ export interface Product {
   unit: string;
   weight: number;
   status: "active" | "inactive";
+  region: Region;
+  regionCode: RegionCode;
   createdAt: string;
   updatedAt: string;
 }

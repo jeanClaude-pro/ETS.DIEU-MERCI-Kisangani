@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { Calculator, DollarSign, RefreshCw } from "lucide-react";
+import { REGION_CODE_MAP } from "../utils/constants";
 
 interface SortieForm {
   reason: string;
@@ -12,6 +13,7 @@ interface SortieForm {
   paymentMethod: "cash" | "mpesa" | "bank" | "card" | "other";
   notes: string;
   currencyMode: "usd" | "fc";
+  region: "Butembo" | "China";
 }
 
 interface ExchangeRate {
@@ -48,6 +50,7 @@ export default function Sortie() {
     paymentMethod: "cash",
     notes: "",
     currencyMode: "usd",
+    region: "China",
   });
 
   // Load exchange rate
@@ -160,6 +163,8 @@ export default function Sortie() {
         paymentMethod: form.paymentMethod,
         notes: form.notes || "",
         recordedBy: currentUser?.username || "unknown",
+        region: form.region,
+        regionCode: REGION_CODE_MAP[form.region],
       };
 
       // ✅ Changed from /sales to /expenses
@@ -191,6 +196,7 @@ export default function Sortie() {
         paymentMethod: "cash",
         notes: "",
         currencyMode: "usd",
+        region: "China",
       });
 
       setMessage("✅ Dépense enregistrée avec succès !");
@@ -380,6 +386,23 @@ export default function Sortie() {
                   <option value="other">Autre</option>
                 </select>
               </div>
+            </div>
+
+            {/* Region */}
+            <div>
+              <label className="block mb-2 font-medium text-gray-700">
+                Région *
+              </label>
+              <select
+                name="region"
+                value={form.region}
+                onChange={handleChange}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                required
+              >
+                <option value="Butembo">Butembo (Bbbb)</option>
+                <option value="China">China (Cnnn)</option>
+              </select>
             </div>
 
             {/* Amount Summary */}

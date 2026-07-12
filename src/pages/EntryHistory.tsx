@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Search,
   FileText,
@@ -20,6 +20,8 @@ import {
   Shield,
 } from "lucide-react";
 import jsPDF from "jspdf";
+import RegionFilterPills from "../components/RegionFilterPills";
+import type { RegionCodeFilter } from "../types";
 
 interface EditHistoryEntry {
   editedBy: string;
@@ -53,6 +55,8 @@ interface Entry {
   editedBy?: string;
   editedAt?: string;
   editHistory?: EditHistoryEntry[];
+  region?: string;
+  regionCode?: string;
 }
 
 // User interface for role checking
@@ -149,6 +153,7 @@ export default function EntryHistory() {
   const [selectedEditedEntry, setSelectedEditedEntry] = useState<Entry | null>(null);
   const [showEditedDetailsModal, setShowEditedDetailsModal] = useState(false);
   const [summary, setSummary] = useState<any>(null);
+  const [regionFilter, setRegionFilter] = useState<RegionCodeFilter>("");
 
   // Sources and categories (same as Entry.tsx)
   const sources = [
@@ -191,7 +196,7 @@ export default function EntryHistory() {
     if (currentUser !== null) { // Only fetch entries after user data is loaded
       fetchEntries();
     }
-  }, [timeframe, selectedYear, selectedDate, showEditedEntries, currentUser]);
+  }, [timeframe, selectedYear, selectedDate, showEditedEntries, currentUser, regionFilter]);
 
   // Update edited entries when entries change
   useEffect(() => {
@@ -255,8 +260,9 @@ export default function EntryHistory() {
       
       // Add status filter for edited entries view
       const statusParam = showEditedEntries ? "&status=all" : "&status=active";
-      
-      const url = `${import.meta.env.VITE_API_URL}/entries?${timeframeParams}${statusParam}`;
+      const regionParam = regionFilter ? `&region=${regionFilter}` : "";
+
+      const url = `${import.meta.env.VITE_API_URL}/entries?${timeframeParams}${statusParam}${regionParam}`;
       
       console.log("Fetching entries from:", url);
       
@@ -366,13 +372,15 @@ export default function EntryHistory() {
   };
 
   // Filter entries based on search term
-  const filteredEntries = (showEditedEntries ? editedEntries : entries).filter(entry =>
-    entry.entryId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    entry.receivedFrom.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    entry.receivedFrom.phone.includes(searchTerm) ||
-    entry.source.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (entry.createdBy?.username && entry.createdBy.username.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredEntries = useMemo(() => {
+    return (showEditedEntries ? editedEntries : entries).filter(entry =>
+      entry.entryId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      entry.receivedFrom.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      entry.receivedFrom.phone.includes(searchTerm) ||
+      entry.source.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (entry.createdBy?.username && entry.createdBy.username.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [showEditedEntries, editedEntries, entries, searchTerm]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString("fr-FR", {
@@ -903,7 +911,10 @@ export default function EntryHistory() {
             Voir toutes les entrées d'argent enregistrées
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          {/* Region Filter */}
+          <RegionFilterPills value={regionFilter} onChange={setRegionFilter} />
+
           {/* Edited Entries Filter Button */}
           <button
             onClick={() => setShowEditedEntries(!showEditedEntries)}
@@ -1086,6 +1097,9 @@ export default function EntryHistory() {
                     Paiement
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Région
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Statut
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1123,6 +1137,15 @@ export default function EntryHistory() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {formatCurrency(entry.amount)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {entry.regionCode ? (
+                        <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                          {entry.regionCode}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

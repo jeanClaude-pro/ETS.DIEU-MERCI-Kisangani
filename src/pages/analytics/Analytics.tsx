@@ -21,6 +21,8 @@ import {
   Download,
 } from "lucide-react";
 import jsPDF from "jspdf";
+import RegionFilterPills from "../../components/RegionFilterPills";
+import type { RegionCodeFilter } from "../../types";
 
 // Define interfaces for the data structures
 interface SaleItem {
@@ -29,6 +31,8 @@ interface SaleItem {
   quantity?: number;
   price?: number;
   total?: number;
+  region?: string;
+  regionCode?: string;
 }
 
 interface Sale {
@@ -70,6 +74,7 @@ interface Expense {
   reason?: string;
   expenseId?: string;
   recipientName?: string;
+  regionCode?: string;
 }
 
 interface Entry {
@@ -84,6 +89,7 @@ interface Entry {
   receivedFrom?: {
     name?: string;
   };
+  regionCode?: string;
 }
 
 interface AnalyticsData {
@@ -122,7 +128,7 @@ interface AnalyticsData {
       revenue: number;
     }[];
   }[];
-  topProducts: { name: string; quantity: number; revenue: number }[];
+  topProducts: { name: string; regionCode?: string; quantity: number; revenue: number }[];
   topCustomers: { name: string; purchases: number; totalSpent: number }[];
   recentTrends: {
     salesGrowth: number;
@@ -221,6 +227,16 @@ const getTimeframeParams = (
   return params.toString();
 };
 
+type RegionFilter = RegionCodeFilter;
+
+// Sum of item totals belonging to the given region (falls back to sale.total when no region is selected)
+const getRegionScopedTotal = (sale: Sale, region: RegionFilter): number => {
+  if (!region) return sale.total;
+  return (sale.items || [])
+    .filter((item) => item.regionCode === region)
+    .reduce((sum, item) => sum + (item.total || 0), 0);
+};
+
 export default function Analytics() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -234,6 +250,17 @@ export default function Analytics() {
   const [timeframeData, setTimeframeData] = useState<TimeframeData | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [regionFilter, setRegionFilter] = useState<RegionFilter>("");
+  const [reservationsStats, setReservationsStats] = useState<{ count: number; value: number }>({ count: 0, value: 0 });
+
+  // Raw (region-omitted) API responses for the current timeframe. Fetched
+  // once per timeframe change; the region-filtered view below is derived
+  // from these client-side so clicking a region pill never re-hits the network.
+  const [rawSalesData, setRawSalesData] = useState<any>(null);
+  const [rawExpensesData, setRawExpensesData] = useState<any>(null);
+  const [rawEntriesData, setRawEntriesData] = useState<any>(null);
+  const [rawCustomers, setRawCustomers] = useState<Customer[]>([]);
+  const [rawReservations, setRawReservations] = useState<Sale[]>([]);
 
   // Effect to automatically set to today's date when timeframe changes to "day"
   useEffect(() => {
@@ -258,10 +285,51 @@ export default function Analytics() {
     }
   }, [timeframe]);
 
-  // Main effect to fetch data when timeframe changes
+  // Main effect to fetch data when the timeframe changes (region-independent —
+  // the fetch always pulls all regions; region filtering happens client-side below).
   useEffect(() => {
     fetchAnalytics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeframe, selectedYear, selectedDate]);
+
+  // Recompute the analytics view whenever the raw data or the region filter
+  // changes. No network request here — this is what makes region-pill
+  // clicks instant instead of re-fetching sales/expenses/entries/customers.
+  useEffect(() => {
+    if (!rawSalesData) return;
+
+    const processed = shouldSeeOnlyTodayData()
+      ? processTodayData(rawSalesData, rawExpensesData || { data: [] }, rawEntriesData || { data: [] }, regionFilter)
+      : processAnalyticsData(rawSalesData, rawExpensesData || { data: [] }, rawEntriesData || { data: [] }, rawCustomers, regionFilter);
+
+    setAnalytics(processed);
+
+    const value = rawReservations.reduce((sum, sale) => sum + getRegionScopedTotal(sale, regionFilter), 0);
+    const count = regionFilter
+      ? rawReservations.filter((sale) => (sale.items || []).some((item) => item.regionCode === regionFilter)).length
+      : rawReservations.length;
+    setReservationsStats({ count, value });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawSalesData, rawExpensesData, rawEntriesData, rawCustomers, rawReservations, regionFilter]);
+
+  // Fetch the reservations list once per timeframe (region omitted); stats
+  // are derived from it in the recompute effect above.
+  const fetchReservations = async (timeframeParams: string) => {
+    try {
+      const res = await fetch(`${serverUrl}/sales/reservations/all?${timeframeParams}`, {
+        headers: getHeaders(),
+      });
+      if (!res.ok) {
+        setRawReservations([]);
+        return;
+      }
+      const data = await res.json();
+      setRawReservations(Array.isArray(data.data) ? data.data : []);
+    } catch (error) {
+      console.error("Error fetching reservations:", error);
+      setRawReservations([]);
+    }
+  };
 
   // Fetch analytics data with server-side timeframe filtering
   const fetchAnalytics = async () => {
@@ -288,11 +356,10 @@ export default function Analytics() {
   const fetchTodayDataOnly = async () => {
     try {
       const today = getTodayDate();
-      
-      // Build query with today's date
       const timeframeParams = `date=${today}`;
-      
-      // Fetch sales, expenses, and entries for today
+
+      // Fetch sales, expenses, and entries for today (all regions — the
+      // region filter is applied client-side by the recompute effect)
       const [salesResponse, expensesResponse, entriesResponse] = await Promise.all([
         fetch(`${serverUrl}/sales?${timeframeParams}`, {
           headers: getHeaders(),
@@ -313,16 +380,12 @@ export default function Analytics() {
       const expensesData = expensesResponse.ok ? await expensesResponse.json() : { data: [], summary: { totalAmount: 0 } };
       const entriesData = entriesResponse.ok ? await entriesResponse.json() : { data: [], summary: { totalAmount: 0 } };
 
-      // Process the data for today
-      const processedAnalytics = processTodayData(
-        salesData,
-        expensesData,
-        entriesData
-      );
-      
-      setAnalytics(processedAnalytics);
+      setRawSalesData(salesData);
+      setRawExpensesData(expensesData);
+      setRawEntriesData(entriesData);
       setTimeframeData({ description: "Aujourd'hui", start: today, end: today });
-      
+      await fetchReservations(timeframeParams);
+
     } catch (error) {
       console.error("Error fetching today's data:", error);
       throw error;
@@ -332,9 +395,10 @@ export default function Analytics() {
   // Fetch data with timeframe filtering for admin users
   const fetchDataWithTimeframe = async () => {
     try {
-      // Build timeframe parameters
+      // Build timeframe parameters (all regions — the region filter is
+      // applied client-side by the recompute effect)
       const timeframeParams = getTimeframeParams(timeframe, selectedYear, selectedDate);
-      
+
       // Fetch sales, expenses, and entries with timeframe filtering
       const [salesResponse, expensesResponse, entriesResponse, customersResponse] = await Promise.all([
         fetch(`${serverUrl}/sales?${timeframeParams}`, {
@@ -361,21 +425,16 @@ export default function Analytics() {
       const customersData = customersResponse.ok ? await customersResponse.json() : [];
 
       // Extract customers from response
-      const customers = Array.isArray(customersData) 
-        ? customersData 
+      const customers = Array.isArray(customersData)
+        ? customersData
         : customersData.data || customersData.customers || [];
 
-      // Process the data with timeframe
-      const processedAnalytics = processAnalyticsData(
-        salesData,
-        expensesData,
-        entriesData,
-        customers
-      );
-      
-      setAnalytics(processedAnalytics);
+      setRawSalesData(salesData);
+      setRawExpensesData(expensesData);
+      setRawEntriesData(entriesData);
+      setRawCustomers(customers);
       setTimeframeData(salesData.timeframe);
-      
+
       // Extract available years for year selection
       if (salesData.timeframe) {
         const years = extractAvailableYears();
@@ -384,7 +443,9 @@ export default function Analytics() {
           setSelectedYear(years[0]);
         }
       }
-      
+
+      await fetchReservations(timeframeParams);
+
     } catch (error) {
       console.error("Error fetching analytics with timeframe:", error);
       throw error;
@@ -395,30 +456,36 @@ export default function Analytics() {
   const processTodayData = (
     salesData: any,
     expensesData: any,
-    entriesData: any
+    entriesData: any,
+    region: RegionFilter = ""
   ): AnalyticsData => {
     const sales = salesData.data || [];
     const expenses = expensesData.data || [];
     const entries = entriesData.data || [];
 
     // Filter completed sales only (not voided, not corrected, not expense type)
-    const completedSales = sales.filter((sale: Sale) => 
-      sale.status !== "voided" && 
-      sale.status !== "refunded" && 
+    const completedSales = sales.filter((sale: Sale) =>
+      sale.status !== "voided" &&
+      sale.status !== "refunded" &&
       sale.status !== "corrected" &&
       sale.type !== "expense" &&
       (sale.status === "completed" || sale.status === "pending")
     );
 
     const totalSales = completedSales.length;
-    const totalRevenue = completedSales.reduce((sum: number, sale: Sale) => sum + sale.total, 0);
+    const totalRevenue = completedSales.reduce((sum: number, sale: Sale) => sum + getRegionScopedTotal(sale, region), 0);
     
-    // Calculate entries (active entries only)
-    const activeEntries = entries.filter((entry: Entry) => entry.status === "active");
+    // Calculate entries (active entries only). Legacy entries with no region
+    // are only included in the "All Regions" view since they can't be attributed.
+    const activeEntries = entries.filter((entry: Entry) =>
+      entry.status === "active" && (!region || entry.regionCode === region)
+    );
     const totalEntries = activeEntries.reduce((sum: number, entry: Entry) => sum + entry.amount, 0);
-    
-    // Calculate validated expenses
-    const validatedExpenses = expenses.filter((expense: Expense) => expense.status === "validated");
+
+    // Calculate validated expenses (same legacy-record handling as entries above)
+    const validatedExpenses = expenses.filter((expense: Expense) =>
+      expense.status === "validated" && (!region || expense.regionCode === region)
+    );
     const totalValidatedExpenses = validatedExpenses.reduce((sum: number, expense: Expense) => sum + expense.amount, 0);
     
     // Calculate net revenue
@@ -462,20 +529,26 @@ export default function Analytics() {
       },
     ];
 
-    // Top products from today's sales
+    // Top products from today's sales. Keyed by name+regionCode — two
+    // products can share a name across regions and must not be merged.
     const productStats = new Map();
     completedSales.forEach((sale: Sale) => {
       if (sale.items && Array.isArray(sale.items)) {
         sale.items.forEach((item: SaleItem) => {
+          if (region && item.regionCode !== region) return;
           const productName = item.name || "Unknown Product";
-          if (productStats.has(productName)) {
-            const existing = productStats.get(productName);
-            productStats.set(productName, {
+          const key = `${productName}|${item.regionCode || ""}`;
+          if (productStats.has(key)) {
+            const existing = productStats.get(key);
+            productStats.set(key, {
+              ...existing,
               quantity: existing.quantity + (item.quantity || 0),
               revenue: existing.revenue + (item.total || 0),
             });
           } else {
-            productStats.set(productName, {
+            productStats.set(key, {
+              name: productName,
+              regionCode: item.regionCode,
               quantity: item.quantity || 0,
               revenue: item.total || 0,
             });
@@ -484,8 +557,7 @@ export default function Analytics() {
       }
     });
 
-    const topProducts = Array.from(productStats.entries())
-      .map(([name, stats]) => ({ name, ...stats }))
+    const topProducts = Array.from(productStats.values())
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 50);
 
@@ -494,19 +566,20 @@ export default function Analytics() {
     completedSales.forEach((sale: Sale) => {
       const customerName = sale.customer?.name || sale.customerName || "Unknown Customer";
       const key = customerName;
-      
+      const saleTotal = getRegionScopedTotal(sale, region);
+
       if (customerStats.has(key)) {
         const existing = customerStats.get(key);
         customerStats.set(key, {
           name: customerName,
           purchases: existing.purchases + 1,
-          totalSpent: existing.totalSpent + sale.total,
+          totalSpent: existing.totalSpent + saleTotal,
         });
       } else {
         customerStats.set(key, {
           name: customerName,
           purchases: 1,
-          totalSpent: sale.total,
+          totalSpent: saleTotal,
         });
       }
     });
@@ -546,25 +619,38 @@ export default function Analytics() {
     salesData: any,
     expensesData: any,
     entriesData: any,
-    customers: Customer[]
+    customers: Customer[],
+    region: RegionFilter = ""
   ): AnalyticsData => {
     const sales = salesData.data || [];
-    const expensesSummary = expensesData.summary || { totalAmount: 0 };
-    const entriesSummary = entriesData.summary || { totalAmount: 0 };
+    const expenses = expensesData.data || [];
+    const entries = entriesData.data || [];
 
     // Filter completed sales
-    const completedSales = sales.filter((sale: Sale) => 
-      sale.status !== "voided" && 
-      sale.status !== "refunded" && 
+    const completedSales = sales.filter((sale: Sale) =>
+      sale.status !== "voided" &&
+      sale.status !== "refunded" &&
       sale.status !== "corrected" &&
       sale.type !== "expense" &&
       (sale.status === "completed" || sale.status === "pending")
     );
 
     const totalSales = completedSales.length;
-    const totalRevenue = completedSales.reduce((sum: number, sale: Sale) => sum + sale.total, 0);
-    const totalEntries = entriesSummary.totalAmount || 0;
-    const totalValidatedExpenses = expensesSummary.totalAmount || 0;
+    const totalRevenue = completedSales.reduce((sum: number, sale: Sale) => sum + getRegionScopedTotal(sale, region), 0);
+
+    // Computed from the raw (region-omitted) fetch and filtered here, rather
+    // than trusting a server-computed summary — the raw arrays are fetched
+    // once per timeframe and reused for every region click (see fetch layer).
+    // Legacy entries/expenses with no region are only included in "All Regions".
+    const activeEntries = entries.filter((entry: Entry) =>
+      entry.status === "active" && (!region || entry.regionCode === region)
+    );
+    const totalEntries = activeEntries.reduce((sum: number, entry: Entry) => sum + entry.amount, 0);
+
+    const validatedExpenses = expenses.filter((expense: Expense) =>
+      expense.status === "validated" && (!region || expense.regionCode === region)
+    );
+    const totalValidatedExpenses = validatedExpenses.reduce((sum: number, expense: Expense) => sum + expense.amount, 0);
     const netRevenue = (totalRevenue + totalEntries) - totalValidatedExpenses;
 
     // Count unique products
@@ -572,6 +658,7 @@ export default function Analytics() {
     completedSales.forEach((sale: Sale) => {
       if (sale.items && Array.isArray(sale.items)) {
         sale.items.forEach((item: SaleItem) => {
+          if (region && item.regionCode !== region) return;
           if (item.productId) {
             productIds.add(item.productId);
           }
@@ -594,20 +681,26 @@ export default function Analytics() {
     // Generate chart data based on timeframe
     const chartData = generateChartData(completedSales);
 
-    // Top products
+    // Top products. Keyed by name+regionCode — two products can share a
+    // name across regions and must not be merged.
     const productStats = new Map();
     completedSales.forEach((sale: Sale) => {
       if (sale.items && Array.isArray(sale.items)) {
         sale.items.forEach((item: SaleItem) => {
+          if (region && item.regionCode !== region) return;
           const productName = item.name || "Unknown Product";
-          if (productStats.has(productName)) {
-            const existing = productStats.get(productName);
-            productStats.set(productName, {
+          const key = `${productName}|${item.regionCode || ""}`;
+          if (productStats.has(key)) {
+            const existing = productStats.get(key);
+            productStats.set(key, {
+              ...existing,
               quantity: existing.quantity + (item.quantity || 0),
               revenue: existing.revenue + (item.total || 0),
             });
           } else {
-            productStats.set(productName, {
+            productStats.set(key, {
+              name: productName,
+              regionCode: item.regionCode,
               quantity: item.quantity || 0,
               revenue: item.total || 0,
             });
@@ -616,8 +709,7 @@ export default function Analytics() {
       }
     });
 
-    const topProducts = Array.from(productStats.entries())
-      .map(([name, stats]) => ({ name, ...stats }))
+    const topProducts = Array.from(productStats.values())
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 50);
 
@@ -626,34 +718,38 @@ export default function Analytics() {
     completedSales.forEach((sale: Sale) => {
       const customerName = sale.customer?.name || sale.customerName || "Unknown Customer";
       const key = customerName;
-      
+      const saleTotal = getRegionScopedTotal(sale, region);
+
       if (customerStats.has(key)) {
         const existing = customerStats.get(key);
         customerStats.set(key, {
           name: customerName,
           purchases: existing.purchases + 1,
-          totalSpent: existing.totalSpent + sale.total,
+          totalSpent: existing.totalSpent + saleTotal,
         });
       } else {
         customerStats.set(key, {
           name: customerName,
           purchases: 1,
-          totalSpent: sale.total,
+          totalSpent: saleTotal,
         });
       }
     });
 
-    // Also include customers from the customers list
-    customers.forEach((customer: Customer) => {
-      const key = customer.name || `Customer ${customer._id?.substring(0, 8)}...`;
-      if (!customerStats.has(key) && customer.totalSpent && customer.totalSpent > 0) {
-        customerStats.set(key, {
-          name: customer.name || `Customer ${customer._id?.substring(0, 8)}...`,
-          purchases: customer.totalPurchases || 0,
-          totalSpent: customer.totalSpent || 0,
-        });
-      }
-    });
+    // Also include customers from the customers list (lifetime totals aren't
+    // region-scoped, so only merge these in when viewing all regions)
+    if (!region) {
+      customers.forEach((customer: Customer) => {
+        const key = customer.name || `Customer ${customer._id?.substring(0, 8)}...`;
+        if (!customerStats.has(key) && customer.totalSpent && customer.totalSpent > 0) {
+          customerStats.set(key, {
+            name: customer.name || `Customer ${customer._id?.substring(0, 8)}...`,
+            purchases: customer.totalPurchases || 0,
+            totalSpent: customer.totalSpent || 0,
+          });
+        }
+      });
+    }
 
     const topCustomers = Array.from(customerStats.values())
       .filter(customer => customer.purchases > 0 && customer.name !== "Unknown Customer")
@@ -994,7 +1090,8 @@ export default function Analytics() {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(50, 50, 50);
-    doc.text(`Période : ${getTimeframeLabel()}`, margin, y);
+    const regionLabel = regionFilter === "Bbbb" ? "Butembo (Bbbb)" : regionFilter === "Cnnn" ? "China (Cnnn)" : "Toutes régions";
+    doc.text(`Période : ${getTimeframeLabel()}  |  Région : ${regionLabel}`, margin, y);
     doc.text(`Généré le : ${generatedAt} (GMT+2)`, pageWidth - margin, y, { align: 'right' });
 
     y += 5;
@@ -1029,6 +1126,7 @@ export default function Analytics() {
       { label: 'Revenu Net (USD)', value: formatCurrency(analytics.netRevenue), highlight: true },
       { label: 'Clients Servis', value: analytics.totalCustomers.toString(), highlight: false },
       { label: 'Produits Distincts', value: analytics.totalProducts.toString(), highlight: false },
+      { label: 'Réservations', value: `${reservationsStats.count} (${formatCurrency(reservationsStats.value)})`, highlight: false },
     ];
 
     metrics.forEach((m, i) => {
@@ -1119,7 +1217,7 @@ export default function Analytics() {
 
       analytics.topProducts.forEach((product, i) => {
         checkPage(8);
-        let nameStr = `${i + 1}. ${product.name}`;
+        let nameStr = `${i + 1}. ${product.name}${product.regionCode ? ` (${product.regionCode})` : ''}`;
         if (nameStr.length > 48) nameStr = nameStr.substring(0, 48) + '…';
 
         if (i % 2 === 0) {
@@ -1353,6 +1451,8 @@ export default function Analytics() {
                   </button>
                 ))}
               </div>
+
+              <RegionFilterPills value={regionFilter} onChange={setRegionFilter} />
             </div>
           </div>
         </div>
@@ -1457,7 +1557,7 @@ export default function Analytics() {
         </div>
 
         {/* Additional Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -1508,6 +1608,25 @@ export default function Analytics() {
               </div>
               <div className="p-2 sm:p-3 bg-indigo-100 rounded-full">
                 <Package className="w-4 h-4 sm:w-6 sm:h-6 text-indigo-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs sm:text-sm text-gray-600">
+                  Réservations
+                </p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                  {reservationsStats.count}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {formatCurrency(reservationsStats.value)}
+                </p>
+              </div>
+              <div className="p-2 sm:p-3 bg-teal-100 rounded-full">
+                <Calendar className="w-4 h-4 sm:w-6 sm:h-6 text-teal-600" />
               </div>
             </div>
           </div>
@@ -1635,6 +1754,11 @@ export default function Analytics() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 truncate text-sm sm:text-base">
                       {index + 1}. {product.name}
+                      {product.regionCode && (
+                        <span className="ml-1.5 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
+                          {product.regionCode}
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs sm:text-sm text-gray-600">
                       {product.quantity} unités vendues

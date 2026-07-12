@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Search,
   FileText,
@@ -22,6 +22,8 @@ import {
   ChevronDown,
   Shield,
 } from "lucide-react";
+import RegionFilterPills from "../components/RegionFilterPills";
+import type { RegionCodeFilter } from "../types";
 
 interface ExpenseItem {
   _id: string;
@@ -38,6 +40,8 @@ interface ExpenseItem {
   notes?: string;
   validatedBy?: string;
   validatedAt?: string;
+  region?: string;
+  regionCode?: string;
 }
 
 interface ExpensesResponse {
@@ -76,6 +80,7 @@ interface ExpensesResponse {
     paymentMethod: string;
     recordedBy: string;
     search: string;
+    region?: string;
   };
 }
 
@@ -159,7 +164,8 @@ export default function SortieHistory() {
     status: "",
     paymentMethod: "",
     recordedBy: "",
-    search: ""
+    search: "",
+    region: ""
   });
 
   const [initialLoad, setInitialLoad] = useState(true);
@@ -209,7 +215,8 @@ export default function SortieHistory() {
     if (queryParams.paymentMethod) params.append("paymentMethod", queryParams.paymentMethod);
     if (queryParams.recordedBy) params.append("recordedBy", queryParams.recordedBy);
     if (queryParams.search) params.append("search", queryParams.search);
-    
+    if (queryParams.region) params.append("region", queryParams.region);
+
     return params.toString();
   };
 
@@ -443,7 +450,8 @@ export default function SortieHistory() {
       status: "",
       paymentMethod: "",
       recordedBy: "",
-      search: ""
+      search: "",
+      region: ""
     });
     setTimeframeType("today");
     setSearchTerm("");
@@ -473,14 +481,16 @@ export default function SortieHistory() {
     }).format(amount);
   };
 
-  const filteredExpenses = expenses.filter(
-    (expense) =>
-      expense.expenseId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expense.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expense.recipientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expense.recipientPhone.includes(searchTerm) ||
-      expense.recordedBy.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter(
+      (expense) =>
+        expense.expenseId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        expense.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        expense.recipientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        expense.recipientPhone.includes(searchTerm) ||
+        expense.recordedBy.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [expenses, searchTerm]);
 
   const viewExpenseDetails = (expense: ExpenseItem) => {
     setSelectedExpense(expense);
@@ -1257,7 +1267,11 @@ export default function SortieHistory() {
             </div>
           )}
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <RegionFilterPills
+            value={queryParams.region as RegionCodeFilter}
+            onChange={(value) => handleQueryParamChange("region", value)}
+          />
           <button
             onClick={fetchExpenses}
             disabled={loading}
@@ -1266,12 +1280,12 @@ export default function SortieHistory() {
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             Actualiser
           </button>
-          <div className="relative">
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
               type="text"
               placeholder="Rechercher des dépenses..."
-              className="pl-10 w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -1605,6 +1619,9 @@ export default function SortieHistory() {
                     Paiement
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Région
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Statut
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1639,6 +1656,15 @@ export default function SortieHistory() {
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {expense.paymentMethod}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {expense.regionCode ? (
+                        <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                          {expense.regionCode}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span

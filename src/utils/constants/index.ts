@@ -1,4 +1,4 @@
-import type { Category } from "../../types";
+import type { Category, Region, RegionCode } from "../../types";
 
 export const getProductStatus = (status: string) => {
     switch (status) {
@@ -59,3 +59,17 @@ export const units = [
 ];
 
 export const serverUrl = import.meta.env.VITE_API_URL;
+
+export const REGIONS: { region: Region; regionCode: RegionCode }[] = [
+    { region: "Butembo", regionCode: "Bbbb" },
+    { region: "China", regionCode: "Cnnn" },
+];
+
+export const REGION_CODE_MAP: Record<Region, RegionCode> = {
+    Butembo: "Bbbb",
+    China: "Cnnn",
+};
+
+export function formatProductLabel(product: { name: string; regionCode?: RegionCode | string }) {
+    return product.regionCode ? `${product.name} (${product.regionCode})` : product.name;
+}

@@ -11,6 +11,8 @@ import {
   ShoppingCart,
   ArrowUp,
 } from "lucide-react";
+import RegionFilterPills from "../../components/RegionFilterPills";
+import type { RegionCodeFilter } from "../../types";
 
 interface DashboardStats {
   totalRevenue: number;
@@ -26,13 +28,27 @@ interface DashboardStats {
 
 const serverUrl = import.meta.env.VITE_API_URL;
 
+type RegionFilter = RegionCodeFilter;
+
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rawSales, setRawSales] = useState<any[]>([]);
+  const [rawCustomers, setRawCustomers] = useState<any[]>([]);
+  const [rawProducts, setRawProducts] = useState<any[]>([]);
+  const [regionFilter, setRegionFilter] = useState<RegionFilter>("");
 
   useEffect(() => {
     fetchDashboardStats();
   }, []);
+
+  // Recompute stats whenever the raw data or the region filter changes
+  useEffect(() => {
+    if (rawSales.length || rawProducts.length || rawCustomers.length) {
+      setStats(processDashboardData(rawSales, rawCustomers, rawProducts, regionFilter));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawSales, rawCustomers, rawProducts, regionFilter]);
 
   const fetchDashboardStats = async () => {
     try {
@@ -78,14 +94,10 @@ export default function Dashboard() {
 
       console.log("Fetched products data:", productsData);
 
-      // Process the data
-      const processedStats = processDashboardData(
-        allSales,
-        Array.isArray(customersData) ? customersData : customersData.customers || customersData.data || [],
-        Array.isArray(productsData) ? productsData : productsData.products || productsData.data || []
-      );
-
-      setStats(processedStats);
+      // Store raw data; stats are (re)computed by the region-aware effect below
+      setRawSales(allSales);
+      setRawCustomers(Array.isArray(customersData) ? customersData : customersData.customers || customersData.data || []);
+      setRawProducts(Array.isArray(productsData) ? productsData : productsData.products || productsData.data || []);
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
       // Try alternative fetch method
@@ -166,8 +178,9 @@ export default function Dashboard() {
           console.error("Error fetching products:", error);
         }
         
-        const processedStats = processDashboardData(allSales, allCustomers, allProducts);
-        setStats(processedStats);
+        setRawSales(allSales);
+        setRawCustomers(allCustomers);
+        setRawProducts(allProducts);
       } else {
         // Set default stats if no data
         setStats({
@@ -199,15 +212,25 @@ export default function Dashboard() {
     }
   };
 
+  // Sum of item totals for a sale that belong to the given region (region-scoped revenue)
+  const getSaleRegionTotal = (sale: any, region: RegionFilter): number =>
+    (sale.items || [])
+      .filter((item: any) => item.regionCode === region)
+      .reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+
+  const saleTouchesRegion = (sale: any, region: RegionFilter): boolean =>
+    (sale.items || []).some((item: any) => item.regionCode === region);
+
   const processDashboardData = (
     sales: any[],
     customers: any[],
-    products: any[]
+    products: any[],
+    region: RegionFilter = ""
   ): DashboardStats => {
     // FILTER OUT VOIDED AND CORRECTED SALES - ONLY COUNT COMPLETED SALES
-    const validSales = sales.filter(sale => 
-      sale.status !== 'voided' && 
-      sale.status !== 'cancelled' && 
+    const validSales = sales.filter(sale =>
+      sale.status !== 'voided' &&
+      sale.status !== 'cancelled' &&
       sale.status !== 'refunded' &&
       sale.status !== 'deleted'
     );
@@ -215,36 +238,50 @@ export default function Dashboard() {
     console.log(`Dashboard: Filtered sales: ${validSales.length} valid out of ${sales.length} total`);
 
     // Filter out invalid sales (ensure they have required properties)
-    const cleanSales = validSales.filter(sale => 
+    const cleanSales = validSales.filter(sale =>
       sale && typeof sale.total === 'number'
     );
 
     console.log(`Dashboard: Clean sales for processing: ${cleanSales.length}`);
 
-    const totalRevenue = cleanSales.reduce(
-      (sum, sale) => sum + (sale.total || 0),
-      0
-    );
-    const totalSales = cleanSales.length;
-    const totalProducts = products.length;
+    // When a region is selected, scope both the product catalog and the
+    // sales math (using per-item totals so mixed-region sales aren't
+    // double-counted) to that region. "All Regions" keeps the original math.
+    const scopedProducts = region
+      ? products.filter((p) => p.regionCode === region)
+      : products;
+
+    const scopedSales = region
+      ? cleanSales.filter((sale) => saleTouchesRegion(sale, region))
+      : cleanSales;
+
+    const scopedSalesForGrowth = region
+      ? scopedSales.map((sale) => ({ ...sale, total: getSaleRegionTotal(sale, region) }))
+      : cleanSales;
+
+    const totalRevenue = region
+      ? scopedSales.reduce((sum, sale) => sum + getSaleRegionTotal(sale, region), 0)
+      : cleanSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+    const totalSales = scopedSales.length;
+    const totalProducts = scopedProducts.length;
     const totalCustomers = customers.length;
 
     // Get recent VALID sales (last 5)
-    const recentSales = cleanSales
+    const recentSales = scopedSales
       .sort(
         (a, b) =>
-          new Date(b.createdAt || b.date || b.saleDate).getTime() - 
+          new Date(b.createdAt || b.date || b.saleDate).getTime() -
           new Date(a.createdAt || a.date || a.saleDate).getTime()
       )
       .slice(0, 5);
 
     // Get low stock products (stock < 100)
-    const lowStockProducts = products
+    const lowStockProducts = scopedProducts
       .filter((product) => (product.stock || 0) < 100)
       .slice(0, 5);
 
     // Calculate actual growth trends based on recent data
-    const growthTrends = calculateGrowthTrends(cleanSales, customers);
+    const growthTrends = calculateGrowthTrends(scopedSalesForGrowth, customers);
 
     return {
       totalRevenue,
@@ -383,11 +420,14 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Tableau de bord</h1>
-        <p className="text-gray-600">
-          Aperçu de la performance de votre entreprise
-        </p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Tableau de bord</h1>
+          <p className="text-gray-600">
+            Aperçu de la performance de votre entreprise
+          </p>
+        </div>
+        <RegionFilterPills value={regionFilter} onChange={setRegionFilter} />
       </div>
 
       {/* Stats Cards */}
@@ -539,6 +579,11 @@ export default function Dashboard() {
                     <div>
                       <p className="text-sm font-medium text-gray-900">
                         {product.name || "Unknown Product"}
+                        {product.regionCode && (
+                          <span className="ml-1.5 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
+                            {product.regionCode}
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-red-600">
                         Avertissement De Stock Faible

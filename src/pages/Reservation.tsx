@@ -9,6 +9,8 @@ interface Product {
   sku?: string;
   stock: number;
   price?: number;
+  region?: "Butembo" | "China";
+  regionCode?: "Bbbb" | "Cnnn";
 }
 
 interface CartItem {
@@ -17,6 +19,8 @@ interface CartItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  region?: "Butembo" | "China";
+  regionCode?: "Bbbb" | "Cnnn";
 }
 
 interface ExchangeRate {
@@ -409,6 +413,11 @@ export default function Reservation() {
       return;
     }
 
+    if (!product.regionCode) {
+      setError("Ce produit n'a pas de région assignée. Contactez un administrateur.");
+      return;
+    }
+
     if (quantity <= 0) {
       setError("La quantité doit être supérieure à zéro");
       return;
@@ -452,6 +461,8 @@ export default function Reservation() {
           quantity,
           unitPrice,
           total: itemTotal,
+          region: product.region,
+          regionCode: product.regionCode,
         },
       ]);
     }
@@ -788,7 +799,7 @@ export default function Reservation() {
         .map(
           (item: CartItem) => `
         <div class="item-row">
-          <div class="item-name"><strong>${item.name}</strong></div>
+          <div class="item-name"><strong>${item.name}${item.regionCode ? ` (${item.regionCode})` : ''}</strong></div>
           <div class="item-details">
             <strong>${item.quantity}PcsX$${item.unitPrice.toFixed(2)}</strong>
           </div>
@@ -1135,7 +1146,7 @@ export default function Reservation() {
         .map(
           (item: CartItem) => `
         <div class="item-row">
-          <div class="item-name"><strong>${item.name}</strong></div>
+          <div class="item-name"><strong>${item.name}${item.regionCode ? ` (${item.regionCode})` : ''}</strong></div>
           <div class="item-details">
             <strong>${item.quantity}PcsX$${item.unitPrice.toFixed(2)}</strong>
           </div>
@@ -1286,6 +1297,8 @@ export default function Reservation() {
           name: item.name,
           quantity: item.quantity,
           price: item.unitPrice,
+          region: item.region,
+          regionCode: item.regionCode,
         })),
         subtotal: cartTotal,
         total: cartTotal,
@@ -1483,7 +1496,14 @@ export default function Reservation() {
                       className="px-4 py-3 cursor-pointer hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
                       onClick={() => handleProductSelect(product)}
                     >
-                      <div className="font-medium text-gray-900">{product.name}</div>
+                      <div className="font-medium text-gray-900 flex items-center gap-2">
+                        {product.name}
+                        {product.regionCode && (
+                          <span className="inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
+                            {product.regionCode}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-gray-600 flex justify-between">
                         <span>{product.sku && `SKU: ${product.sku}`}</span>
                         <span className={product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-orange-600" : "text-green-600"}>
@@ -1585,7 +1605,7 @@ export default function Reservation() {
           {cart.length > 0 && (
             <div className="mt-6">
               <h3 className="text-lg font-semibold mb-4 text-gray-900">Articles du panier de réservation</h3>
-              <div className="overflow-hidden rounded-lg border border-gray-200">
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
@@ -1599,7 +1619,14 @@ export default function Reservation() {
                   <tbody className="divide-y divide-gray-200">
                     {cart.map((item, index) => (
                       <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-900">{item.name}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {item.name}
+                          {item.regionCode && (
+                            <span className="ml-2 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
+                              {item.regionCode}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-sm text-center text-gray-600">{item.quantity}</td>
                         <td className="px-4 py-3 text-sm text-right text-gray-900">
                           {formatCurrency(item.unitPrice)}

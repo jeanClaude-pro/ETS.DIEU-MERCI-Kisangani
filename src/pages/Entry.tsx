@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { DollarSign, RefreshCw, FileText, User, Calculator } from "lucide-react";
+import { REGION_CODE_MAP } from "../utils/constants";
 
 interface Entry {
   _id: string;
@@ -69,7 +70,8 @@ export default function Entry() {
     receivedFromName: "",
     receivedFromPhone: "",
     receivedFromEmail: "",
-    currencyMode: "usd" as "usd" | "fc"
+    currencyMode: "usd" as "usd" | "fc",
+    region: "China" as "Butembo" | "China"
   });
 
   const [message, setMessage] = useState<string | null>(null);
@@ -902,7 +904,9 @@ export default function Entry() {
           name: form.receivedFromName,
           phone: form.receivedFromPhone,
           email: form.receivedFromEmail || "",
-        }
+        },
+        region: form.region,
+        regionCode: REGION_CODE_MAP[form.region],
       };
 
       console.log("Sending entry data:", body);
@@ -971,7 +975,8 @@ export default function Entry() {
         receivedFromName: "",
         receivedFromPhone: "",
         receivedFromEmail: "",
-        currencyMode: "usd"
+        currencyMode: "usd",
+        region: "China"
       });
 
       setMessage(
@@ -1130,6 +1135,22 @@ export default function Entry() {
                       {category}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">
+                  Région *
+                </label>
+                <select
+                  name="region"
+                  value={form.region}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                >
+                  <option value="Butembo">Butembo (Bbbb)</option>
+                  <option value="China">China (Cnnn)</option>
                 </select>
               </div>
 

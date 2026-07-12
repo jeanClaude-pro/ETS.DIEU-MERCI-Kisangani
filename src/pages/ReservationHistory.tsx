@@ -1,16 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState } from "react";
-import { 
-  Search, 
-  Eye, 
-  CheckCircle, 
-  XCircle, 
-  Calendar, 
-  User, 
-  Package, 
-  Phone, 
-  Mail, 
-  RefreshCw, 
+import { useEffect, useState, useMemo } from "react";
+import {
+  Search,
+  Eye,
+  CheckCircle,
+  XCircle,
+  Calendar,
+  User,
+  Package,
+  Phone,
+  Mail,
+  RefreshCw,
   Printer,
   Edit,
   Trash2,
@@ -25,6 +25,8 @@ interface ReservationItem {
   price: number;
   total: number;
   _id: string;
+  region?: "Butembo" | "China";
+  regionCode?: "Bbbb" | "Cnnn";
 }
 
 interface EditHistoryEntry {
@@ -69,6 +71,8 @@ interface Product {
   stock: number;
   price: number;
   sku?: string;
+  region?: "Butembo" | "China";
+  regionCode?: "Bbbb" | "Cnnn";
 }
 
 const API_BASE = import.meta.env.VITE_API_URL;
@@ -85,6 +89,7 @@ export default function ReservationManagement() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('all');
+  const [filterRegion, setFilterRegion] = useState<'' | 'Bbbb' | 'Cnnn'>('');
   const [userRole, setUserRole] = useState<string>('');
 
   // Edit modal states
@@ -184,20 +189,39 @@ export default function ReservationManagement() {
     }
   };
 
-  const filteredReservations = reservations.filter((reservation) => {
-    const matchesSearch = 
-      reservation.saleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reservation.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reservation.customer.phone.includes(searchTerm) ||
-      (reservation.customer.email && reservation.customer.email.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredReservations = useMemo(() => {
+    return reservations.filter((reservation) => {
+      const matchesSearch =
+        reservation.saleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        reservation.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        reservation.customer.phone.includes(searchTerm) ||
+        (reservation.customer.email && reservation.customer.email.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesStatus = 
-      filterStatus === 'all' || 
-      (filterStatus === 'pending' && reservation.status === 'pending') ||
-      (filterStatus === 'completed' && reservation.status === 'completed');
+      const matchesStatus =
+        filterStatus === 'all' ||
+        (filterStatus === 'pending' && reservation.status === 'pending') ||
+        (filterStatus === 'completed' && reservation.status === 'completed');
 
-    return matchesSearch && matchesStatus;
-  });
+      const matchesRegion =
+        !filterRegion ||
+        (reservation.items || []).some((item) => item.regionCode === filterRegion);
+
+      return matchesSearch && matchesStatus && matchesRegion;
+    });
+  }, [reservations, searchTerm, filterStatus, filterRegion]);
+
+  // Precompute each reservation's region codes once per data/filter change
+  // instead of re-walking every reservation's items inside the row .map().
+  const reservationRegionBadges = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const reservation of filteredReservations) {
+      const codes = Array.from(
+        new Set((reservation.items || []).map((i) => i.regionCode).filter(Boolean) as string[])
+      );
+      map.set(reservation._id, codes);
+    }
+    return map;
+  }, [filteredReservations]);
 
   const pendingReservations = reservations.filter(r => r.status === 'pending');
   const completedReservations = reservations.filter(r => r.status === 'completed');
@@ -459,6 +483,8 @@ export default function ReservationManagement() {
     updatedItems[index].name = product.name;
     updatedItems[index].price = product.price;
     updatedItems[index].total = product.price * updatedItems[index].quantity;
+    updatedItems[index].region = product.region;
+    updatedItems[index].regionCode = product.regionCode;
 
     setEditForm((prev) => ({
       ...prev,
@@ -886,7 +912,7 @@ export default function ReservationManagement() {
         .map(
           (item) => `
         <div class="item-row">
-          <div class="item-name"><strong>${item.name}</strong></div>
+          <div class="item-name"><strong>${item.name}${item.regionCode ? ` (${item.regionCode})` : ''}</strong></div>
           <div class="item-details">
             <strong>${item.quantity}Pcs × $${item.price.toFixed(2)}</strong>
           </div>
@@ -1161,6 +1187,16 @@ export default function ReservationManagement() {
             <option value="completed">Complétées seulement</option>
           </select>
 
+          <select
+            value={filterRegion}
+            onChange={(e) => setFilterRegion(e.target.value as '' | 'Bbbb' | 'Cnnn')}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">Toutes régions</option>
+            <option value="Bbbb">Butembo (Bbbb)</option>
+            <option value="Cnnn">China (Cnnn)</option>
+          </select>
+
           <div className="flex gap-2">
             <button
               onClick={fetchReservations}
@@ -1214,6 +1250,9 @@ export default function ReservationManagement() {
                     Articles
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Région
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Montant
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1248,6 +1287,18 @@ export default function ReservationManagement() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {reservation.items.length} article(s)
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {(() => {
+                        const codes = reservationRegionBadges.get(reservation._id) || [];
+                        if (codes.length === 0) return <span className="text-xs text-gray-400">—</span>;
+                        if (codes.length > 1) return (
+                          <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">Mixte</span>
+                        );
+                        return (
+                          <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">{codes[0]}</span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {formatCurrency(reservation.total)}
@@ -1522,7 +1573,14 @@ export default function ReservationManagement() {
                     <div key={index} className="bg-gray-50 rounded-lg p-4">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h5 className="font-medium text-gray-900">{item.name}</h5>
+                          <h5 className="font-medium text-gray-900">
+                            {item.name}
+                            {item.regionCode && (
+                              <span className="ml-2 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
+                                {item.regionCode}
+                              </span>
+                            )}
+                          </h5>
                           <p className="text-sm text-gray-600">
                             Quantité: {item.quantity} × {formatCurrency(item.price)}
                           </p>
@@ -1860,7 +1918,8 @@ export default function ReservationManagement() {
                             >
                               {products.map((product) => (
                                 <option key={product._id} value={product._id}>
-                                  {product.name} -{" "}
+                                  {product.name}
+                                  {product.regionCode ? ` (${product.regionCode})` : ""} -{" "}
                                   {formatCurrency(product.price)} (Stock:{" "}
                                   {product.stock})
                                 </option>
