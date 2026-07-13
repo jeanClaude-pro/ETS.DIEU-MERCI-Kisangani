@@ -30,6 +30,12 @@ interface ExchangeRate {
   lastUpdated: string;
 }
 
+interface WalkInCustomer {
+  _id: string;
+  name: string;
+  phone: string;
+}
+
 const API_BASE = import.meta.env.VITE_API_URL;
 
 type UiPayment = "cash" | "mpesa" | "card" | "bank" | "other";
@@ -112,6 +118,7 @@ export default function NewSale() {
   const [receiptData, setReceiptData] = useState<any>(null);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [loadingRate, setLoadingRate] = useState(true);
+  const [walkInCustomer, setWalkInCustomer] = useState<WalkInCustomer | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -128,6 +135,7 @@ export default function NewSale() {
     customerName: "",
     customerPhone: "",
     customerEmail: "",
+    isWalkIn: true,
     paymentMethod: "cash" as UiPayment,
     currencyMode: "usd" as "usd" | "fc" // New field for currency mode
   });
@@ -175,18 +183,40 @@ export default function NewSale() {
     }
   };
 
+  // Load the permanent Walk-in Customer record, so the default customer
+  // sent with a sale always matches the real system record instead of a
+  // hardcoded guess.
+  const loadWalkInCustomer = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/customers/walkin`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setWalkInCustomer(data);
+      } else {
+        console.warn("Failed to load walk-in customer");
+      }
+    } catch (error) {
+      console.error("Error loading walk-in customer:", error);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
-    
+
     async function loadInitialData() {
       setLoadingProducts(true);
       setError(null);
-      
+
       try {
-        // Load products and exchange rate concurrently
+        // Load products, exchange rate, and the walk-in customer concurrently
         await Promise.all([
           loadProducts(),
-          loadExchangeRate()
+          loadExchangeRate(),
+          loadWalkInCustomer()
         ]);
       } catch (e: any) {
         if (!cancelled) setError(e?.message || "Failed to load initial data");
@@ -271,7 +301,10 @@ export default function NewSale() {
   const itemTotal = quantity * unitPrice;
   const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
 
-  const isFormValid = cart.length > 0;
+  const isFormValid =
+    cart.length > 0 &&
+    (form.isWalkIn ||
+      (form.customerName.trim() !== "" && form.customerPhone.trim() !== ""));
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -1283,11 +1316,17 @@ export default function NewSale() {
 
     try {
       const body = {
-        customer: {
-          name: form.customerName,
-          phone: form.customerPhone,
-          email: form.customerEmail || "",
-        },
+        customer: form.isWalkIn
+          ? {
+              name: walkInCustomer?.name,
+              phone: walkInCustomer?.phone,
+              email: "",
+            }
+          : {
+              name: form.customerName,
+              phone: form.customerPhone,
+              email: form.customerEmail || "",
+            },
         items: cart.map((item) => ({
           productId: item.productId,
           name: item.name,
@@ -1337,9 +1376,9 @@ export default function NewSale() {
         shopAddress: "Av du 1er Janvier N°13, C. Makiso, Kisangani",
         shopNumber: "+243 839 336 794",
         shopRegistration: "RCCM/KIS : 22-A-267",
-        customerName: form.customerName,
-        customerPhone: form.customerPhone,
-        customerEmail: form.customerEmail,
+        customerName: form.isWalkIn ? (walkInCustomer?.name || "Walk-in Customer") : form.customerName,
+        customerPhone: form.isWalkIn ? "" : form.customerPhone,
+        customerEmail: form.isWalkIn ? "" : form.customerEmail,
         items: cart,
         total: cartTotal,
         paymentMethod: form.paymentMethod,
@@ -1369,6 +1408,7 @@ export default function NewSale() {
         customerName: "",
         customerPhone: "",
         customerEmail: "",
+        isWalkIn: true,
         paymentMethod: form.paymentMethod,
         currencyMode: "usd"
       });
@@ -1659,49 +1699,76 @@ export default function NewSale() {
 
         <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
           <h3 className="text-lg font-semibold mb-4 text-gray-900">
-            Informations du client <span className="text-sm font-normal text-gray-400">(optionnel)</span>
+            Informations du client
           </h3>
+
+          <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={form.isWalkIn}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, isWalkIn: e.target.checked }))
+              }
+              className="w-4 h-4 rounded border-gray-300 focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="font-medium text-gray-700">
+              Client de passage (Walk-in Customer)
+            </span>
+          </label>
+
+          {form.isWalkIn ? (
+            <div className="mb-6 rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-600">
+              Cette vente sera enregistrée sous{" "}
+              <strong>{walkInCustomer?.name || "Walk-in Customer"}</strong>.
+              Décochez la case ci-dessus pour sélectionner un client enregistré.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">
+                  Nom du client <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="customerName"
+                  value={form.customerName}
+                  onChange={handleChange}
+                  placeholder="Entrer le nom du client"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">
+                  Numéro de téléphone du client <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  name="customerPhone"
+                  value={form.customerPhone}
+                  onChange={handleChange}
+                  placeholder="Entrer le numéro de téléphone"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">
+                  Email du client (optionnel)
+                </label>
+                <input
+                  type="email"
+                  name="customerEmail"
+                  value={form.customerEmail}
+                  onChange={handleChange}
+                  placeholder="Entrer l'email du client"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <label className="block mb-2 font-medium text-gray-700">Nom du client</label>
-              <input
-                type="text"
-                name="customerName"
-                value={form.customerName}
-                onChange={handleChange}
-                placeholder="Entrer le nom du client"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block mb-2 font-medium text-gray-700">
-                Numéro de téléphone du client
-              </label>
-              <input
-                type="tel"
-                name="customerPhone"
-                value={form.customerPhone}
-                onChange={handleChange}
-                placeholder="Entrer le numéro de téléphone"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block mb-2 font-medium text-gray-700">
-                Email du client (optionnel)
-              </label>
-              <input
-                type="email"
-                name="customerEmail"
-                value={form.customerEmail}
-                onChange={handleChange}
-                placeholder="Entrer l'email du client"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
             <div>
               <label className="block mb-2 font-medium text-gray-700">
                 Méthode de paiement

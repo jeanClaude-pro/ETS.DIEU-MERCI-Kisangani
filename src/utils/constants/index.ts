@@ -73,3 +73,7 @@ export const REGION_CODE_MAP: Record<Region, RegionCode> = {
 export function formatProductLabel(product: { name: string; regionCode?: RegionCode | string }) {
     return product.regionCode ? `${product.name} (${product.regionCode})` : product.name;
 }
+
+// The single permanent system customer used whenever a sale has no registered
+// customer attached. Mirrors the backend constant in server/utils/walkInCustomer.js.
+export const WALKIN_CUSTOMER_NAME = "Walk-in Customer";

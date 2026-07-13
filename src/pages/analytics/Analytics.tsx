@@ -23,6 +23,7 @@ import {
 import jsPDF from "jspdf";
 import RegionFilterPills from "../../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../../types";
+import { WALKIN_CUSTOMER_NAME } from "../../utils/constants";
 
 // Define interfaces for the data structures
 interface SaleItem {
@@ -52,6 +53,7 @@ interface Sale {
     name?: string;
     phone?: string;
     email?: string;
+    isWalkIn?: boolean;
   };
 }
 
@@ -507,6 +509,9 @@ export default function Analytics() {
     // Count unique customers
     const customerIds = new Set();
     completedSales.forEach((sale: Sale) => {
+      // Walk-in sales share one fixed identity — they aren't a "customer" for
+      // this metric, so they're excluded rather than collapsed into one.
+      if (sale.customer?.isWalkIn) return;
       if (sale.customerId) {
         customerIds.add(sale.customerId);
       } else if (sale.customer?.phone) {
@@ -585,7 +590,7 @@ export default function Analytics() {
     });
 
     const topCustomers = Array.from(customerStats.values())
-      .filter(customer => customer.purchases > 0 && customer.name !== "Unknown Customer")
+      .filter(customer => customer.purchases > 0 && customer.name !== "Unknown Customer" && customer.name !== WALKIN_CUSTOMER_NAME)
       .sort((a, b) => b.totalSpent - a.totalSpent)
       .slice(0, 5);
 
@@ -670,6 +675,9 @@ export default function Analytics() {
     // Count unique customers
     const customerIds = new Set();
     completedSales.forEach((sale: Sale) => {
+      // Walk-in sales share one fixed identity — they aren't a "customer" for
+      // this metric, so they're excluded rather than collapsed into one.
+      if (sale.customer?.isWalkIn) return;
       if (sale.customerId) {
         customerIds.add(sale.customerId);
       } else if (sale.customer?.phone) {
@@ -752,7 +760,7 @@ export default function Analytics() {
     }
 
     const topCustomers = Array.from(customerStats.values())
-      .filter(customer => customer.purchases > 0 && customer.name !== "Unknown Customer")
+      .filter(customer => customer.purchases > 0 && customer.name !== "Unknown Customer" && customer.name !== WALKIN_CUSTOMER_NAME)
       .sort((a, b) => b.totalSpent - a.totalSpent)
       .slice(0, 5);
 

@@ -50,6 +50,7 @@ interface Sale {
     name: string;
     phone: string;
     email: string;
+    isWalkIn?: boolean;
   };
   items: SaleItem[];
   subtotal: number;
