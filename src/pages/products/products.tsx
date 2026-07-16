@@ -490,14 +490,18 @@ export default function Products() {
                       type="text"
                       required
                       value={formData.name}
+                      readOnly={showEditModal}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
                           name: e.target.value,
                         }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg outline-none ${showEditModal ? "bg-gray-100 cursor-not-allowed" : "focus:ring-2 focus:ring-blue-500 focus:border-transparent"}`}
                     />
+                    {showEditModal && (
+                      <p className="mt-1 text-xs text-gray-500">Le nom original est permanent et ne peut pas être traduit.</p>
+                    )}
                   </div>
 
                   <div>

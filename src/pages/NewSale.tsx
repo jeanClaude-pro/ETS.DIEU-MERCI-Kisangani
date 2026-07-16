@@ -1318,9 +1318,10 @@ export default function NewSale() {
       const body = {
         customer: form.isWalkIn
           ? {
-              name: walkInCustomer?.name,
-              phone: walkInCustomer?.phone,
+              name: form.customerName,
+              phone: "",
               email: "",
+              isWalkIn: true,
             }
           : {
               name: form.customerName,
@@ -1376,7 +1377,7 @@ export default function NewSale() {
         shopAddress: "Av du 1er Janvier N°13, C. Makiso, Kisangani",
         shopNumber: "+243 839 336 794",
         shopRegistration: "RCCM/KIS : 22-A-267",
-        customerName: form.isWalkIn ? (walkInCustomer?.name || "Walk-in Customer") : form.customerName,
+        customerName: form.customerName || (walkInCustomer?.name || "Walk-in Customer"),
         customerPhone: form.isWalkIn ? "" : form.customerPhone,
         customerEmail: form.isWalkIn ? "" : form.customerEmail,
         items: cart,
@@ -1717,10 +1718,20 @@ export default function NewSale() {
           </label>
 
           {form.isWalkIn ? (
-            <div className="mb-6 rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-600">
-              Cette vente sera enregistrée sous{" "}
-              <strong>{walkInCustomer?.name || "Walk-in Customer"}</strong>.
-              Décochez la case ci-dessus pour sélectionner un client enregistré.
+            <div className="mb-6 space-y-3 rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-600">
+              <label className="block font-medium text-gray-700" htmlFor="walkInCustomerName">
+                Nom du client de passage (optionnel)
+              </label>
+              <input
+                id="walkInCustomerName"
+                type="text"
+                name="customerName"
+                value={form.customerName}
+                onChange={handleChange}
+                placeholder={walkInCustomer?.name || "Walk-in Customer"}
+                className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p>Décochez la case ci-dessus pour sélectionner un client enregistré.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
