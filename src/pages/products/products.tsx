@@ -36,6 +36,7 @@ export default function Products() {
     minStock: 0,
     unit: "pcs",
     weight: 0,
+    unitCost: 0,
     status: "active",
     region: "China",
     regionCode: "Cnnn",
@@ -166,6 +167,7 @@ export default function Products() {
       minStock: 0,
       unit: "pcs",
       weight: 0,
+      unitCost: 0,
       status: "active",
       region: "China",
       regionCode: "Cnnn",
@@ -641,6 +643,24 @@ export default function Products() {
                           </option>
                         ))}
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Coût unitaire (USD)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.unitCost ?? 0}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            unitCost: Number.parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
+                      />
                     </div>
                   </div>
 

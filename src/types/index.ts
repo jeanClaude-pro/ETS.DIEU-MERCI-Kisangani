@@ -14,6 +14,7 @@ export interface Product {
   minStock: number;
   unit: string;
   weight: number;
+  unitCost?: number;
   status: "active" | "inactive";
   region: Region;
   regionCode: RegionCode;

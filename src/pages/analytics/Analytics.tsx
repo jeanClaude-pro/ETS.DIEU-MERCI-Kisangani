@@ -24,6 +24,7 @@ import jsPDF from "jspdf";
 import RegionFilterPills from "../../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../../types";
 import { WALKIN_CUSTOMER_NAME } from "../../utils/constants";
+import { isReportableSale, projectSalesToRegion } from "../../utils/regionalSales";
 
 // Define interfaces for the data structures
 interface SaleItem {
@@ -34,11 +35,23 @@ interface SaleItem {
   total?: number;
   region?: string;
   regionCode?: string;
+  subtotal?: number;
+  unitCost?: number;
+  cost?: number;
+  profit?: number;
+  netTotal?: number;
 }
 
 interface Sale {
   _id?: string;
   total: number;
+  subtotal?: number;
+  discount?: number;
+  tax?: number;
+  transportCost?: number;
+  otherCharges?: number;
+  cost?: number;
+  profit?: number;
   status?: string;
   createdAt?: string;
   date?: string;
@@ -234,9 +247,7 @@ type RegionFilter = RegionCodeFilter;
 // Sum of item totals belonging to the given region (falls back to sale.total when no region is selected)
 const getRegionScopedTotal = (sale: Sale, region: RegionFilter): number => {
   if (!region) return sale.total;
-  return (sale.items || [])
-    .filter((item) => item.regionCode === region)
-    .reduce((sum, item) => sum + (item.total || 0), 0);
+  return sale.total;
 };
 
 export default function Analytics() {
@@ -306,10 +317,9 @@ export default function Analytics() {
 
     setAnalytics(processed);
 
-    const value = rawReservations.reduce((sum, sale) => sum + getRegionScopedTotal(sale, regionFilter), 0);
-    const count = regionFilter
-      ? rawReservations.filter((sale) => (sale.items || []).some((item) => item.regionCode === regionFilter)).length
-      : rawReservations.length;
+    const projectedReservations = projectSalesToRegion(rawReservations, regionFilter);
+    const value = projectedReservations.reduce((sum, sale) => sum + sale.total, 0);
+    const count = projectedReservations.length;
     setReservationsStats({ count, value });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawSalesData, rawExpensesData, rawEntriesData, rawCustomers, rawReservations, regionFilter]);
@@ -461,17 +471,13 @@ export default function Analytics() {
     entriesData: any,
     region: RegionFilter = ""
   ): AnalyticsData => {
-    const sales = salesData.data || [];
+    const sales = projectSalesToRegion((salesData.data || []) as Sale[], region);
     const expenses = expensesData.data || [];
     const entries = entriesData.data || [];
 
     // Filter completed sales only (not voided, not corrected, not expense type)
     const completedSales = sales.filter((sale: Sale) =>
-      sale.status !== "voided" &&
-      sale.status !== "refunded" &&
-      sale.status !== "corrected" &&
-      sale.type !== "expense" &&
-      (sale.status === "completed" || sale.status === "pending")
+      isReportableSale(sale) && (sale.status === "completed" || sale.status === "pending")
     );
 
     const totalSales = completedSales.length;
@@ -548,14 +554,14 @@ export default function Analytics() {
             productStats.set(key, {
               ...existing,
               quantity: existing.quantity + (item.quantity || 0),
-              revenue: existing.revenue + (item.total || 0),
+              revenue: existing.revenue + (item.netTotal ?? item.total ?? 0),
             });
           } else {
             productStats.set(key, {
               name: productName,
               regionCode: item.regionCode,
               quantity: item.quantity || 0,
-              revenue: item.total || 0,
+              revenue: item.netTotal ?? item.total ?? 0,
             });
           }
         });
@@ -627,17 +633,13 @@ export default function Analytics() {
     customers: Customer[],
     region: RegionFilter = ""
   ): AnalyticsData => {
-    const sales = salesData.data || [];
+    const sales = projectSalesToRegion((salesData.data || []) as Sale[], region);
     const expenses = expensesData.data || [];
     const entries = entriesData.data || [];
 
     // Filter completed sales
     const completedSales = sales.filter((sale: Sale) =>
-      sale.status !== "voided" &&
-      sale.status !== "refunded" &&
-      sale.status !== "corrected" &&
-      sale.type !== "expense" &&
-      (sale.status === "completed" || sale.status === "pending")
+      isReportableSale(sale) && (sale.status === "completed" || sale.status === "pending")
     );
 
     const totalSales = completedSales.length;
@@ -703,14 +705,14 @@ export default function Analytics() {
             productStats.set(key, {
               ...existing,
               quantity: existing.quantity + (item.quantity || 0),
-              revenue: existing.revenue + (item.total || 0),
+              revenue: existing.revenue + (item.netTotal ?? item.total ?? 0),
             });
           } else {
             productStats.set(key, {
               name: productName,
               regionCode: item.regionCode,
               quantity: item.quantity || 0,
-              revenue: item.total || 0,
+              revenue: item.netTotal ?? item.total ?? 0,
             });
           }
         });

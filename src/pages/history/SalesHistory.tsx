@@ -23,6 +23,7 @@ import {
 import jsPDF from "jspdf";
 import RegionFilterPills from "../../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../../types";
+import { isReportableSale, projectSalesToRegion } from "../../utils/regionalSales";
 
 interface SaleItem {
   productId: string;
@@ -33,6 +34,15 @@ interface SaleItem {
   _id: string;
   region?: "Butembo" | "China";
   regionCode?: "Bbbb" | "Cnnn";
+  subtotal?: number;
+  unitCost?: number;
+  cost?: number;
+  profit?: number;
+  discount?: number;
+  tax?: number;
+  transportCost?: number;
+  otherCharges?: number;
+  netTotal?: number;
 }
 
 interface EditHistoryEntry {
@@ -55,6 +65,12 @@ interface Sale {
   items: SaleItem[];
   subtotal: number;
   total: number;
+  discount?: number;
+  tax?: number;
+  transportCost?: number;
+  otherCharges?: number;
+  cost?: number;
+  profit?: number;
   paymentMethod: string;
   status: string;
   createdAt: string;
@@ -251,8 +267,7 @@ export default function SalesHistory() {
   const filterValidSales = (sales: Sale[]): Sale[] => {
     return sales.filter((sale: Sale) => {
       // Filter out voided, cancelled, refunded sales and expenses
-      const invalidStatuses = ['voided', 'cancelled', 'refunded', 'expense', 'depense'];
-      const isValidStatus = !invalidStatuses.includes(sale.status?.toLowerCase());
+      const isValidStatus = isReportableSale(sale);
       
       // Also check if it's a sale (has saleId and customer structure)
       const isSaleStructure = sale.saleId && sale.customer && sale.items;
@@ -483,14 +498,29 @@ export default function SalesHistory() {
   };
 
   const filteredSales = useMemo(() => {
-    const source = showEditedSales ? editedSales : sales;
+    const source = projectSalesToRegion(
+      showEditedSales ? editedSales : sales,
+      queryParams.region as RegionCodeFilter,
+    );
     return source.filter(sale =>
       sale.saleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.customer.phone.includes(searchTerm) ||
       (sale.salesPerson && sale.salesPerson.toLowerCase().includes(searchTerm.toLowerCase()))
     );
-  }, [showEditedSales, editedSales, sales, searchTerm]);
+  }, [showEditedSales, editedSales, sales, searchTerm, queryParams.region]);
+
+  const displayedSummaryStats = useMemo(() => {
+    if (!summaryStats || !queryParams.region) return summaryStats;
+    const revenue = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
+    return {
+      ...summaryStats,
+      totalRecords: filteredSales.length,
+      salesCount: filteredSales.length,
+      revenue,
+      net: revenue - Number(summaryStats.expenses || 0),
+    };
+  }, [summaryStats, filteredSales, queryParams.region]);
 
   // Precompute each sale's region badge once per data/filter change, instead
   // of re-walking every sale's items on every render inside the row .map().
@@ -1172,16 +1202,19 @@ export default function SalesHistory() {
   };
 
   const openEditModal = async (sale: Sale) => {
-    if (sale.status === "voided" || sale.status === "corrected") {
+    // Regional rows are read-only projections; editing must always load the
+    // complete original receipt so hidden items from the other region survive.
+    const fullSale = sales.find((candidate) => candidate._id === sale._id) || sale;
+    if (fullSale.status === "voided" || fullSale.status === "corrected") {
       setError("Cannot edit a voided or corrected sale");
       return;
     }
 
-    setEditingSale(sale);
+    setEditingSale(fullSale);
     setEditForm({
-      customer: { ...sale.customer },
-      items: sale.items.map((item) => ({ ...item })),
-      paymentMethod: sale.paymentMethod,
+      customer: { ...fullSale.customer },
+      items: fullSale.items.map((item) => ({ ...item })),
+      paymentMethod: fullSale.paymentMethod,
       reason: "",
     });
     setShowEditModal(true);
@@ -1529,7 +1562,7 @@ export default function SalesHistory() {
       </div>
 
       {/* Summary Stats - ONLY VISIBLE TO ADMINS */}
-      {isAdmin && summaryStats && (
+      {isAdmin && displayedSummaryStats && (
         <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
@@ -1548,7 +1581,7 @@ export default function SalesHistory() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Total Records</p>
-                  <p className="text-2xl font-bold text-gray-900">{summaryStats.totalRecords}</p>
+                  <p className="text-2xl font-bold text-gray-900">{displayedSummaryStats.totalRecords}</p>
                 </div>
                 <FileText className="w-8 h-8 text-blue-500" />
               </div>
@@ -1558,7 +1591,7 @@ export default function SalesHistory() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Revenue</p>
-                  <p className="text-2xl font-bold text-green-600">{formatCurrency(summaryStats.revenue)}</p>
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(displayedSummaryStats.revenue)}</p>
                 </div>
                 <Download className="w-8 h-8 text-green-500" />
               </div>
@@ -1568,7 +1601,7 @@ export default function SalesHistory() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Expenses</p>
-                  <p className="text-2xl font-bold text-red-600">{formatCurrency(summaryStats.expenses)}</p>
+                  <p className="text-2xl font-bold text-red-600">{formatCurrency(displayedSummaryStats.expenses)}</p>
                 </div>
                 <Minus className="w-8 h-8 text-red-500" />
               </div>
@@ -1578,7 +1611,7 @@ export default function SalesHistory() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Net</p>
-                  <p className="text-2xl font-bold text-blue-600">{formatCurrency(summaryStats.net)}</p>
+                  <p className="text-2xl font-bold text-blue-600">{formatCurrency(displayedSummaryStats.net)}</p>
                 </div>
                 <Package className="w-8 h-8 text-blue-500" />
               </div>
@@ -1591,7 +1624,7 @@ export default function SalesHistory() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Total Sales</p>
-                  <p className="text-xl font-bold text-green-700">{summaryStats.salesCount}</p>
+                  <p className="text-xl font-bold text-green-700">{displayedSummaryStats.salesCount}</p>
                 </div>
                 <FileText className="w-6 h-6 text-green-500" />
               </div>
@@ -1601,7 +1634,7 @@ export default function SalesHistory() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Total Expenses</p>
-                  <p className="text-xl font-bold text-red-700">{summaryStats.expensesCount}</p>
+                  <p className="text-xl font-bold text-red-700">{displayedSummaryStats.expensesCount}</p>
                 </div>
                 <Minus className="w-6 h-6 text-red-500" />
               </div>
@@ -2197,11 +2230,9 @@ export default function SalesHistory() {
                         <div>
                           <h5 className="font-medium text-gray-900">
                             {item.name}
-                            {item.regionCode && (
-                              <span className="ml-2 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
-                                {item.regionCode}
-                              </span>
-                            )}
+                            <span className={`ml-2 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded ${item.regionCode ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}`}>
+                              {item.regionCode || "Unknown region"}
+                            </span>
                           </h5>
                           <p className="text-sm text-gray-600">
                             Nombre de pieces: {item.quantity} ×{" "}
@@ -2210,7 +2241,7 @@ export default function SalesHistory() {
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-gray-900">
-                            {formatCurrency(item.total)}
+                            {formatCurrency(item.netTotal ?? item.total)}
                           </p>
                         </div>
                       </div>
@@ -2232,6 +2263,11 @@ export default function SalesHistory() {
                     {formatCurrency(selectedSale.subtotal)}
                   </span>
                 </div>
+                {Number(selectedSale.discount || 0) > 0 && <div className="flex justify-between text-sm mb-2"><span>Remise allouée:</span><span>-{formatCurrency(selectedSale.discount || 0)}</span></div>}
+                {Number(selectedSale.tax || 0) > 0 && <div className="flex justify-between text-sm mb-2"><span>Taxe allouée:</span><span>{formatCurrency(selectedSale.tax || 0)}</span></div>}
+                {Number(selectedSale.transportCost || 0) > 0 && <div className="flex justify-between text-sm mb-2"><span>Transport alloué:</span><span>{formatCurrency(selectedSale.transportCost || 0)}</span></div>}
+                {isAdmin && Number.isFinite(selectedSale.cost) && <div className="flex justify-between text-sm mb-2"><span>Coût:</span><span>{formatCurrency(selectedSale.cost || 0)}</span></div>}
+                {isAdmin && Number.isFinite(selectedSale.profit) && <div className="flex justify-between text-sm mb-2"><span>Profit:</span><span>{formatCurrency(selectedSale.profit || 0)}</span></div>}
                 <div className="flex justify-between items-center text-lg font-semibold">
                   <span className="text-gray-900">Total:</span>
                   <span className="text-gray-900">
