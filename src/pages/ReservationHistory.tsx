@@ -17,6 +17,10 @@ import {
   Plus,
   Minus
 } from "lucide-react";
+import {
+  normalizeSaleReceipt,
+  printSaleReceiptAndStub,
+} from "../services/printService";
 
 interface ReservationItem {
   productId: string;
@@ -631,358 +635,20 @@ export default function ReservationManagement() {
 
   const { subtotal, total } = calculateTotals();
 
-  // Print receipt for reservation (pending or completed)
+  // Reservations remain clearly labelled and use the shared receipt + stub pipeline.
   const printReservationReceipt = (reservation: Reservation) => {
-    const printWindow = window.open("", "_blank", "width=320,height=600");
-    if (printWindow) {
-      const username = localStorage.getItem("username") || "VENDEUR";
-      const currentDate = new Date().toLocaleString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+    const receipt = normalizeSaleReceipt(reservation, { type: "reservation" });
+    void printSaleReceiptAndStub(receipt)
+      .then((destination) => {
+        setMessage(
+          destination === "usb"
+            ? "✅ Réservation et souche envoyées à l'imprimante thermique."
+            : "✅ Réservation et souche ouvertes dans une seule fenêtre d'impression.",
+        );
+      })
+      .catch((printError: unknown) => {
+        setError(printError instanceof Error ? printError.message : "Échec de l'impression.");
       });
-      
-      const isCompleted = reservation.status === 'completed';
-      
-      printWindow.document.write(`
-<html>
-  <head>
-    <title>Reçu Réservation</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      body { 
-        font-family: 'Courier New', Courier, monospace; 
-        margin: 0; 
-        padding: 0; 
-        font-size: 13px;
-        font-weight: bold;
-        line-height: 1.1;
-        width: 72mm;
-        background-color: white;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-        display: flex;
-        justify-content: center;
-      }
-      .receipt-container { 
-        width: 70mm;
-        margin: 0 auto;
-        padding: 0.5mm;
-        border: none;
-        text-align: center;
-      }
-      .header { 
-        text-align: center; 
-        margin-bottom: 1mm; 
-        padding-bottom: 1mm;
-        border-bottom: 2px double #000;
-      }
-      .shop-name {
-        font-size: 15px;
-        font-weight: bold;
-        margin-bottom: 0.5mm;
-        text-transform: uppercase;
-      }
-      .shop-details {
-        font-size: 11px;
-        margin-bottom: 0.3mm;
-        line-height: 1;
-        font-weight: bold;
-      }
-      .receipt-info {
-        margin: 1mm 0;
-        padding: 1mm;
-        background-color: #f8f8f8;
-        border-left: 3px solid #000;
-      }
-      .receipt-title {
-        font-size: 13px;
-        font-weight: bold;
-        margin: 1mm 0;
-        text-transform: uppercase;
-        background-color: #000;
-        color: white;
-        padding: 1mm;
-        border-radius: 2px;
-      }
-      .status-badge {
-        padding: 2mm;
-        font-weight: bold;
-        text-align: center;
-        margin: 1mm 0;
-        font-size: 14px;
-        border-radius: 3px;
-        ${isCompleted 
-          ? 'background-color: #28a745; color: white;' 
-          : 'background-color: #ffc107; color: #000;'
-        }
-      }
-      .items-section {
-        margin: 1mm 0;
-        padding: 1mm;
-        background-color: #fafafa;
-        border: 1px solid #eee;
-      }
-      .item-row { 
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 0.5mm;
-        padding: 0 1mm;
-        border-bottom: 1px dotted #ddd;
-      }
-      .item-name {
-        text-align: left;
-        font-weight: bold;
-        font-size: 12px;
-        flex: 1;
-      }
-      .item-details {
-        text-align: right;
-        font-weight: bold;
-        font-size: 12px;
-        flex: 1;
-      }
-      .total-section { 
-        font-weight: bold; 
-        margin-top: 1mm;
-        padding: 1mm;
-        background-color: #f0f0f0;
-        border: 1px solid #ddd;
-        border-radius: 3px;
-      }
-      .total-row {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 0.3mm;
-        font-size: 13px;
-        padding: 0 1mm;
-      }
-      .payment-method {
-        text-transform: uppercase;
-        font-weight: bold;
-        font-size: 13px;
-        color: #000;
-      }
-      .footer { 
-        text-align: center; 
-        margin-top: 1mm; 
-        font-size: 11px;
-        font-weight: bold;
-        padding: 1mm;
-        background-color: #f8f8f8;
-        border-top: 1px dashed #000;
-      }
-      .sales-person {
-        margin-top: 1mm;
-        text-align: center;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 1mm;
-        background-color: #e8e8e8;
-        border: 1px solid #ccc;
-        border-radius: 2px;
-      }
-      .customer-info {
-        margin: 1mm 0;
-        padding: 1mm;
-        font-weight: bold;
-        text-align: center;
-        background-color: #f5f5f5;
-        border: 1px solid #ddd;
-        border-radius: 3px;
-      }
-      .customer-field {
-        margin-bottom: 0.3mm;
-        font-size: 12px;
-      }
-      .status-info {
-        padding: 1mm;
-        margin: 1mm 0;
-        font-weight: bold;
-        font-size: 12px;
-        border-radius: 3px;
-        ${isCompleted 
-          ? 'background-color: #d4edda; border: 2px solid #28a745;' 
-          : 'background-color: #fff3cd; border: 2px solid #ffc107;'
-        }
-      }
-      .cut-line {
-        text-align: center;
-        margin: 1mm 0;
-        font-weight: bold;
-        font-size: 11px;
-        color: #000;
-        letter-spacing: 1px;
-      }
-      .thank-you {
-        font-weight: bold;
-        margin: 0.5mm 0;
-        font-size: 12px;
-      }
-      .warning {
-        font-size: 10px;
-        color: #000;
-        margin: 0.3mm 0;
-        font-weight: bold;
-      }
-      .notes {
-        margin: 1mm 0;
-        padding: 1mm;
-        background-color: #f5f5f5;
-        border-left: 3px solid #ccc;
-        font-size: 11px;
-        font-weight: bold;
-        border-radius: 2px;
-      }
-      .section-divider {
-        height: 2px;
-        background: linear-gradient(to right, transparent, #000, transparent);
-        margin: 1mm 0;
-      }
-      @media print {
-        @page {
-          margin: 0 !important;
-          size: 72mm auto !important;
-        }
-        body { 
-          margin: 0 !important; 
-          padding: 0 !important; 
-          width: 72mm !important;
-          font-size: 13px !important;
-          background: white !important;
-          font-weight: bold !important;
-          height: auto !important;
-          overflow: hidden !important;
-        }
-        .receipt-container { 
-          border: none !important; 
-          box-shadow: none !important; 
-          margin: 0 auto !important;
-          padding: 0.5mm !important;
-          width: 70mm !important;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="receipt-container">
-      <div class="header">
-        <div class="shop-name"><strong>ETS. DIEU MERCI</strong></div>
-        <div class="shop-details"><strong>Av Manono Coin Munama N°39, C. Kenya, Lubumbashi</strong></div>
-        <div class="shop-details">TEL: <strong>+243 977 771 421 / +243 853 549 102</strong></div>
-        <div class="shop-details"><strong>RCCM: 14-A-017885</strong></div>
-      </div>
-      
-      <div class="section-divider"></div>
-      
-      <div class="status-badge">
-        <strong>${isCompleted ? '✅ RÉSERVATION RÉCUPÉRÉE ✅' : '⏳ RÉSERVATION EN ATTENTE ⏳'}</strong>
-      </div>
-      
-      <div class="receipt-info">
-        <div class="shop-details">DATE: <strong>${currentDate}</strong></div>
-        <div class="shop-details">RESERVATION #: <strong>${reservation.saleId}</strong></div>
-      </div>
-      
-      <div class="customer-info">
-        <div class="customer-field">CLIENT: <strong>${reservation.customer.name.toUpperCase()}</strong></div>
-        <div class="customer-field">TELEPHONE: <strong>${reservation.customer.phone}</strong></div>
-        ${reservation.customer.email ? `
-          <div class="customer-field">EMAIL: <strong>${reservation.customer.email}</strong></div>
-        ` : ''}
-      </div>
-      
-      ${reservation.notes ? `
-        <div class="notes">
-          <strong>NOTES:</strong> <strong>${reservation.notes}</strong>
-        </div>
-      ` : ''}
-      
-      <div class="receipt-title">ARTICLES RÉSERVÉS</div>
-      
-      <div class="items-section">
-      ${reservation.items
-        .map(
-          (item) => `
-        <div class="item-row">
-          <div class="item-name"><strong>${item.name}${item.regionCode ? ` (${item.regionCode})` : ''}</strong></div>
-          <div class="item-details">
-            <strong>${item.quantity}Pcs × $${item.price.toFixed(2)}</strong>
-          </div>
-        </div>
-        <div class="item-row">
-          <div class="item-name"><strong>Sous-total</strong></div>
-          <div class="item-details">
-            <strong>$${item.total.toFixed(2)}</strong>
-          </div>
-        </div>
-      `
-        )
-        .join("")}
-      </div>
-      
-      <div class="total-section">
-        <div class="total-row">
-          <div><strong>MONTANT TOTAL:</strong></div>
-          <div><strong>$${reservation.total.toFixed(2)}</strong></div>
-        </div>
-        <div class="total-row">
-          <div><strong>ACOMPTE PERÇU:</strong></div>
-          <div><strong>$${reservation.total.toFixed(2)}</strong></div>
-        </div>
-        <div class="total-row">
-          <div><strong>MÉTHODE PAIEMENT:</strong></div>
-          <div class="payment-method"><strong>${reservation.paymentMethod.toUpperCase()}</strong></div>
-        </div>
-      </div>
-      
-      <div class="status-info">
-        <div><strong>${isCompleted ? 'RÉSERVATION COMPLÉTÉE AVEC SUCCÈS' : 'RÉSERVATION EN ATTENTE DE RETRAIT'}</strong></div>
-        <div><strong>${isCompleted ? 'Tous les articles ont été remis au client' : 'Présentez ce reçu pour retirer vos articles'}</strong></div>
-        <div><strong>${isCompleted ? `Date retrait: ${currentDate}` : `Date réservation: ${displayReservationDate(reservation)}`}</strong></div>
-      </div>
-      
-      <div class="sales-person">
-        Agent: <strong>${username.toUpperCase()}</strong>
-      </div>
-      
-      <div class="footer">
-        <div class="thank-you"><strong>${isCompleted ? 'RETRAIT EFFECTUÉ AVEC SUCCÈS !' : 'MERCI POUR VOTRE RÉSERVATION !'}</strong></div>
-        ${!isCompleted ? `
-          <div class="warning"><strong>Validité: 7 jours</strong></div>
-          <div class="warning"><strong>Non remboursable</strong></div>
-        ` : ''}
-        <div class="warning"><strong>À BIENTÔT !</strong></div>
-      </div>
-
-      <div class="cut-line">
-        ✄ ────────────────────────── ✄
-      </div>
-    </div>
-    <script>
-      window.onload = function() {
-        try {
-          window.print();
-        } catch(e) {
-          console.error('Print error:', e);
-        }
-        setTimeout(() => {
-          window.close();
-        }, 1000);
-      };
-    </script>
-  </body>
-</html>
-`);
-      printWindow.document.close();
-    }
   };
 
   const markAsCompleted = async (reservation: Reservation) => {
@@ -1327,7 +993,7 @@ export default function ReservationManagement() {
                         <button
                           onClick={() => printReservationReceipt(reservation)}
                           className="text-purple-600 hover:text-purple-900 p-1 rounded"
-                          title="Imprimer le reçu"
+                          title="Imprimer le reçu et la souche"
                         >
                           <Printer className="w-4 h-4" />
                         </button>
@@ -1625,7 +1291,7 @@ export default function ReservationManagement() {
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <Printer className="w-4 h-4" />
-                  Imprimer le Reçu
+                  Imprimer Reçu + Souche
                 </button>
                 
                 {canEditReservation && (
