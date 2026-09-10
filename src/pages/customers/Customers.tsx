@@ -62,7 +62,11 @@ export default function Customers() {
       setLoading(true);
       const params = new URLSearchParams({ page: String(currentPage), limit: "50" });
       if (searchTerm.trim()) params.set("search", searchTerm.trim());
-      const response = await fetch(`${serverUrl}/customers?${params}`);
+      const response = await fetch(`${serverUrl}/customers?${params}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+        },
+      });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setCustomers(Array.isArray(data.customers) ? data.customers : []);

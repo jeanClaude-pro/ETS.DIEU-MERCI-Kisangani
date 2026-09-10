@@ -542,44 +542,6 @@ export default function Reservation() {
         throw new Error(msg);
       }
 
-      // Get the sale ID from the API response
-      const saleId = data._id;
-      const reservationId = data.saleId;
-      
-      // Create reservation tracking record
-      try {
-        const trackRes = await fetch(`${API_BASE}/reservations/track`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...authHeader(),
-          },
-          body: JSON.stringify({
-            saleReference: saleId,
-            saleId: reservationId,
-            customer: {
-              name: form.customerName,
-              phone: form.customerPhone,
-              email: form.customerEmail
-            },
-            items: cart,
-            total: cartTotal,
-            paymentMethod: uiToModelPayment(form.paymentMethod),
-            salesPerson: currentUser?.username || "unknown",
-            reservationDate: reservationDate,
-            reservationTime: reservationTime,
-            notes: form.notes
-          }),
-        });
-
-        if (!trackRes.ok) {
-          console.warn('Failed to create reservation tracking, but sale was created');
-        }
-      } catch (trackError) {
-        console.warn('Error creating reservation tracking:', trackError);
-        // Don't fail the whole reservation if tracking fails
-      }
-
       // Keep the reservation document distinct, but print its committed Sale snapshot.
       const newReceiptData = normalizeSaleReceipt(data, {
         type: "reservation",

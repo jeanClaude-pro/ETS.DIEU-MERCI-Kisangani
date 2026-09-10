@@ -253,7 +253,7 @@ export default function SalesHistory() {
         setIsAdmin(userData.role === "admin");
       } else {
         // Fallback to API call
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/me`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/users/me`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${localStorage.getItem("token") || ""}`,

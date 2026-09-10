@@ -89,8 +89,10 @@ test("long product names remain present and use wrapping-friendly columns", () =
   assert.match(html, new RegExp(longName));
   assert.match(html, /overflow-wrap: anywhere/);
   assert.match(html, /ARTICLES ACHETÉS/);
-  assert.match(html, /PU FC/);
-  assert.match(html, /Total article/);
+  assert.match(html, /class="item-calc"/);
+  // Compact single-row article line: qty x PU USD/FC on the left, PT USD/FC on the right.
+  assert.equal((html.match(/FC/g) || []).length >= 2, true);
+  assert.match(html, /312,50 USD/);
   assert.match(html, /white-space: nowrap/);
 });
 

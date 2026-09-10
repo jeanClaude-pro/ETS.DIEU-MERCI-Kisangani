@@ -267,9 +267,7 @@ const thermalStyles = `
   .item { padding: 1.2mm .4mm; border-bottom: .2mm dotted #555; break-inside: avoid; page-break-inside: avoid; }
   .item:last-child { border-bottom: 0; }
   .item-name { font-weight: 800; overflow-wrap: anywhere; word-break: break-word; }
-  .item-calc, .item-total { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5mm 2mm; margin-top: .5mm; overflow-wrap: anywhere; }
-  .item-fc { margin-top: .3mm; font-size: 10px; font-weight: 600; }
-  .item-total { font-weight: 800; }
+  .item-calc { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5mm 2mm; margin-top: .5mm; overflow-wrap: anywhere; font-weight: 800; }
   .region { margin-top: .4mm; font-size: 10.5px; }
   .totals { width: 100%; }
   .total-row { display: flex; justify-content: space-between; align-items: baseline; gap: 3mm; margin: .8mm 0; }
@@ -344,9 +342,7 @@ export function buildSaleReceiptHtml(receipt: SaleReceiptData): string {
     <div class="section-label">ARTICLES ACHETÉS</div>
     <section class="items">${receipt.items.map((item) => `<article class="item">
       <div class="item-name">${escapeHtml(item.name)}${item.regionCode ? ` <span class="region">(${escapeHtml(item.regionCode)})</span>` : ""}</div>
-      <div class="item-calc"><span>${item.quantity}${itemUnit(item)} x ${formatUsd(item.unitPrice)}</span><span>${formatUsd(item.lineTotal)}</span></div>
-      <div class="item-fc">PU FC : ${itemFc(item.unitPrice, receipt)}</div>
-      <div class="item-total"><span>Total article</span><span>${formatUsd(item.lineTotal)} / ${itemFc(item.lineTotal, receipt)}</span></div>
+      <div class="item-calc"><span>${item.quantity}${itemUnit(item)} x ${formatUsd(item.unitPrice)} / ${itemFc(item.unitPrice, receipt)}</span><strong>${formatUsd(item.lineTotal)} / ${itemFc(item.lineTotal, receipt)}</strong></div>
     </article>`).join("")}</section>
     <div class="rule"></div>
     <section class="totals">
