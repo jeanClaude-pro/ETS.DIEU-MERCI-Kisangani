@@ -5,14 +5,22 @@ const API_BASE = import.meta.env?.VITE_API_URL ?? "";
 export const SALE_BUSINESS = Object.freeze({
   name: "Boutique C'EST DIEU QUI PARTAGE",
   address: "Av du 1er Janvier N°13, C. Makiso, Kisangani",
+  phone: "+243 839 336 794",
   registration: "RCCM/KIS : 22-A-267",
+  thankYou: "Merci pour votre confiance.",
+  salesNotice: "Marchandises vendues non reprises, non échangées.",
+  logoUrl: "/icons/pwa-512x512.png",
 });
+
+export const POST_SAVE_PRINT_DELAY_MS = 500;
+export const BROWSER_DOCUMENT_DELAY_MS = 2000;
 
 export type ReceiptDocumentType = "sale" | "reservation";
 export type PrintDocumentKind = "receipt" | "stub";
 
 export interface SaleReceiptItem {
   name: string;
+  unit?: string;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
@@ -20,6 +28,7 @@ export interface SaleReceiptItem {
 }
 
 export interface SaleReceiptData {
+  savedSaleId: string;
   type: ReceiptDocumentType;
   status: string;
   reference: string;
@@ -45,6 +54,7 @@ export interface SaleReceiptData {
 
 interface PrintableItemSource {
   name?: unknown;
+  unit?: unknown;
   quantity?: unknown;
   price?: unknown;
   unitPrice?: unknown;
@@ -145,6 +155,7 @@ export function normalizeSaleReceipt(
     const storedTotal = numberValue(item.total ?? item.subtotal);
     return {
       name: stringValue(item.name) || "Article",
+      unit: stringValue(item.unit) || undefined,
       quantity,
       unitPrice: roundMoney(unitPrice),
       lineTotal: roundMoney(storedTotal || quantity * unitPrice),
@@ -158,6 +169,7 @@ export function normalizeSaleReceipt(
   const type: ReceiptDocumentType = requestedType === "reservation" ? "reservation" : "sale";
 
   return {
+    savedSaleId: stringValue(sale._id),
     type,
     status: stringValue(sale.status) || (type === "reservation" ? "pending" : "completed"),
     reference: stringValue(sale.saleId ?? sale._id) || "N/A",
@@ -213,37 +225,51 @@ const reservationSchedule = (receipt: SaleReceiptData): string =>
     ? `<div><strong>Retrait :</strong> ${escapeHtml([receipt.reservationDate, receipt.reservationTime].filter(Boolean).join(" à "))}</div>`
     : "";
 
+const itemUnit = (item: SaleReceiptItem): string => item.unit ? ` ${escapeHtml(item.unit)}` : "";
+const itemFc = (amount: number, receipt: SaleReceiptData): string =>
+  receipt.exchangeRate ? formatFc(amount * receipt.exchangeRate) : "FC indisponible";
+
+export const wait = (milliseconds: number): Promise<void> =>
+  new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
+
+export async function printCommittedSaleAfterDelay(receipt: SaleReceiptData): Promise<"usb" | "browser"> {
+  await wait(POST_SAVE_PRINT_DELAY_MS);
+  return printSaleReceiptAndStub(receipt);
+}
+
 const thermalStyles = `
   * { box-sizing: border-box; }
   @page { margin: 0; }
   html, body { margin: 0; padding: 0; width: 80mm; height: auto; min-height: 0; }
   body {
-    padding: 2mm 3mm 1.5mm;
+    padding: 1.5mm 1mm .8mm;
     color: #000;
     background: #fff;
     font-family: "Courier New", Courier, "Liberation Mono", monospace;
-    font-size: 12px;
-    line-height: 1.35;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.3;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .document { width: 74mm; max-width: 100%; height: auto; min-height: 0; margin: 0; }
+  .document { position: relative; width: 78mm; max-width: 100%; height: auto; min-height: 0; margin: 0; }
+  .document > *:not(.watermark) { position: relative; z-index: 1; }
+  .watermark { position: fixed; z-index: 0; inset: 24mm 14mm auto; width: 50mm; height: 50mm; object-fit: contain; opacity: .035; filter: grayscale(1); pointer-events: none; }
   .center { text-align: center; }
   .business { font-size: 16px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
   .business-meta { margin-top: .8mm; font-size: 11px; line-height: 1.3; }
   .rule { border-top: 1px dashed #000; margin: 1.8mm 0; }
   .double-rule { border-top: 2px double #000; margin: 1.8mm 0; }
-  .title { margin: 1.5mm 0; text-align: center; font-size: 14px; font-weight: 700; }
+  .title { margin: 1.5mm 0; text-align: center; font-size: 14px; font-weight: 800; }
+  .section-label { margin: 1.6mm 0 1mm; padding: 1mm; color: #fff; background: #000; text-align: center; font-weight: 800; letter-spacing: .2px; }
   .meta, .customer, .reservation { display: grid; gap: .7mm; overflow-wrap: anywhere; }
-  .items { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 1.2mm; }
-  .items th { border-bottom: 1px solid #000; padding: 1mm .3mm; font-size: 11px; text-align: left; }
-  .items td { padding: 1.2mm .3mm; vertical-align: top; font-size: 11.5px; }
-  .items tr { break-inside: avoid; page-break-inside: avoid; }
-  .items .description { width: 43%; overflow-wrap: anywhere; word-break: break-word; padding-right: 1mm; }
-  .items .quantity { width: 9%; text-align: right; white-space: nowrap; }
-  .items .unit-price { width: 24%; text-align: right; white-space: nowrap; }
-  .items .amount { width: 24%; text-align: right; white-space: nowrap; }
-  .items .unit-price, .items .amount { font-size: 9.5px; letter-spacing: -.2px; }
+  .customer, .totals { padding: 1.2mm; border: .2mm solid #d4d4d4; border-radius: 1.5mm; background: #f5f5f5; }
+  .item { padding: 1.2mm .4mm; border-bottom: .2mm dotted #555; break-inside: avoid; page-break-inside: avoid; }
+  .item:last-child { border-bottom: 0; }
+  .item-name { font-weight: 800; overflow-wrap: anywhere; word-break: break-word; }
+  .item-calc, .item-total { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5mm 2mm; margin-top: .5mm; overflow-wrap: anywhere; }
+  .item-fc { margin-top: .3mm; font-size: 10px; font-weight: 600; }
+  .item-total { font-weight: 800; }
   .region { margin-top: .4mm; font-size: 10.5px; }
   .totals { width: 100%; }
   .total-row { display: flex; justify-content: space-between; align-items: baseline; gap: 3mm; margin: .8mm 0; }
@@ -252,20 +278,22 @@ const thermalStyles = `
   .secondary { font-size: 12px; }
   .rate { text-align: right; font-size: 11px; }
   .footer { margin-top: 2mm; text-align: center; font-size: 10.5px; line-height: 1.35; }
+  .footer strong { font-size: 12px; text-transform: uppercase; }
+  .cut-indicator { margin-top: 1.4mm; text-align: center; font-size: 9px; font-weight: 400; white-space: nowrap; }
   .stub { border: 1px solid #000; padding: 2mm; height: auto; min-height: 0; break-inside: avoid; }
   .stub .business { font-size: 13px; }
   .stub-grid { display: grid; gap: .8mm; margin-top: 1.5mm; overflow-wrap: anywhere; }
-  .stub-items { margin-top: 1.4mm; padding-top: 1.2mm; border-top: 1px dashed #000; }
-  .stub-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2mm; margin: .7mm 0; }
+  .stub-items { margin-top: 1.2mm; }
+  .stub-item { padding: .8mm .2mm; border-bottom: .2mm dotted #555; }
   .stub-item span:first-child { overflow-wrap: anywhere; word-break: break-word; }
-  .stub-item strong { white-space: nowrap; }
+  .stub-item-detail { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5mm 2mm; margin-top: .3mm; font-size: 10.5px; overflow-wrap: anywhere; }
   .stub-total { display: flex; justify-content: space-between; gap: 2mm; border-top: 1px solid #000; margin-top: 1.2mm; padding-top: 1.2mm; font-size: 14px; font-weight: 700; }
   .stub-total strong { text-align: right; white-space: nowrap; }
-  @media screen { body { margin: 8px auto; box-shadow: 0 0 12px #bbb; } }
+  @media screen { body { margin: 8px auto; border: 1px solid #ddd; box-shadow: 0 0 12px #bbb; } }
   @media print {
     html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; }
-    body { margin: 0 !important; padding: 2mm 3mm 1.5mm !important; }
-    .document { width: 74mm; height: auto !important; min-height: 0 !important; }
+    body { margin: 0 !important; padding: 1.5mm 1mm .8mm !important; border: 0 !important; box-shadow: none !important; }
+    .document { width: 78mm; height: auto !important; min-height: 0 !important; }
   }
 `;
 
@@ -279,7 +307,7 @@ function buildThermalDocument(title: string, kind: PrintDocumentKind, content: s
   <style>${thermalStyles}</style>
 </head>
 <body data-document-kind="${kind}">
-  <main class="document">${content}</main>
+  <main class="document"><img class="watermark" src="${SALE_BUSINESS.logoUrl}" alt="">${content}<div class="cut-indicator">- - - - - - - ✂ - - - - - - -</div></main>
 </body>
 </html>`;
 }
@@ -296,6 +324,7 @@ export function buildSaleReceiptHtml(receipt: SaleReceiptData): string {
     <header class="center">
       <div class="business">${SALE_BUSINESS.name}</div>
       <div class="business-meta">${SALE_BUSINESS.address}</div>
+      <div class="business-meta">Tél. : ${SALE_BUSINESS.phone}</div>
       <div class="business-meta">${SALE_BUSINESS.registration}</div>
     </header>
     <div class="double-rule"></div>
@@ -312,16 +341,13 @@ export function buildSaleReceiptHtml(receipt: SaleReceiptData): string {
       ${receipt.customerPhone ? `<div><strong>Tél. :</strong> ${escapeHtml(receipt.customerPhone)}</div>` : ""}
       ${receipt.customerEmail ? `<div><strong>Email :</strong> ${escapeHtml(receipt.customerEmail)}</div>` : ""}
     </section>
-    <table class="items">
-      <colgroup><col class="description"><col class="quantity"><col class="unit-price"><col class="amount"></colgroup>
-      <thead><tr><th>Article</th><th class="quantity">Qté</th><th class="unit-price">PU</th><th class="amount">Total</th></tr></thead>
-      <tbody>${receipt.items.map((item) => `<tr>
-        <td class="description">${escapeHtml(item.name)}${item.regionCode ? `<div class="region">${escapeHtml(item.regionCode)}</div>` : ""}</td>
-        <td class="quantity">${item.quantity}</td>
-        <td class="unit-price">${formatUsd(item.unitPrice)}</td>
-        <td class="amount">${formatUsd(item.lineTotal)}</td>
-      </tr>`).join("")}</tbody>
-    </table>
+    <div class="section-label">ARTICLES ACHETÉS</div>
+    <section class="items">${receipt.items.map((item) => `<article class="item">
+      <div class="item-name">${escapeHtml(item.name)}${item.regionCode ? ` <span class="region">(${escapeHtml(item.regionCode)})</span>` : ""}</div>
+      <div class="item-calc"><span>${item.quantity}${itemUnit(item)} x ${formatUsd(item.unitPrice)}</span><span>${formatUsd(item.lineTotal)}</span></div>
+      <div class="item-fc">PU FC : ${itemFc(item.unitPrice, receipt)}</div>
+      <div class="item-total"><span>Total article</span><span>${formatUsd(item.lineTotal)} / ${itemFc(item.lineTotal, receipt)}</span></div>
+    </article>`).join("")}</section>
     <div class="rule"></div>
     <section class="totals">
       <div class="total-row"><span>Sous-total</span><strong>${formatUsd(receipt.subtotal)}</strong></div>
@@ -334,9 +360,9 @@ export function buildSaleReceiptHtml(receipt: SaleReceiptData): string {
     </section>
     <div class="rule"></div>
     <div><strong>Paiement :</strong> ${escapeHtml(receipt.paymentMethod.toUpperCase())}</div>
-    <div><strong>Agent :</strong> ${escapeHtml(receipt.salesPerson)}</div>
+    <div><strong>Agent de vente :</strong> ${escapeHtml(receipt.salesPerson)}</div>
     ${isReservation && receipt.notes ? `<div class="reservation"><strong>Notes :</strong> ${escapeHtml(receipt.notes)}</div>` : ""}
-    <footer class="footer">Merci pour votre confiance.<br>Marchandises vendues non reprises, non échangées.</footer>`;
+    <footer class="footer"><strong>${SALE_BUSINESS.thankYou}</strong><br>${SALE_BUSINESS.salesNotice}</footer>`;
 
   return buildThermalDocument(`${documentTitle} ${receipt.reference}`, "receipt", content);
 }
@@ -355,12 +381,15 @@ export function buildSaleStubHtml(receipt: SaleReceiptData): string {
       <div><strong>Client :</strong> ${escapeHtml(customerLabel(receipt))}</div>
       <div><strong>Paiement :</strong> ${escapeHtml(receipt.paymentMethod.toUpperCase())}</div>
       <div><strong>Statut :</strong> ${escapeHtml(receipt.status.toUpperCase())}</div>
-      <div><strong>Agent :</strong> ${escapeHtml(receipt.salesPerson)}</div>
+      <div><strong>Agent de vente :</strong> ${escapeHtml(receipt.salesPerson)}</div>
     </div>
+    <div class="section-label">ARTICLES VENDUS</div>
     <div class="stub-items">
-      ${receipt.items.map((item) => `<div class="stub-item"><span>${escapeHtml(item.name)}</span><strong>x ${item.quantity}</strong></div>`).join("")}
+      ${receipt.items.map((item) => `<div class="stub-item"><div><strong>${escapeHtml(item.name)}</strong></div><div class="stub-item-detail"><span>${item.quantity}${itemUnit(item)} x ${formatUsd(item.unitPrice)}</span><strong>${formatUsd(item.lineTotal)} / ${itemFc(item.lineTotal, receipt)}</strong></div></div>`).join("")}
     </div>
     <div class="stub-total"><span>TOTAL</span><strong>${formatUsd(receipt.total)}</strong></div>
+    ${receipt.exchangeRate ? `<div class="total-row"><span>Total FC</span><strong>${formatFc(receipt.total * receipt.exchangeRate)}</strong></div>` : ""}
+    <footer class="footer"><strong>SOUCHE DE CAISSE</strong><br>À conserver</footer>
   </section>`;
   return buildThermalDocument(`${stubTitle} ${receipt.reference}`, "stub", content);
 }
@@ -369,8 +398,10 @@ export function buildSaleStubHtml(receipt: SaleReceiptData): string {
 export async function runPrintSequence(
   printReceipt: () => Promise<void>,
   printStub: () => Promise<void>,
+  interDocumentDelayMs = 0,
 ): Promise<void> {
   await printReceipt();
+  if (interDocumentDelayMs > 0) await wait(interDocumentDelayMs);
   await printStub();
 }
 
@@ -447,43 +478,40 @@ async function renderAndPrint(printWindow: Window, html: string): Promise<void> 
   await waitForPrintDialog(printWindow);
 }
 
-function createPrintFrame(): HTMLIFrameElement {
-  const frame = document.createElement("iframe");
-  frame.title = "Document d'impression";
-  frame.setAttribute("aria-hidden", "true");
-  frame.style.position = "fixed";
-  frame.style.left = "-10000px";
-  frame.style.top = "0";
-  frame.style.width = "80mm";
-  frame.style.height = "1px";
-  frame.style.border = "0";
-  document.body.appendChild(frame);
-  return frame;
+function openPrintWindow(): Window {
+  const printWindow = window.open("", "_blank", "popup=yes,width=420,height=720");
+  if (!printWindow) {
+    throw new Error(
+      "Fenêtre d'impression bloquée. Autorisez les popups pour ce site puis réimprimez la vente enregistrée.",
+    );
+  }
+  return printWindow;
 }
 
-/** Reuses one same-origin frame so dialogs are sequential and never popup-blocked. */
+/** Uses one independently closed window per document, in strict receipt/stub order. */
 export async function printHtmlDocumentsSequentially(documents: readonly string[]): Promise<void> {
   if (!documents.length) return;
-  const frame = createPrintFrame();
-  const printWindow = frame.contentWindow;
-  if (!printWindow) {
-    frame.remove();
-    throw new Error("Le navigateur n'a pas pu préparer la zone d'impression.");
-  }
-
   let completedDialogs = 0;
-  try {
-    for (const html of documents) {
+  for (const [index, html] of documents.entries()) {
+    if (index > 0) await wait(BROWSER_DOCUMENT_DELAY_MS);
+    let printWindow: Window | null = null;
+    try {
+      printWindow = openPrintWindow();
       await renderAndPrint(printWindow, html);
       completedDialogs += 1;
+    } catch (error) {
+      const popupBlocked = error instanceof Error && error.message.includes("bloquée");
+      const message = popupBlocked && completedDialogs > 0
+        ? "Le reçu est terminé, mais la fenêtre de la souche a été bloquée. Autorisez les popups puis réimprimez la vente enregistrée."
+        : completedDialogs > 0
+          ? "Le reçu est terminé, mais l'impression de la souche a échoué. La vente reste enregistrée et peut être réimprimée."
+          : popupBlocked
+            ? error.message
+            : "Le dialogue d'impression n'a pas pu démarrer. La vente reste enregistrée et peut être réimprimée.";
+      throw new Error(message, { cause: error });
+    } finally {
+      if (printWindow && !printWindow.closed) printWindow.close();
     }
-  } catch (error) {
-    const message = completedDialogs > 0
-      ? "Le premier document est terminé, mais le second dialogue d'impression a échoué. La vente reste enregistrée et peut être réimprimée."
-      : "Le dialogue d'impression n'a pas pu démarrer. La vente reste enregistrée et peut être réimprimée.";
-    throw new Error(message, { cause: error });
-  } finally {
-    frame.remove();
   }
 }
 
@@ -506,9 +534,9 @@ async function printSaleReceiptOnUsb(receipt: SaleReceiptData): Promise<UsbPrint
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+        Authorization: `Bearer ${localStorage.getItem("authToken") || localStorage.getItem("token") || ""}`,
       },
-      body: JSON.stringify({ receiptData: receipt, type: receipt.type }),
+      body: JSON.stringify({ savedSaleId: receipt.savedSaleId, receiptData: receipt, type: receipt.type }),
     });
   } catch (error) {
     // The request may have reached the printer; automatic fallback could duplicate it.
@@ -582,9 +610,9 @@ export function downloadSaleReceiptAndStubPdf(receipt: SaleReceiptData): void {
     sum + Math.max(1, Math.ceil(`${item.name}${item.regionCode ? ` (${item.regionCode})` : ""}`.length / 40)), 0);
   const optionalHeight = (receipt.customerPhone ? 4 : 0) + (receipt.exchangeRate ? 4 : 0) +
     (receipt.type === "reservation" ? 8 : 0);
-  const receiptPageHeight = 73 + itemNameLines * 4 + receipt.items.length * 4 + adjustmentCount * 4 + optionalHeight;
+  const receiptPageHeight = 79 + itemNameLines * 4 + receipt.items.length * (receipt.exchangeRate ? 8 : 4) + adjustmentCount * 4 + optionalHeight;
   const stubNameLines = receipt.items.reduce((sum, item) => sum + Math.max(1, Math.ceil(item.name.length / 44)), 0);
-  const stubPageHeight = 47 + stubNameLines * 4 + receipt.items.length * 4 +
+  const stubPageHeight = 57 + stubNameLines * 4 + receipt.items.length * (receipt.exchangeRate ? 8 : 4) +
     (receipt.type === "reservation" ? 5 : 0);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [80, receiptPageHeight] });
   const left = 5;
@@ -627,11 +655,13 @@ export function downloadSaleReceiptAndStubPdf(receipt: SaleReceiptData): void {
   text(`Client: ${customerLabel(receipt)}`);
   if (receipt.customerPhone) text(`Tel: ${receipt.customerPhone}`);
   line();
+  centered("ARTICLES ACHETES", 8, true);
 
   for (const item of receipt.items) {
     const names = doc.splitTextToSize(`${item.name}${item.regionCode ? ` (${item.regionCode})` : ""}`, 68) as string[];
     names.forEach((name) => text(name, 8, true));
-    row(`${item.quantity} x ${pdfMoney(item.unitPrice)}`, pdfMoney(item.lineTotal));
+    row(`${item.quantity}${item.unit ? ` ${item.unit}` : ""} x ${pdfMoney(item.unitPrice)}`, pdfMoney(item.lineTotal));
+    if (receipt.exchangeRate) row("Equivalent FC", formatFc(item.lineTotal * receipt.exchangeRate));
   }
   line();
   row("Sous-total", pdfMoney(receipt.subtotal));
@@ -642,8 +672,9 @@ export function downloadSaleReceiptAndStubPdf(receipt: SaleReceiptData): void {
   row("TOTAL", pdfMoney(receipt.total), true);
   if (receipt.exchangeRate) row("TOTAL FC", formatFc(receipt.total * receipt.exchangeRate));
   text(`Paiement: ${receipt.paymentMethod.toUpperCase()}`);
-  text(`Agent: ${receipt.salesPerson}`);
-  centered("Merci pour votre confiance.", 7);
+  text(`Agent de vente: ${receipt.salesPerson}`);
+  centered(SALE_BUSINESS.thankYou, 7, true);
+  centered(SALE_BUSINESS.salesNotice, 6);
   doc.addPage([80, stubPageHeight], "portrait");
   y = 7;
   centered(receipt.type === "reservation" ? "SOUCHE DE RESERVATION" : "SOUCHE DE VENTE", 9, true);
@@ -653,13 +684,18 @@ export function downloadSaleReceiptAndStubPdf(receipt: SaleReceiptData): void {
   text(`Client: ${customerLabel(receipt)}`);
   text(`Paiement: ${receipt.paymentMethod.toUpperCase()}`);
   text(`Statut: ${receipt.status.toUpperCase()}`);
+  centered("ARTICLES VENDUS", 8, true);
   receipt.items.forEach((item) => {
     const names = doc.splitTextToSize(item.name, 58) as string[];
     names.forEach((name) => text(name, 7));
-    row("Quantite", String(item.quantity));
+    row(`${item.quantity}${item.unit ? ` ${item.unit}` : ""} x ${pdfMoney(item.unitPrice)}`, pdfMoney(item.lineTotal));
+    if (receipt.exchangeRate) row("Total FC", formatFc(item.lineTotal * receipt.exchangeRate));
   });
   row("TOTAL", pdfMoney(receipt.total), true);
-  text(`Agent: ${receipt.salesPerson}`);
+  if (receipt.exchangeRate) row("TOTAL FC", formatFc(receipt.total * receipt.exchangeRate));
+  text(`Agent de vente: ${receipt.salesPerson}`);
+  centered("SOUCHE DE CAISSE", 8, true);
+  centered("A conserver", 7);
 
   doc.save(`recu-${receipt.reference}.pdf`);
 }

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   normalizeSaleReceipt,
+  printCommittedSaleAfterDelay,
   printSaleReceiptAndStub,
 } from "../services/printService";
 
@@ -616,14 +617,17 @@ export default function ReservationManagement() {
   const { subtotal, total } = calculateTotals();
 
   // Reservations remain clearly labelled and use the shared receipt + stub pipeline.
-  const printReservationReceipt = (reservation: Reservation) => {
+  const printReservationReceipt = (reservation: Reservation, afterSave = false) => {
     const receipt = normalizeSaleReceipt(reservation, { type: "reservation" });
-    void printSaleReceiptAndStub(receipt)
+    const printOperation = afterSave
+      ? printCommittedSaleAfterDelay(receipt)
+      : printSaleReceiptAndStub(receipt);
+    void printOperation
       .then((destination) => {
         setMessage(
           destination === "usb"
             ? "✅ Réservation et souche envoyées à l'imprimante thermique."
-            : "✅ Réservation et souche ouvertes dans une seule fenêtre d'impression.",
+            : "✅ Réservation et souche imprimées successivement dans le navigateur.",
         );
       })
       .catch((printError: unknown) => {
@@ -660,7 +664,7 @@ export default function ReservationManagement() {
         setShowCompletionDialog(false);
         
         // Print the authoritative object returned by the completion endpoint.
-        printReservationReceipt(updatedReservation);
+        printReservationReceipt(updatedReservation, true);
       } else {
         const errorData = await response.json();
         setError(errorData.error || "Échec de la mise à jour de la réservation");

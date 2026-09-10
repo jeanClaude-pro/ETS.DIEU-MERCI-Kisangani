@@ -810,7 +810,7 @@ export default function SalesHistory() {
         setMessage(
           destination === "usb"
             ? "✅ Reçu et souche envoyés à l'imprimante thermique."
-            : "✅ Reçu et souche ouverts dans une seule fenêtre d'impression.",
+            : "✅ Reçu et souche imprimés successivement dans le navigateur.",
         );
       })
       .catch((printError: unknown) => {

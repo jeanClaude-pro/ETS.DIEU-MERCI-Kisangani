@@ -4,8 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 import { DollarSign, RefreshCw, Calculator, Search } from "lucide-react";
 import {
   normalizeSaleReceipt,
-  printSaleReceiptAndStub,
-  type SaleReceiptData,
+  printCommittedSaleAfterDelay,
 } from "../services/printService";
 
 interface Product {
@@ -65,7 +64,6 @@ export default function NewSale() {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [receiptData, setReceiptData] = useState<SaleReceiptData | null>(null);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [loadingRate, setLoadingRate] = useState(true);
   const [walkInCustomer, setWalkInCustomer] = useState<WalkInCustomer | null>(null);
@@ -490,17 +488,6 @@ export default function NewSale() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  useEffect(() => {
-    if (!receiptData) return;
-
-    void printSaleReceiptAndStub(receiptData).catch((printError: unknown) => {
-      const message = printError instanceof Error
-        ? printError.message
-        : "L'impression du reçu et de la souche a échoué.";
-      setError(message);
-    });
-  }, [receiptData]);
-
   async function handleSale(e: React.FormEvent) {
     e.preventDefault();
     if (!isFormValid) return;
@@ -569,8 +556,6 @@ export default function NewSale() {
         exchangeRate: exchangeRate?.rate,
       });
 
-      setReceiptData(newReceiptData);
-
       // Reset form and cart
       setForm({
         productId: "",
@@ -590,6 +575,13 @@ export default function NewSale() {
       setMessage(
         "✅ Vente effectuée avec succès ! Impression du reçu et de la souche..."
       );
+      try {
+        await printCommittedSaleAfterDelay(newReceiptData);
+      } catch (printError: unknown) {
+        setError(printError instanceof Error
+          ? printError.message
+          : "La vente est enregistrée, mais l'impression a échoué.");
+      }
     } catch (e: any) {
       setError(e?.message || "La vente n'a pas pu être effectuée");
     } finally {

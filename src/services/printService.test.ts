@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  BROWSER_DOCUMENT_DELAY_MS,
+  POST_SAVE_PRINT_DELAY_MS,
   SALE_BUSINESS,
   buildSaleReceiptHtml,
   buildSaleStubHtml,
@@ -40,12 +42,18 @@ const savedSale = {
 test("saved sale snapshots normalize without consulting current product data or rates", () => {
   const receipt = normalizeSaleReceipt(savedSale, { exchangeRate: 3000 });
   assert.equal(receipt.reference, "SALE-100");
+  assert.equal(receipt.savedSaleId, "database-id");
   assert.equal(receipt.items[0].name, "Article historique A");
   assert.equal(receipt.items[1].regionCode, "Cnnn");
   assert.equal(receipt.discount, 5);
   assert.equal(receipt.transportCost, 3);
   assert.equal(receipt.total, 51);
   assert.equal(receipt.exchangeRate, 2800);
+});
+
+test("automatic sale printing and browser document spacing use the required delays", () => {
+  assert.equal(POST_SAVE_PRINT_DELAY_MS, 500);
+  assert.equal(BROWSER_DOCUMENT_DELAY_MS, 2000);
 });
 
 test("browser receipt and stub are distinct auto-height thermal documents", () => {
@@ -80,7 +88,9 @@ test("long product names remain present and use wrapping-friendly columns", () =
 
   assert.match(html, new RegExp(longName));
   assert.match(html, /overflow-wrap: anywhere/);
-  assert.match(html, /<th class="quantity">Qté<\/th><th class="unit-price">PU<\/th>/);
+  assert.match(html, /ARTICLES ACHETÉS/);
+  assert.match(html, /PU FC/);
+  assert.match(html, /Total article/);
   assert.match(html, /white-space: nowrap/);
 });
 
@@ -101,7 +111,9 @@ test("walk-in sales and reservations keep readable French labels", () => {
   assert.match(buildSaleReceiptHtml(reservation), /REÇU DE RÉSERVATION/);
   assert.match(buildSaleStubHtml(reservation), /SOUCHE DE RÉSERVATION/);
   assert.match(buildSaleStubHtml(reservation), /Article historique A/);
-  assert.match(buildSaleStubHtml(reservation), /x 2/);
+  assert.match(buildSaleStubHtml(reservation), /2 x/);
+  assert.match(buildSaleStubHtml(reservation), /ARTICLES VENDUS/);
+  assert.match(buildSaleStubHtml(reservation), /SOUCHE DE CAISSE/);
   assert.match(buildSaleStubHtml(reservation), /Statut/);
   assert.match(buildSaleReceiptHtml(reservation), /Référence/);
   assert.doesNotMatch(buildSaleReceiptHtml(reservation), /Ã/);
@@ -159,6 +171,20 @@ test("receipt completes before stub starts", async () => {
   finishReceipt?.();
   await sequence;
   assert.deepEqual(events, ["receipt:start", "receipt:end", "stub:start"]);
+});
+
+test("the inter-document delay elapses after receipt completion and before the stub", async () => {
+  const events: string[] = [];
+  const sequence = runPrintSequence(
+    async () => { events.push("receipt"); },
+    async () => { events.push("stub"); },
+    15,
+  );
+
+  await Promise.resolve();
+  assert.deepEqual(events, ["receipt"]);
+  await sequence;
+  assert.deepEqual(events, ["receipt", "stub"]);
 });
 
 test("a receipt failure prevents the stub from starting", async () => {

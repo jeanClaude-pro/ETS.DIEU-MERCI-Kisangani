@@ -4,8 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 import { DollarSign, RefreshCw, Calculator, Search } from "lucide-react";
 import {
   normalizeSaleReceipt,
-  printSaleReceiptAndStub,
-  type SaleReceiptData,
+  printCommittedSaleAfterDelay,
 } from "../services/printService";
 
 interface Product {
@@ -59,7 +58,6 @@ export default function Reservation() {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [receiptData, setReceiptData] = useState<SaleReceiptData | null>(null);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [loadingRate, setLoadingRate] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -463,17 +461,6 @@ export default function Reservation() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  useEffect(() => {
-    if (!receiptData) return;
-
-    void printSaleReceiptAndStub(receiptData).catch((printError: unknown) => {
-      const message = printError instanceof Error
-        ? printError.message
-        : "L'impression de la réservation et de sa souche a échoué.";
-      setError(message);
-    });
-  }, [receiptData]);
-
   const formatCurrency = (amount: number) => new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "USD",
@@ -599,8 +586,6 @@ export default function Reservation() {
         exchangeRate: exchangeRate?.rate,
       });
 
-      setReceiptData(newReceiptData);
-
       // Reset form and cart
       setForm({
         productId: "",
@@ -620,6 +605,13 @@ export default function Reservation() {
       setMessage(
         "✅ Reservation effectuée avec succès ! Impression du reçu et de la souche..."
       );
+      try {
+        await printCommittedSaleAfterDelay(newReceiptData);
+      } catch (printError: unknown) {
+        setError(printError instanceof Error
+          ? printError.message
+          : "La réservation est enregistrée, mais l'impression a échouée.");
+      }
     } catch (e: any) {
       setError(e?.message || "La reservation n'a pas pu être effectuée");
     } finally {
