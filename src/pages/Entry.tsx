@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { DollarSign, RefreshCw, FileText, User, Calculator } from "lucide-react";
 import { REGION_CODE_MAP } from "../utils/constants";
+import { printHtmlDocumentsSequentially } from "../services/printService";
 
 interface Entry {
   _id: string;
@@ -195,13 +196,13 @@ export default function Entry() {
     }).format(amount);
   };
 
-  // Print function for entry receipt only
-  const printReceiptOnly = () => {
-    const printWindow = window.open("", "_blank", "width=320,height=600");
-    if (printWindow && receiptData) {
-      printWindow.document.write(`
+  // Build separate documents; one shared popup prints them in strict order.
+  const buildEntryReceiptHtml = useCallback((): string => {
+    if (!receiptData) return "";
+    return `
 <html>
   <head>
+    <meta charset="utf-8">
     <title>Reçu d'Entrée d'Argent</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
@@ -215,7 +216,7 @@ export default function Entry() {
         margin: 0; 
         padding: 0; 
         font-size: 13px;
-        font-weight: bold;
+        font-weight: normal;
         line-height: 1.1;
         width: 72mm;
         background-color: white;
@@ -401,9 +402,10 @@ export default function Entry() {
           width: 72mm !important;
           font-size: 13px !important;
           background: white !important;
-          font-weight: bold !important;
+          font-weight: normal !important;
           height: auto !important;
-          overflow: hidden !important;
+          min-height: 0 !important;
+          overflow: visible !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
           display: flex !important;
@@ -418,10 +420,7 @@ export default function Entry() {
           page-break-after: avoid !important;
           page-break-inside: avoid !important;
         }
-        .cut-line {
-          page-break-after: always !important;
-          margin-bottom: 0 !important;
-        }
+        .cut-line { display: none !important; }
         body::after,
         body::before {
           display: none !important;
@@ -509,37 +508,18 @@ export default function Entry() {
         <div class="thank-you"><strong>À BIENTÔT !</strong></div>
       </div>
 
-      <!-- PAPER CUT INDICATOR -->
-      <div class="cut-line">
-        ✄ ────────────────────────── ✄
-      </div>
     </div>
-    <script>
-      window.onload = function() {
-        try {
-          window.print();
-        } catch(e) {
-          console.error('Print error:', e);
-        }
-        setTimeout(() => {
-          window.close();
-        }, 1000);
-      };
-    </script>
   </body>
 </html>
-`);
-      printWindow.document.close();
-    }
-  };
+`;
+  }, [receiptData]);
 
-  // Print function for entry stub only
-  const printStubOnly = () => {
-    const printWindow = window.open("", "_blank", "width=320,height=600");
-    if (printWindow && receiptData) {
-      printWindow.document.write(`
+  const buildEntryStubHtml = useCallback((): string => {
+    if (!receiptData) return "";
+    return `
 <html>
   <head>
+    <meta charset="utf-8">
     <title>Souche Entrée d'Argent</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
@@ -553,7 +533,7 @@ export default function Entry() {
         margin: 0; 
         padding: 0; 
         font-size: 13px;
-        font-weight: bold;
+        font-weight: normal;
         line-height: 1.1;
         width: 72mm;
         background-color: white;
@@ -739,9 +719,10 @@ export default function Entry() {
           width: 72mm !important;
           font-size: 13px !important;
           background: white !important;
-          font-weight: bold !important;
+          font-weight: normal !important;
           height: auto !important;
-          overflow: hidden !important;
+          min-height: 0 !important;
+          overflow: visible !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
           display: flex !important;
@@ -756,10 +737,7 @@ export default function Entry() {
           page-break-after: avoid !important;
           page-break-inside: avoid !important;
         }
-        .cut-line {
-          page-break-after: always !important;
-          margin-bottom: 0 !important;
-        }
+        .cut-line { display: none !important; }
         body::after,
         body::before {
           display: none !important;
@@ -836,51 +814,21 @@ export default function Entry() {
         <div class="warning">Montant: <strong>$${receiptData.amount.toFixed(2)}</strong></div>
       </div>
       
-      <!-- PAPER CUT INDICATOR -->
-      <div class="cut-line">
-        ✄ ────────────────────────── ✄
-      </div>
     </div>
-    <script>
-      window.onload = function() {
-        try {
-          window.print();
-        } catch(e) {
-          console.error('Print error:', e);
-        }
-        setTimeout(() => {
-          window.close();
-        }, 1000);
-      };
-    </script>
   </body>
 </html>
-`);
-      printWindow.document.close();
-    }
-  };
-
-  // Sequential printing function for entries
-  const printSequentially = () => {
-    // Print receipt first
-    printReceiptOnly();
-    
-    // Wait 2 seconds then print stub
-    setTimeout(() => {
-      printStubOnly();
-    }, 2000);
-  };
+`;
+  }, [receiptData]);
 
   useEffect(() => {
-    if (receiptData) {
-      // Small delay to ensure the receipt data is set
-      const timer = setTimeout(() => {
-        printSequentially();
-      }, 500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [receiptData]);
+    if (!receiptData) return;
+    void printHtmlDocumentsSequentially([
+      buildEntryReceiptHtml(),
+      buildEntryStubHtml(),
+    ]).catch((printError: unknown) => {
+      setError(printError instanceof Error ? printError.message : "Échec de l'impression.");
+    });
+  }, [receiptData, buildEntryReceiptHtml, buildEntryStubHtml]);
 
   async function handleEntry(e: React.FormEvent) {
     e.preventDefault();

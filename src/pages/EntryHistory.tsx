@@ -22,6 +22,7 @@ import {
 import jsPDF from "jspdf";
 import RegionFilterPills from "../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../types";
+import { printHtmlDocumentsSequentially } from "../services/printService";
 
 interface EditHistoryEntry {
   editedBy: string;
@@ -91,8 +92,10 @@ const getTimeframeParams = (
       break;
 
     case "week": {
-      const weekAgo = toKisanganiDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
-      params.set("from", weekAgo.toISOString().split('T')[0]);
+      const weekStart = new Date(kis);
+      const daysSinceMonday = (weekStart.getUTCDay() + 6) % 7;
+      weekStart.setUTCDate(weekStart.getUTCDate() - daysSinceMonday);
+      params.set("from", weekStart.toISOString().split('T')[0]);
       params.set("to", getTodayDate());
       break;
     }
@@ -100,7 +103,7 @@ const getTimeframeParams = (
     case "month": {
       const y = kis.getUTCFullYear();
       const m = String(kis.getUTCMonth() + 1).padStart(2, '0');
-      const lastDay = new Date(y, kis.getUTCMonth() + 1, 0).getDate();
+      const lastDay = new Date(Date.UTC(y, kis.getUTCMonth() + 1, 0)).getUTCDate();
       params.set("from", `${y}-${m}-01`);
       params.set("to", `${y}-${m}-${String(lastDay).padStart(2, '0')}`);
       break;
@@ -154,6 +157,8 @@ export default function EntryHistory() {
   const [showEditedDetailsModal, setShowEditedDetailsModal] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const [regionFilter, setRegionFilter] = useState<RegionCodeFilter>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, limit: 50 });
 
   // Sources and categories (same as Entry.tsx)
   const sources = [
@@ -188,15 +193,15 @@ export default function EntryHistory() {
   // Fetch current user on component mount
   useEffect(() => {
     fetchCurrentUser();
-    fetchEntries();
   }, []);
 
   // Fetch entries when timeframe or filters change
   useEffect(() => {
-    if (currentUser !== null) { // Only fetch entries after user data is loaded
-      fetchEntries();
-    }
-  }, [timeframe, selectedYear, selectedDate, showEditedEntries, currentUser, regionFilter]);
+    if (currentUser === null) return;
+    const timer = window.setTimeout(fetchEntries, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeframe, selectedYear, selectedDate, showEditedEntries, currentUser, regionFilter, currentPage, searchTerm]);
 
   // Update edited entries when entries change
   useEffect(() => {
@@ -261,10 +266,10 @@ export default function EntryHistory() {
       // Add status filter for edited entries view
       const statusParam = showEditedEntries ? "&status=all" : "&status=active";
       const regionParam = regionFilter ? `&region=${regionFilter}` : "";
+      const searchParam = searchTerm.trim() ? `&search=${encodeURIComponent(searchTerm.trim())}` : "";
+      const editedParam = showEditedEntries ? "&edited=true" : "";
 
-      const url = `${import.meta.env.VITE_API_URL}/entries?${timeframeParams}${statusParam}${regionParam}`;
-      
-      console.log("Fetching entries from:", url);
+      const url = `${import.meta.env.VITE_API_URL}/entries?${timeframeParams}${statusParam}${regionParam}${searchParam}${editedParam}&page=${currentPage}&limit=50`;
       
       const res = await fetch(url, {
         headers: {
@@ -275,8 +280,6 @@ export default function EntryHistory() {
 
       if (res.ok) {
         const data = await res.json();
-        
-        console.log("API Response:", data);
         
         if (data.success && data.data) {
           // Set entries
@@ -290,8 +293,8 @@ export default function EntryHistory() {
           if (data.summary) {
             setSummary(data.summary);
           }
+          setPagination(data.pagination || { totalRecords: fetchedEntries.length, totalPages: 1, currentPage: 1, limit: 50 });
           
-          console.log(`Fetched ${fetchedEntries.length} entries with timeframe: ${data.timeframe?.description}`);
         } else {
           console.error("Unexpected API response format:", data);
           setEntries([]);
@@ -363,6 +366,7 @@ export default function EntryHistory() {
   };
 
   const handleTimeframeChange = (period: "day" | "week" | "month" | "year") => {
+    setCurrentPage(1);
     setTimeframe(period);
     
     if (period === "year") {
@@ -465,11 +469,10 @@ export default function EntryHistory() {
 
   // Print function for entry receipt
   const printEntryReceipt = (entry: Entry) => {
-    const printWindow = window.open("", "_blank", "width=320,height=600");
-    if (printWindow) {
-      printWindow.document.write(`
+    const html = `
 <html>
   <head>
+    <meta charset="utf-8">
     <title>Reçu d'Entrée d'Argent</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
@@ -477,7 +480,7 @@ export default function EntryHistory() {
       body { 
         font-family: 'Courier New', Courier, monospace; 
         margin: 0; padding: 0; 
-        font-size: 13px; font-weight: bold; line-height: 1.1;
+        font-size: 13px; font-weight: normal; line-height: 1.2;
         width: 72mm; background-color: white;
         -webkit-print-color-adjust: exact; print-color-adjust: exact;
         display: flex; justify-content: center;
@@ -507,9 +510,9 @@ export default function EntryHistory() {
       .section-divider { height: 2px; background: linear-gradient(to right, transparent, #000, transparent); margin: 1mm 0; }
       @media print {
         @page { margin: 0 !important; size: 72mm auto !important; }
-        body { margin: 0 !important; padding: 0 !important; width: 72mm !important; font-size: 13px !important; background: white !important; font-weight: bold !important; height: auto !important; overflow: hidden !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: flex !important; justify-content: center !important; }
+        body { margin: 0 !important; padding: 0 !important; width: 72mm !important; min-height: 0 !important; font-size: 13px !important; background: white !important; font-weight: normal !important; height: auto !important; overflow: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: flex !important; justify-content: center !important; }
         .receipt-container { border: none !important; box-shadow: none !important; margin: 0 auto !important; padding: 0.5mm !important; width: 70mm !important; page-break-after: avoid !important; page-break-inside: avoid !important; }
-        .cut-line { page-break-after: always !important; margin-bottom: 0 !important; }
+        .cut-line { display: none !important; }
       }
     </style>
   </head>
@@ -576,19 +579,13 @@ export default function EntryHistory() {
         <div class="thank-you"><strong>À BIENTÔT !</strong></div>
       </div>
 
-      <div class="cut-line">✄ ────────────────────────── ✄</div>
     </div>
-    <script>
-      window.onload = function() {
-        try { window.print(); } catch(e) { console.error('Print error:', e); }
-        setTimeout(() => { window.close(); }, 1000);
-      };
-    </script>
   </body>
 </html>
-`);
-      printWindow.document.close();
-    }
+`;
+    void printHtmlDocumentsSequentially([html]).catch((printError: unknown) => {
+      setError(printError instanceof Error ? printError.message : "Échec de l'impression.");
+    });
   };
 
   const generateEntryPDF = (entry: Entry) => {
@@ -718,7 +715,6 @@ export default function EntryHistory() {
         reason: editForm.reason,
       };
 
-      console.log("Sending update data:", updateData);
 
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/entries/${editingEntry._id}`,
@@ -732,12 +728,8 @@ export default function EntryHistory() {
         }
       );
 
-      console.log("Update response status:", response.status);
 
       if (response.ok) {
-        const updatedEntry = await response.json();
-        console.log("Updated entry:", updatedEntry);
-
         setMessage("✅ Entrée mise à jour avec succès");
         await fetchEntries();
         closeEditModal();
@@ -913,11 +905,11 @@ export default function EntryHistory() {
         </div>
         <div className="flex flex-wrap gap-3">
           {/* Region Filter */}
-          <RegionFilterPills value={regionFilter} onChange={setRegionFilter} />
+          <RegionFilterPills value={regionFilter} onChange={(value) => { setRegionFilter(value); setCurrentPage(1); }} />
 
           {/* Edited Entries Filter Button */}
           <button
-            onClick={() => setShowEditedEntries(!showEditedEntries)}
+            onClick={() => { setShowEditedEntries(!showEditedEntries); setCurrentPage(1); }}
             className={`px-4 py-2 rounded-lg border transition-all duration-200 flex items-center gap-2 ${
               showEditedEntries
                 ? "bg-blue-500 text-white border-blue-500 shadow-sm"
@@ -940,7 +932,7 @@ export default function EntryHistory() {
               placeholder="Rechercher des entrées..."
               className="pl-10 w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
         </div>
@@ -1053,7 +1045,7 @@ export default function EntryHistory() {
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <FileText className="w-5 h-5" />
-            {showEditedEntries ? "Entrées modifiées" : "Entrées d'argent"} ({filteredEntries.length})
+            {showEditedEntries ? "Entrées modifiées" : "Entrées d'argent"} ({pagination.totalRecords})
           </h2>
         </div>
 
@@ -1240,6 +1232,15 @@ export default function EntryHistory() {
             </table>
           )}
         </div>
+        {pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between border-t px-4 py-3">
+            <span className="text-sm text-gray-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
+            <div className="flex gap-2">
+              <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="px-3 py-1.5 border rounded disabled:opacity-50">Précédent</button>
+              <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="px-3 py-1.5 border rounded disabled:opacity-50">Suivant</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Entry Details Modal */}

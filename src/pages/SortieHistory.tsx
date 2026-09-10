@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import RegionFilterPills from "../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../types";
+import { printHtmlDocumentsSequentially } from "../services/printService";
 
 interface ExpenseItem {
   _id: string;
@@ -81,6 +82,12 @@ interface ExpensesResponse {
     recordedBy: string;
     search: string;
     region?: string;
+  };
+  pagination: {
+    totalRecords: number;
+    totalPages: number;
+    currentPage: number;
+    limit: number;
   };
 }
 
@@ -174,6 +181,8 @@ export default function SortieHistory() {
   const [timeframeDescription, setTimeframeDescription] = useState<string>("Today");
   const [showFilters, setShowFilters] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, limit: 50 });
 
   // User permissions
   const [userPermissions, setUserPermissions] = useState<UserPermissions>({
@@ -216,6 +225,9 @@ export default function SortieHistory() {
     if (queryParams.recordedBy) params.append("recordedBy", queryParams.recordedBy);
     if (queryParams.search) params.append("search", queryParams.search);
     if (queryParams.region) params.append("region", queryParams.region);
+    params.set("page", String(currentPage));
+    params.set("limit", "50");
+    if (searchTerm.trim()) params.set("search", searchTerm.trim());
 
     return params.toString();
   };
@@ -224,15 +236,14 @@ export default function SortieHistory() {
   useEffect(() => {
     fetchCurrentUser();
     fetchUserPermissions();
-    fetchExpenses();
   }, []);
 
   // Fetch data when query params change
   useEffect(() => {
-    if (Object.keys(queryParams).length > 0) {
-      fetchExpenses();
-    }
-  }, [queryParams]);
+    const timer = window.setTimeout(fetchExpenses, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryParams, currentPage, searchTerm]);
 
   // Effect to automatically set to today's date when timeframe changes to "day"
   useEffect(() => {
@@ -318,8 +329,6 @@ export default function SortieHistory() {
       const queryString = buildQueryString();
       const url = `${import.meta.env.VITE_API_URL}/expenses${queryString ? `?${queryString}` : ''}`;
       
-      console.log("Fetching expenses from:", url);
-      
       const res = await fetch(url, {
         headers: {
           "Content-Type": "application/json",
@@ -333,10 +342,6 @@ export default function SortieHistory() {
         if (data.success && data.data && Array.isArray(data.data)) {
           const fetchedExpenses = data.data;
           
-          console.log(`Fetched ${fetchedExpenses.length} expenses from API`);
-          console.log("Timeframe metadata:", data.timeframe);
-          console.log("Summary stats:", data.summary);
-          
           // Sort expenses by date - newest first
           const sortedExpenses = fetchedExpenses.sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -349,6 +354,7 @@ export default function SortieHistory() {
           setTimeframeDescription(data.timeframe.description);
           setSummaryStats(data.summary);
           setAppliedFilters(data.filtersApplied);
+          setPagination(data.pagination || { totalRecords: fetchedExpenses.length, totalPages: 1, currentPage: 1, limit: 50 });
           
         } else {
           console.warn("Unexpected expenses data structure:", data);
@@ -434,6 +440,7 @@ export default function SortieHistory() {
   };
 
   const handleQueryParamChange = (key: keyof typeof queryParams, value: string) => {
+    setCurrentPage(1);
     setQueryParams(prev => ({
       ...prev,
       [key]: value
@@ -767,8 +774,6 @@ export default function SortieHistory() {
 
   // Print function for expense receipt
   const printExpenseReceipt = (expense: ExpenseItem) => {
-    const printWindow = window.open("", "_blank", "width=320,height=600");
-    if (printWindow) {
       // Format the amount directly for the print window
       const formattedAmount = new Intl.NumberFormat("fr-FR", {
         style: "currency",
@@ -796,10 +801,11 @@ export default function SortieHistory() {
           })
         : formattedDate;
 
-      printWindow.document.write(`
+      const html = `
 <html>
   <head>
-    <title>Expense Receipt</title>
+    <meta charset="utf-8">
+    <title>Reçu de sortie de caisse</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
       * {
@@ -812,8 +818,8 @@ export default function SortieHistory() {
         margin: 0; 
         padding: 0; 
         font-size: 13px;
-        font-weight: bold;
-        line-height: 1.1;
+        font-weight: normal;
+        line-height: 1.2;
         width: 72mm;
         background-color: white;
         -webkit-print-color-adjust: exact;
@@ -951,9 +957,10 @@ export default function SortieHistory() {
           width: 72mm !important;
           font-size: 13px !important;
           background: white !important;
-          font-weight: bold !important;
+          font-weight: normal !important;
           height: auto !important;
-          overflow: hidden !important;
+          min-height: 0 !important;
+          overflow: visible !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
           display: flex !important;
@@ -968,10 +975,7 @@ export default function SortieHistory() {
           page-break-after: avoid !important;
           page-break-inside: avoid !important;
         }
-        .cut-line {
-          page-break-after: always !important;
-          margin-bottom: 0 !important;
-        }
+        .cut-line { display: none !important; }
         body::after,
         body::before {
           display: none !important;
@@ -1046,28 +1050,13 @@ export default function SortieHistory() {
         <div class="warning">Date: <strong>${formattedDate}</strong></div>
       </div>
       
-      <!-- PAPER CUT INDICATOR -->
-      <div class="cut-line">
-        ✄ ────────────────────────── ✄
-      </div>
     </div>
-    <script>
-      window.onload = function() {
-        try {
-          window.print();
-        } catch(e) {
-          console.error('Print error:', e);
-        }
-        setTimeout(() => {
-          window.close();
-        }, 1000);
-      };
-    </script>
   </body>
 </html>
-`);
-      printWindow.document.close();
-    }
+`;
+      void printHtmlDocumentsSequentially([html]).catch((printError: unknown) => {
+        setError(printError instanceof Error ? printError.message : "Échec de l'impression.");
+      });
   };
 
   // Check if user can edit this expense
@@ -1287,7 +1276,7 @@ export default function SortieHistory() {
               placeholder="Rechercher des dépenses..."
               className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
         </div>
@@ -1583,7 +1572,7 @@ export default function SortieHistory() {
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <FileText className="w-5 h-5" />
             {userPermissions.isAdmin ? "Dépenses en attente et validées" : "Dépenses du jour"} (
-            {filteredExpenses.length})
+            {pagination.totalRecords})
           </h2>
         </div>
 
@@ -1773,6 +1762,15 @@ export default function SortieHistory() {
             </table>
           )}
         </div>
+        {pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between border-t px-4 py-3">
+            <span className="text-sm text-gray-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
+            <div className="flex gap-2">
+              <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="px-3 py-1.5 border rounded disabled:opacity-50">Précédent</button>
+              <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="px-3 py-1.5 border rounded disabled:opacity-50">Suivant</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Expense Details Modal */}

@@ -139,6 +139,12 @@ interface SalesResponse {
     region?: string;
   };
   performanceNote: string | null;
+  pagination: {
+    totalRecords: number;
+    totalPages: number;
+    currentPage: number;
+    limit: number;
+  };
 }
 
 // Kisangani is UTC+2 permanently — derive local date/time from UTC
@@ -206,6 +212,8 @@ export default function SalesHistory() {
   const [timeframeMetadata, setTimeframeMetadata] = useState<TimeframeMetadata | null>(null);
   const [summaryStats, setSummaryStats] = useState<any>(null);
   const [appliedFilters, setAppliedFilters] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, limit: 50 });
 
   // UI state
   const [showFilters, setShowFilters] = useState(false);
@@ -214,7 +222,6 @@ export default function SalesHistory() {
   // Fetch current user on component mount
   useEffect(() => {
     fetchCurrentUser();
-    fetchSales();
     fetchProducts();
     const handleSalesUpdate = () => {
       // Refresh sales when triggered from other components
@@ -228,12 +235,12 @@ export default function SalesHistory() {
     };
   }, []);
 
-  // Fetch sales when query params change
+  // Fetch a server-filtered page; search is debounced to avoid one request per keystroke.
   useEffect(() => {
-    if (Object.keys(queryParams).length > 0) {
-      fetchSales();
-    }
-  }, [queryParams]);
+    const timer = window.setTimeout(fetchSales, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryParams, currentPage, searchTerm, showEditedSales]);
 
   // Fetch current user from API or localStorage
   const fetchCurrentUser = async () => {
@@ -310,6 +317,10 @@ export default function SalesHistory() {
     if (queryParams.status) params.append("status", queryParams.status);
     if (queryParams.customerPhone) params.append("customerPhone", queryParams.customerPhone);
     if (queryParams.region) params.append("region", queryParams.region);
+    params.set("page", String(currentPage));
+    params.set("limit", "50");
+    if (searchTerm.trim()) params.set("search", searchTerm.trim());
+    if (showEditedSales) params.set("edited", "true");
 
     return params.toString();
   };
@@ -321,8 +332,6 @@ export default function SalesHistory() {
       
       const queryString = buildQueryString();
       const url = `${import.meta.env.VITE_API_URL}/sales${queryString ? `?${queryString}` : ''}`;
-      
-      console.log("Fetching sales from:", url);
       
       const res = await fetch(url, {
         headers: {
@@ -337,13 +346,8 @@ export default function SalesHistory() {
         if (data.success && data.data && Array.isArray(data.data)) {
           const fetchedSales = data.data;
           
-          console.log(`Fetched ${fetchedSales.length} sales from API`);
-          console.log("Timeframe metadata:", data.timeframe);
-          console.log("Summary stats:", data.summary);
-          
           // Filter out expenses and invalid sales
           const validSales = filterValidSales(fetchedSales);
-          console.log(`After filtering: ${validSales.length} valid sales`);
           
           // Update sales state
           setSales(validSales);
@@ -352,6 +356,7 @@ export default function SalesHistory() {
           setTimeframeMetadata(data.timeframe);
           setSummaryStats(data.summary);
           setAppliedFilters(data.filtersApplied);
+          setPagination(data.pagination || { totalRecords: validSales.length, totalPages: 1, currentPage: 1, limit: 50 });
           
           // Update edited sales
           updateEditedSales(validSales);
@@ -443,6 +448,7 @@ export default function SalesHistory() {
 
   // Handle query parameter changes
   const handleQueryParamChange = (key: keyof typeof queryParams, value: string) => {
+    setCurrentPage(1);
     setQueryParams(prev => ({
       ...prev,
       [key]: value
@@ -451,6 +457,7 @@ export default function SalesHistory() {
 
   // Clear all filters
   const clearAllFilters = () => {
+    setCurrentPage(1);
     setQueryParams({
       from: "",
       to: "",
@@ -489,7 +496,6 @@ export default function SalesHistory() {
           productsArray = [data];
         }
 
-        console.log("Processed products:", productsArray.length);
         setProducts(productsArray);
       } else {
         console.error("Products API Error:", res.status, res.statusText);
@@ -515,16 +521,8 @@ export default function SalesHistory() {
   }, [showEditedSales, editedSales, sales, searchTerm, queryParams.region]);
 
   const displayedSummaryStats = useMemo(() => {
-    if (!summaryStats || !queryParams.region) return summaryStats;
-    const revenue = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-    return {
-      ...summaryStats,
-      totalRecords: filteredSales.length,
-      salesCount: filteredSales.length,
-      revenue,
-      net: revenue - Number(summaryStats.expenses || 0),
-    };
-  }, [summaryStats, filteredSales, queryParams.region]);
+    return summaryStats;
+  }, [summaryStats]);
 
   // Precompute each sale's region badge once per data/filter change, instead
   // of re-walking every sale's items on every render inside the row .map().
@@ -1185,7 +1183,7 @@ export default function SalesHistory() {
               placeholder="Search sales..."
               className="pl-10 w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
         </div>
@@ -1447,10 +1445,9 @@ export default function SalesHistory() {
                       onChange={(e) => handleQueryParamChange("type", e.target.value)}
                       className="w-full p-2 border border-gray-300 rounded-lg"
                     >
-                      <option value="">All Types</option>
+                      <option value="">Sales & Reservations</option>
                       <option value="sale">Sale</option>
                       <option value="reservation">Reservation</option>
-                      <option value="expense">Expense</option>
                     </select>
                   </div>
                   
@@ -1466,7 +1463,6 @@ export default function SalesHistory() {
                       <option value="">All Status</option>
                       <option value="completed">Completed</option>
                       <option value="pending">Pending</option>
-                      <option value="expense">Expense</option>
                     </select>
                   </div>
                   
@@ -1715,6 +1711,17 @@ export default function SalesHistory() {
               </table>
           )}
         </div>
+        {pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
+            <span className="text-sm text-gray-600">
+              Page {pagination.currentPage} sur {pagination.totalPages} · {pagination.totalRecords} ventes
+            </span>
+            <div className="flex gap-2">
+              <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="px-3 py-1.5 border rounded disabled:opacity-50">Précédent</button>
+              <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="px-3 py-1.5 border rounded disabled:opacity-50">Suivant</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sale Details Modal */}

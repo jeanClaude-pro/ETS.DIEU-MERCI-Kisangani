@@ -95,6 +95,9 @@ export default function ReservationManagement() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('all');
   const [filterRegion, setFilterRegion] = useState<'' | 'Bbbb' | 'Cnnn'>('');
   const [userRole, setUserRole] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, limit: 50 });
+  const [reservationSummary, setReservationSummary] = useState({ totalReservations: 0, pending: 0, completed: 0, itemCount: 0, totalValue: 0 });
 
   // Edit modal states
   const [showEditModal, setShowEditModal] = useState(false);
@@ -111,23 +114,28 @@ export default function ReservationManagement() {
   const [loadingProducts, setLoadingProducts] = useState(false);
 
   useEffect(() => {
-    fetchReservations();
     fetchProducts();
     // Get user role from localStorage or auth context
     const role = localStorage.getItem('userRole') || 'admin'; // Default to admin for testing
-    console.log('🔑 User Role:', role);
     setUserRole(role);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(fetchReservations, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterStatus, filterRegion, searchTerm, currentPage]);
 
   const fetchReservations = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('🔍 Fetching reservations from API...');
-      
-      // Use the sales endpoint for reservations
-      const response = await fetch(`${API_BASE}/sales/reservations/all`, {
+      const params = new URLSearchParams({ page: String(currentPage), limit: "50" });
+      if (filterStatus !== "all") params.set("status", filterStatus);
+      if (filterRegion) params.set("region", filterRegion);
+      if (searchTerm.trim()) params.set("search", searchTerm.trim());
+      const response = await fetch(`${API_BASE}/sales/reservations/all?${params}`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
@@ -136,11 +144,10 @@ export default function ReservationManagement() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log("📦 Reservations API Response:", data);
-        
-        if (Array.isArray(data)) {
-          console.log(`✅ Found ${data.length} reservations`);
-          setReservations(data);
+        if (data.success && Array.isArray(data.data)) {
+          setReservations(data.data);
+          setPagination(data.pagination || { totalRecords: data.data.length, totalPages: 1, currentPage: 1, limit: 50 });
+          setReservationSummary(data.summary || { totalReservations: 0, pending: 0, completed: 0, itemCount: 0, totalValue: 0 });
         } else {
           console.warn("❌ Invalid data format from API");
           setError("Format de données invalide reçu de l'API");
@@ -193,26 +200,7 @@ export default function ReservationManagement() {
     }
   };
 
-  const filteredReservations = useMemo(() => {
-    return reservations.filter((reservation) => {
-      const matchesSearch =
-        reservation.saleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        reservation.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        reservation.customer.phone.includes(searchTerm) ||
-        (reservation.customer.email && reservation.customer.email.toLowerCase().includes(searchTerm.toLowerCase()));
-
-      const matchesStatus =
-        filterStatus === 'all' ||
-        (filterStatus === 'pending' && reservation.status === 'pending') ||
-        (filterStatus === 'completed' && reservation.status === 'completed');
-
-      const matchesRegion =
-        !filterRegion ||
-        (reservation.items || []).some((item) => item.regionCode === filterRegion);
-
-      return matchesSearch && matchesStatus && matchesRegion;
-    });
-  }, [reservations, searchTerm, filterStatus, filterRegion]);
+  const filteredReservations = reservations;
 
   // Precompute each reservation's region codes once per data/filter change
   // instead of re-walking every reservation's items inside the row .map().
@@ -226,9 +214,6 @@ export default function ReservationManagement() {
     }
     return map;
   }, [filteredReservations]);
-
-  const pendingReservations = reservations.filter(r => r.status === 'pending');
-  const completedReservations = reservations.filter(r => r.status === 'completed');
 
   const formatDate = (dateString: string) => {
     try {
@@ -546,7 +531,6 @@ export default function ReservationManagement() {
         saleId: editingReservation.saleId,
       };
 
-      console.log("Sending reservation update data:", updateData);
 
       const response = await fetch(
         `${API_BASE}/sales/${editingReservation._id}`,
@@ -560,12 +544,8 @@ export default function ReservationManagement() {
         }
       );
 
-      console.log("Update response status:", response.status);
 
       if (response.ok) {
-        const updatedReservation = await response.json();
-        console.log("Updated reservation:", updatedReservation);
-
         setMessage("✅ Réservation mise à jour avec succès");
 
         // Refresh the reservations list immediately
@@ -668,33 +648,19 @@ export default function ReservationManagement() {
       });
 
       if (response.ok) {
-        await response.json();
+        const updatedReservation = await response.json() as Reservation;
         
         setMessage("✅ Réservation marquée comme complétée avec succès");
         
         // Update local state immediately
-        setReservations(prev => prev.map(r => 
-          r._id === reservation._id 
-            ? { 
-                ...r, 
-                status: "completed",
-                completedBy: localStorage.getItem("username") || "Admin",
-                completedAt: new Date().toISOString()
-              }
-            : r
+        setReservations(prev => prev.map(r =>
+          r._id === reservation._id ? updatedReservation : r
         ));
         
         setShowCompletionDialog(false);
         
-        // Print completion receipt
-        setTimeout(() => {
-          printReservationReceipt({
-            ...reservation,
-            status: "completed",
-            completedBy: localStorage.getItem("username") || "Admin",
-            completedAt: new Date().toISOString()
-          });
-        }, 500);
+        // Print the authoritative object returned by the completion endpoint.
+        printReservationReceipt(updatedReservation);
       } else {
         const errorData = await response.json();
         setError(errorData.error || "Échec de la mise à jour de la réservation");
@@ -771,12 +737,12 @@ export default function ReservationManagement() {
         <div className="flex gap-3 items-center">
           <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
             <div className="text-sm text-blue-600 font-medium">
-              En attente: <span className="font-bold">{pendingReservations.length}</span>
+              En attente: <span className="font-bold">{reservationSummary.pending}</span>
             </div>
           </div>
           <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
             <div className="text-sm text-green-600 font-medium">
-              Complétées: <span className="font-bold">{completedReservations.length}</span>
+              Complétées: <span className="font-bold">{reservationSummary.completed}</span>
             </div>
           </div>
         </div>
@@ -785,20 +751,20 @@ export default function ReservationManagement() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg shadow border">
-          <div className="text-2xl font-bold text-blue-600">{reservations.length}</div>
+          <div className="text-2xl font-bold text-blue-600">{reservationSummary.totalReservations}</div>
           <div className="text-sm text-gray-600">Total Réservations</div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow border">
-          <div className="text-2xl font-bold text-orange-600">{pendingReservations.length}</div>
+          <div className="text-2xl font-bold text-orange-600">{reservationSummary.pending}</div>
           <div className="text-sm text-gray-600">En Attente</div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow border">
-          <div className="text-2xl font-bold text-green-600">{completedReservations.length}</div>
+          <div className="text-2xl font-bold text-green-600">{reservationSummary.completed}</div>
           <div className="text-sm text-gray-600">Complétées</div>
         </div>
         <div className="bg-white p-4 rounded-lg shadow border">
           <div className="text-2xl font-bold text-purple-600">
-            {reservations.reduce((sum, r) => sum + r.items.length, 0)}
+            {reservationSummary.itemCount}
           </div>
           <div className="text-sm text-gray-600">Articles Réservés</div>
         </div>
@@ -839,13 +805,13 @@ export default function ReservationManagement() {
               placeholder="Rechercher par ID, client, téléphone..."
               className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
           
           <select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as any)}
+            onChange={(e) => { setFilterStatus(e.target.value as any); setCurrentPage(1); }}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="all">Toutes les réservations</option>
@@ -855,7 +821,7 @@ export default function ReservationManagement() {
 
           <select
             value={filterRegion}
-            onChange={(e) => setFilterRegion(e.target.value as '' | 'Bbbb' | 'Cnnn')}
+            onChange={(e) => { setFilterRegion(e.target.value as '' | 'Bbbb' | 'Cnnn'); setCurrentPage(1); }}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Toutes régions</option>
@@ -881,7 +847,7 @@ export default function ReservationManagement() {
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <Calendar className="w-5 h-5" />
-            Liste des Réservations ({filteredReservations.length})
+            Liste des Réservations ({pagination.totalRecords})
           </h2>
         </div>
 
@@ -900,6 +866,7 @@ export default function ReservationManagement() {
               </p>
             </div>
           ) : (
+            <>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -1054,6 +1021,16 @@ export default function ReservationManagement() {
                 ))}
               </tbody>
             </table>
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center justify-between border-t px-4 py-3">
+                <span className="text-sm text-gray-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
+                <div className="flex gap-2">
+                  <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="px-3 py-1.5 border rounded disabled:opacity-50">Précédent</button>
+                  <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="px-3 py-1.5 border rounded disabled:opacity-50">Suivant</button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
       </div>

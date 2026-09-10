@@ -29,6 +29,7 @@ interface CartItem {
 }
 
 interface ExchangeRate {
+  _id: string;
   rate: number;
   effectiveFrom: string;
   lastUpdated: string;
@@ -525,6 +526,14 @@ export default function Reservation() {
         reservationTime: reservationTime,
         notes: form.notes || "",
         type: "reservation",
+        // Preserve the rate that was active when this reservation was saved.
+        exchangeRateSnapshot: exchangeRate
+          ? {
+              rateId: exchangeRate._id,
+              rate: exchangeRate.rate,
+              effectiveFrom: exchangeRate.effectiveFrom,
+            }
+          : null,
       };
 
       // Use the sales endpoint to create the reservation (money recorded immediately)

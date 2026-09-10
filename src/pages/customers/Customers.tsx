@@ -46,87 +46,40 @@ export default function Customers() {
   const [refreshing, setRefreshing] = useState(false);
   const [recalculating, setRecalculating] = useState<string | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: 1, limit: 50 });
+  const [portfolioTotal, setPortfolioTotal] = useState(0);
+  const [activeCustomerCount, setActiveCustomerCount] = useState(0);
+
   useEffect(() => {
-    fetchCustomers();
-  }, []);
+    const timer = window.setTimeout(fetchCustomers, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, searchTerm]);
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      // Remove pagination - fetch ALL customers at once
-      const response = await fetch(
-        `${serverUrl}/customers?limit=0&timestamp=${Date.now()}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      const params = new URLSearchParams({ page: String(currentPage), limit: "50" });
+      if (searchTerm.trim()) params.set("search", searchTerm.trim());
+      const response = await fetch(`${serverUrl}/customers?${params}`);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      
-      // Handle different response formats
-      let allCustomers: Customer[] = [];
-      if (Array.isArray(data)) {
-        allCustomers = data;
-      } else if (data.customers && Array.isArray(data.customers)) {
-        allCustomers = data.customers;
-      } else if (data.data && Array.isArray(data.data)) {
-        allCustomers = data.data;
-      } else {
-        console.warn("Unexpected customers data structure:", data);
-        allCustomers = [];
-      }
-
-      console.log(`Fetched ${allCustomers.length} customers from API`);
-      setCustomers(allCustomers);
+      setCustomers(Array.isArray(data.customers) ? data.customers : []);
+      setPagination({
+        total: Number(data.total || 0),
+        totalPages: Number(data.totalPages || 1),
+        currentPage: Number(data.currentPage || 1),
+        limit: Number(data.limit || 50),
+      });
+      setPortfolioTotal(Number(data.summary?.totalSpent || 0));
+      setActiveCustomerCount(Number(data.summary?.activeCustomers || 0));
     } catch (error) {
       console.error("Error fetching customers:", error);
-      // Try alternative endpoints
-      await tryAlternativeFetch();
+      setCustomers([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
-    }
-  };
-
-  // Alternative fetch method if the main one fails
-  const tryAlternativeFetch = async () => {
-    try {
-      console.log("Customers: Trying alternative fetch method...");
-      
-      const endpoints = [
-        `${serverUrl}/customers?limit=1000`,
-        `${serverUrl}/customers/all`,
-      ];
-      
-      let allCustomers: Customer[] = [];
-      
-      for (const endpoint of endpoints) {
-        try {
-          const response = await fetch(endpoint);
-          if (response.ok) {
-            const data = await response.json();
-            if (Array.isArray(data)) {
-              allCustomers = data;
-              break;
-            } else if (data.customers && Array.isArray(data.customers)) {
-              allCustomers = data.customers;
-              break;
-            } else if (data.data && Array.isArray(data.data)) {
-              allCustomers = data.data;
-              break;
-            }
-          }
-        } catch (error) {
-          console.warn(`Failed to fetch from ${endpoint}:`, error);
-          continue;
-        }
-      }
-      
-      console.log(`Customers: Alternative fetch got ${allCustomers.length} customers`);
-      setCustomers(allCustomers);
-    } catch (error) {
-      console.error("Customers: Alternative fetch also failed:", error);
     }
   };
 
@@ -135,16 +88,7 @@ export default function Customers() {
     await fetchCustomers();
   };
 
-  const filteredCustomers = customers.filter(
-    (customer) =>
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone.includes(searchTerm) ||
-      (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const calculateTotalRevenue = () => {
-    return customers.reduce((sum, customer) => sum + customer.totalSpent, 0);
-  };
+  const filteredCustomers = customers;
 
   const formatDate = (dateString: string) => {
     if (!dateString || dateString === "null" || dateString === "undefined") return "N/A";
@@ -154,7 +98,7 @@ export default function Customers() {
         month: "short",
         day: "numeric",
       });
-    } catch (error) {
+    } catch {
       return "N/A";
     }
   };
@@ -169,7 +113,7 @@ export default function Customers() {
         hour: "2-digit",
         minute: "2-digit",
       });
-    } catch (error) {
+    } catch {
       return "N/A";
     }
   };
@@ -300,7 +244,7 @@ export default function Customers() {
               placeholder="rechercher les clients..."
               className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
         </div>
@@ -309,7 +253,7 @@ export default function Customers() {
             <Users className="w-5 h-5 text-blue-600" />
             <div>
               <p className="text-sm text-gray-600">Nombre Total de Clients</p>
-              <p className="text-xl font-semibold text-gray-900">{customers.length}</p>
+              <p className="text-xl font-semibold text-gray-900">{pagination.total}</p>
             </div>
           </div>
         </div>
@@ -319,10 +263,10 @@ export default function Customers() {
             <div>
               <p className="text-sm text-gray-600">Revenue Totale Clients</p>
               <p className="text-xl font-semibold text-gray-900">
-                {formatCurrency(calculateTotalRevenue())}
+                {formatCurrency(portfolioTotal)}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                {customers.filter((c) => c.totalSpent > 0).length} clients actifs
+                {activeCustomerCount} clients actifs
               </p>
             </div>
           </div>
@@ -355,7 +299,7 @@ export default function Customers() {
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <Users className="w-5 h-5" />
-            Répertoire clients ({filteredCustomers.length})
+            Répertoire clients ({pagination.total})
           </h2>
           <button
             onClick={refreshCustomers}
@@ -379,6 +323,7 @@ export default function Customers() {
               <p>Aucun client trouvé</p>
             </div>
           ) : (
+            <>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -484,6 +429,16 @@ export default function Customers() {
                 ))}
               </tbody>
             </table>
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center justify-between border-t px-4 py-3">
+                <span className="text-sm text-gray-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
+                <div className="flex gap-2">
+                  <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="px-3 py-1.5 border rounded disabled:opacity-50">Précédent</button>
+                  <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="px-3 py-1.5 border rounded disabled:opacity-50">Suivant</button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
 

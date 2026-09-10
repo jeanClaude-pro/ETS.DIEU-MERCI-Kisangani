@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import {
   SALE_BUSINESS,
   buildSaleReceiptHtml,
+  buildSaleStubHtml,
   normalizeSaleReceipt,
+  printSaleReceiptAndStub,
+  runPrintSequence,
+  validateSaleReceipt,
 } from "./printService.ts";
 
 const savedSale = {
@@ -33,8 +37,8 @@ const savedSale = {
   exchangeRateSnapshot: { rate: 2800 },
 };
 
-test("saved sale snapshots normalize without consulting current product data", () => {
-  const receipt = normalizeSaleReceipt(savedSale);
+test("saved sale snapshots normalize without consulting current product data or rates", () => {
+  const receipt = normalizeSaleReceipt(savedSale, { exchangeRate: 3000 });
   assert.equal(receipt.reference, "SALE-100");
   assert.equal(receipt.items[0].name, "Article historique A");
   assert.equal(receipt.items[1].regionCode, "Cnnn");
@@ -44,19 +48,43 @@ test("saved sale snapshots normalize without consulting current product data", (
   assert.equal(receipt.exchangeRate, 2800);
 });
 
-test("sale browser document always contains one detailed receipt and one compact stub", () => {
-  const html = buildSaleReceiptHtml(normalizeSaleReceipt(savedSale));
-  assert.match(html, /REÇU DE VENTE/);
-  assert.match(html, /SOUCHE VENTE/);
-  assert.match(html, /Remise/);
-  assert.match(html, /Transport/);
-  assert.match(html, /Bbbb/);
-  assert.match(html, /Cnnn/);
-  assert.equal(html.split(SALE_BUSINESS.name).length - 1, 2);
-  assert.equal(html.split("window.print()").length - 1, 1);
+test("browser receipt and stub are distinct auto-height thermal documents", () => {
+  const receipt = normalizeSaleReceipt(savedSale);
+  const receiptHtml = buildSaleReceiptHtml(receipt);
+  const stubHtml = buildSaleStubHtml(receipt);
+
+  assert.match(receiptHtml, /data-document-kind="receipt"/);
+  assert.match(receiptHtml, /REÇU DE VENTE/);
+  assert.doesNotMatch(receiptHtml, /SOUCHE DE VENTE/);
+  assert.match(stubHtml, /data-document-kind="stub"/);
+  assert.match(stubHtml, /SOUCHE DE VENTE/);
+  assert.doesNotMatch(stubHtml, /REÇU DE VENTE/);
+  assert.equal(receiptHtml.split(SALE_BUSINESS.name).length - 1, 1);
+  assert.equal(stubHtml.split(SALE_BUSINESS.name).length - 1, 1);
+
+  for (const html of [receiptHtml, stubHtml]) {
+    assert.match(html, /@page \{ margin: 0; \}/);
+    assert.match(html, /height: auto/);
+    assert.match(html, /min-height: 0/);
+    assert.doesNotMatch(html, /100vh|297mm|80mm auto|window\.print|setTimeout/);
+  }
 });
 
-test("walk-in sales and reservations keep sensible, distinct document labels", () => {
+test("long product names remain present and use wrapping-friendly columns", () => {
+  const longName = "Chemise longue femme avec une description exceptionnellement détaillée";
+  const receipt = normalizeSaleReceipt({
+    ...savedSale,
+    items: [{ name: longName, quantity: 25, price: 12.5, total: 312.5, regionCode: "Cnnn" }],
+  });
+  const html = buildSaleReceiptHtml(receipt);
+
+  assert.match(html, new RegExp(longName));
+  assert.match(html, /overflow-wrap: anywhere/);
+  assert.match(html, /<th class="quantity">Qté<\/th><th class="unit-price">PU<\/th>/);
+  assert.match(html, /white-space: nowrap/);
+});
+
+test("walk-in sales and reservations keep readable French labels", () => {
   const walkIn = normalizeSaleReceipt({
     ...savedSale,
     customer: { name: "Walk-in Customer", phone: "WALK-IN", isWalkIn: true },
@@ -67,11 +95,115 @@ test("walk-in sales and reservations keep sensible, distinct document labels", (
     ...savedSale,
     type: "reservation",
     status: "pending",
-    reservationDate: "09/09/2026",
+    reservationDate: "09\/09\/2026",
     reservationTime: "10:30",
   });
-  const html = buildSaleReceiptHtml(reservation);
-  assert.match(html, /REÇU DE RÉSERVATION/);
-  assert.match(html, /SOUCHE RÉSERVATION/);
-  assert.match(html, /PENDING/);
+  assert.match(buildSaleReceiptHtml(reservation), /REÇU DE RÉSERVATION/);
+  assert.match(buildSaleStubHtml(reservation), /SOUCHE DE RÉSERVATION/);
+  assert.match(buildSaleStubHtml(reservation), /Article historique A/);
+  assert.match(buildSaleStubHtml(reservation), /x 2/);
+  assert.match(buildSaleStubHtml(reservation), /Statut/);
+  assert.match(buildSaleReceiptHtml(reservation), /Référence/);
+  assert.doesNotMatch(buildSaleReceiptHtml(reservation), /Ã/);
+});
+
+test("blank or malformed saved transactions are rejected before printing", async () => {
+  const blank = normalizeSaleReceipt({});
+  assert.throws(() => validateSaleReceipt(blank), /introuvable/);
+
+  const noItems = normalizeSaleReceipt({ ...savedSale, items: [] });
+  await assert.rejects(() => printSaleReceiptAndStub(noItems, {
+    printUsb: async () => {
+      assert.fail("USB must not be called for an empty receipt");
+    },
+  }), /sans articles/);
+});
+
+test("duplicate concurrent requests for the same transaction share one print operation", async () => {
+  let usbCalls = 0;
+  let finishUsb: (() => void) | undefined;
+  const usbFinished = new Promise<void>((resolve) => { finishUsb = resolve; });
+  const receipt = normalizeSaleReceipt(savedSale);
+  const runtime = {
+    printUsb: async () => {
+      usbCalls += 1;
+      await usbFinished;
+      return { success: true, printedDocuments: ["receipt", "stub"] as const };
+    },
+  };
+
+  const first = printSaleReceiptAndStub(receipt, runtime);
+  const duplicate = printSaleReceiptAndStub(receipt, runtime);
+  finishUsb?.();
+  assert.equal(await first, "usb");
+  assert.equal(await duplicate, "usb");
+  assert.equal(usbCalls, 1);
+});
+
+test("receipt completes before stub starts", async () => {
+  const events: string[] = [];
+  let finishReceipt: (() => void) | undefined;
+  const receiptFinished = new Promise<void>((resolve) => { finishReceipt = resolve; });
+
+  const sequence = runPrintSequence(
+    async () => {
+      events.push("receipt:start");
+      await receiptFinished;
+      events.push("receipt:end");
+    },
+    async () => { events.push("stub:start"); },
+  );
+
+  await Promise.resolve();
+  assert.deepEqual(events, ["receipt:start"]);
+  finishReceipt?.();
+  await sequence;
+  assert.deepEqual(events, ["receipt:start", "receipt:end", "stub:start"]);
+});
+
+test("a receipt failure prevents the stub from starting", async () => {
+  let stubStarted = false;
+  await assert.rejects(() => runPrintSequence(
+    async () => { throw new Error("receipt failed"); },
+    async () => { stubStarted = true; },
+  ), /receipt failed/);
+  assert.equal(stubStarted, false);
+});
+
+test("USB success never triggers duplicate browser printing", async () => {
+  let browserCalls = 0;
+  const destination = await printSaleReceiptAndStub(normalizeSaleReceipt(savedSale), {
+    printUsb: async () => ({ success: true, printedDocuments: ["receipt", "stub"] }),
+    printBrowser: async () => { browserCalls += 1; },
+  });
+  assert.equal(destination, "usb");
+  assert.equal(browserCalls, 0);
+});
+
+test("USB unavailability falls back in receipt then stub order", async () => {
+  const documents: string[] = [];
+  const destination = await printSaleReceiptAndStub(normalizeSaleReceipt(savedSale), {
+    printUsb: async () => ({ success: false, printedDocuments: [], message: "offline" }),
+    printBrowser: async (_receipt, missing) => { documents.push(...missing); },
+  });
+  assert.equal(destination, "browser");
+  assert.deepEqual(documents, ["receipt", "stub"]);
+});
+
+test("partial USB success falls back only for the missing stub", async () => {
+  const documents: string[] = [];
+  await printSaleReceiptAndStub(normalizeSaleReceipt(savedSale), {
+    printUsb: async () => ({ success: false, printedDocuments: ["receipt"], message: "stub failed" }),
+    printBrowser: async (_receipt, missing) => { documents.push(...missing); },
+  });
+  assert.deepEqual(documents, ["stub"]);
+});
+
+test("ambiguous USB errors do not trigger a duplicate browser print", async () => {
+  let browserCalls = 0;
+  await assert.rejects(() => printSaleReceiptAndStub(normalizeSaleReceipt(savedSale), {
+    printUsb: async () => { throw new Error("network timeout"); },
+    printBrowser: async () => { browserCalls += 1; },
+  }), /network timeout/);
+  assert.equal(browserCalls, 0);
 });

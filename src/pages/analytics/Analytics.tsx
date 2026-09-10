@@ -23,89 +23,7 @@ import {
 import jsPDF from "jspdf";
 import RegionFilterPills from "../../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../../types";
-import { WALKIN_CUSTOMER_NAME } from "../../utils/constants";
-import { isReportableSale, projectSalesToRegion } from "../../utils/regionalSales";
 
-// Define interfaces for the data structures
-interface SaleItem {
-  productId?: string;
-  name?: string;
-  quantity?: number;
-  price?: number;
-  total?: number;
-  region?: string;
-  regionCode?: string;
-  subtotal?: number;
-  unitCost?: number;
-  cost?: number;
-  profit?: number;
-  netTotal?: number;
-}
-
-interface Sale {
-  _id?: string;
-  total: number;
-  subtotal?: number;
-  discount?: number;
-  tax?: number;
-  transportCost?: number;
-  otherCharges?: number;
-  cost?: number;
-  profit?: number;
-  status?: string;
-  createdAt?: string;
-  date?: string;
-  saleDate?: string;
-  items?: SaleItem[];
-  customerId?: string;
-  customerName?: string;
-  type?: string;
-  saleId?: string;
-  saleNumber?: string;
-  customer?: {
-    name?: string;
-    phone?: string;
-    email?: string;
-    isWalkIn?: boolean;
-  };
-}
-
-interface Customer {
-  _id?: string;
-  id?: string;
-  name?: string;
-  totalSpent?: number;
-  totalPurchases?: number;
-  email?: string;
-}
-
-interface Expense {
-  _id?: string;
-  amount: number;
-  status: string;
-  createdAt?: string;
-  date?: string;
-  validatedAt?: string;
-  reason?: string;
-  expenseId?: string;
-  recipientName?: string;
-  regionCode?: string;
-}
-
-interface Entry {
-  _id?: string;
-  amount: number;
-  status: string;
-  createdAt?: string;
-  date?: string;
-  source?: string;
-  category?: string;
-  entryId?: string;
-  receivedFrom?: {
-    name?: string;
-  };
-  regionCode?: string;
-}
 
 interface AnalyticsData {
   totalSales: number;
@@ -162,11 +80,7 @@ const serverUrl = import.meta.env.VITE_API_URL;
 
 // Helper function to get today's date in correct format
 const getTodayDate = (): string => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().slice(0, 10);
 };
 
 // Helper function to get user role from localStorage
@@ -212,31 +126,36 @@ const getTimeframeParams = (
   selectedDate?: string
 ) => {
   const params = new URLSearchParams();
-  const today = new Date();
+  const today = new Date(`${getTodayDate()}T12:00:00.000Z`);
   
   switch (timeframe) {
     case "day":
       params.set("date", selectedDate || getTodayDate());
       break;
       
-    case "week":
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      params.set("from", weekAgo.toISOString().split('T')[0]);
+    case "week": {
+      const weekStart = new Date(today);
+      const daysSinceMonday = (weekStart.getUTCDay() + 6) % 7;
+      weekStart.setUTCDate(weekStart.getUTCDate() - daysSinceMonday);
+      params.set("from", weekStart.toISOString().split('T')[0]);
       params.set("to", today.toISOString().split('T')[0]);
       break;
+    }
       
-    case "month":
-      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      params.set("from", firstDayOfMonth.toISOString().split('T')[0]);
-      params.set("to", lastDayOfMonth.toISOString().split('T')[0]);
+    case "month": {
+      const year = today.getUTCFullYear();
+      const month = today.getUTCMonth() + 1;
+      const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      params.set("from", `${year}-${String(month).padStart(2, "0")}-01`);
+      params.set("to", `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`);
       break;
+    }
       
-    case "year":
-      const year = selectedYear || today.getFullYear();
+    case "year": {
+      const year = selectedYear || today.getUTCFullYear();
       params.set("year", year.toString());
       break;
+    }
   }
   
   return params.toString();
@@ -244,11 +163,6 @@ const getTimeframeParams = (
 
 type RegionFilter = RegionCodeFilter;
 
-// Sum of item totals belonging to the given region (falls back to sale.total when no region is selected)
-const getRegionScopedTotal = (sale: Sale, region: RegionFilter): number => {
-  if (!region) return sale.total;
-  return sale.total;
-};
 
 export default function Analytics() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
@@ -257,40 +171,14 @@ export default function Analytics() {
     "day"
   );
   const [selectedYear, setSelectedYear] = useState<number>(
-    new Date().getFullYear()
+    Number(getTodayDate().slice(0, 4))
   );
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDate());
   const [timeframeData, setTimeframeData] = useState<TimeframeData | null>(null);
-  const [initialLoad, setInitialLoad] = useState(true);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [regionFilter, setRegionFilter] = useState<RegionFilter>("");
   const [reservationsStats, setReservationsStats] = useState<{ count: number; value: number }>({ count: 0, value: 0 });
 
-  // Raw (region-omitted) API responses for the current timeframe. Fetched
-  // once per timeframe change; the region-filtered view below is derived
-  // from these client-side so clicking a region pill never re-hits the network.
-  const [rawSalesData, setRawSalesData] = useState<any>(null);
-  const [rawExpensesData, setRawExpensesData] = useState<any>(null);
-  const [rawEntriesData, setRawEntriesData] = useState<any>(null);
-  const [rawCustomers, setRawCustomers] = useState<Customer[]>([]);
-  const [rawReservations, setRawReservations] = useState<Sale[]>([]);
-
-  // Effect to automatically set to today's date when timeframe changes to "day"
-  useEffect(() => {
-    if (!initialLoad && timeframe === "day") {
-      const today = getTodayDate();
-      setSelectedDate(today);
-    }
-  }, [timeframe, initialLoad]);
-
-  // Effect to mark initial load as complete
-  useEffect(() => {
-    if (analytics) {
-      setInitialLoad(false);
-    }
-  }, [analytics]);
-
-  // Effect to enforce day-only view for non-admin users
   useEffect(() => {
     if (shouldSeeOnlyTodayData() && timeframe !== "day") {
       setTimeframe("day");
@@ -298,690 +186,41 @@ export default function Analytics() {
     }
   }, [timeframe]);
 
-  // Main effect to fetch data when the timeframe changes (region-independent —
-  // the fetch always pulls all regions; region filtering happens client-side below).
   useEffect(() => {
     fetchAnalytics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeframe, selectedYear, selectedDate]);
+  }, [timeframe, selectedYear, selectedDate, regionFilter]);
 
-  // Recompute the analytics view whenever the raw data or the region filter
-  // changes. No network request here — this is what makes region-pill
-  // clicks instant instead of re-fetching sales/expenses/entries/customers.
-  useEffect(() => {
-    if (!rawSalesData) return;
-
-    const processed = shouldSeeOnlyTodayData()
-      ? processTodayData(rawSalesData, rawExpensesData || { data: [] }, rawEntriesData || { data: [] }, regionFilter)
-      : processAnalyticsData(rawSalesData, rawExpensesData || { data: [] }, rawEntriesData || { data: [] }, rawCustomers, regionFilter);
-
-    setAnalytics(processed);
-
-    const projectedReservations = projectSalesToRegion(rawReservations, regionFilter);
-    const value = projectedReservations.reduce((sum, sale) => sum + sale.total, 0);
-    const count = projectedReservations.length;
-    setReservationsStats({ count, value });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawSalesData, rawExpensesData, rawEntriesData, rawCustomers, rawReservations, regionFilter]);
-
-  // Fetch the reservations list once per timeframe (region omitted); stats
-  // are derived from it in the recompute effect above.
-  const fetchReservations = async (timeframeParams: string) => {
-    try {
-      const res = await fetch(`${serverUrl}/sales/reservations/all?${timeframeParams}`, {
-        headers: getHeaders(),
-      });
-      if (!res.ok) {
-        setRawReservations([]);
-        return;
-      }
-      const data = await res.json();
-      setRawReservations(Array.isArray(data.data) ? data.data : []);
-    } catch (error) {
-      console.error("Error fetching reservations:", error);
-      setRawReservations([]);
-    }
-  };
-
-  // Fetch analytics data with server-side timeframe filtering
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-
-      // For non-admin users, only fetch today's data
-      if (shouldSeeOnlyTodayData()) {
-        await fetchTodayDataOnly();
-        return;
-      }
-
-      // For admin, fetch data with timeframe filtering
-      await fetchDataWithTimeframe();
+      const params = new URLSearchParams(
+        getTimeframeParams(
+          shouldSeeOnlyTodayData() ? "day" : timeframe,
+          selectedYear,
+          shouldSeeOnlyTodayData() ? getTodayDate() : selectedDate,
+        ),
+      );
+      if (regionFilter) params.set("region", regionFilter);
+      const response = await fetch(`${serverUrl}/reports/analytics?${params}`, {
+        headers: getHeaders(),
+      });
+      if (!response.ok) throw new Error(`Failed to fetch analytics report: ${response.status}`);
+      const payload = await response.json();
+      setAnalytics(payload.data);
+      setReservationsStats({
+        count: Number(payload.reservations?.count || 0),
+        value: Number(payload.reservations?.value || 0),
+      });
+      setTimeframeData(payload.timeframe || null);
+      const years = Array.isArray(payload.availableYears) ? payload.availableYears : [];
+      setAvailableYears(years);
     } catch (error) {
-      console.error("Error fetching analytics:", error);
+      console.error("Error fetching analytics report:", error);
       setAnalytics(null);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Fetch only today's data for non-admin users
-  const fetchTodayDataOnly = async () => {
-    try {
-      const today = getTodayDate();
-      const timeframeParams = `date=${today}`;
-
-      // Fetch sales, expenses, and entries for today (all regions — the
-      // region filter is applied client-side by the recompute effect)
-      const [salesResponse, expensesResponse, entriesResponse] = await Promise.all([
-        fetch(`${serverUrl}/sales?${timeframeParams}`, {
-          headers: getHeaders(),
-        }),
-        fetch(`${serverUrl}/expenses?${timeframeParams}`, {
-          headers: getHeaders(),
-        }),
-        fetch(`${serverUrl}/entries?${timeframeParams}`, {
-          headers: getHeaders(),
-        })
-      ]);
-
-      if (!salesResponse.ok) {
-        throw new Error(`Failed to fetch sales: ${salesResponse.status}`);
-      }
-
-      const salesData = await salesResponse.json();
-      const expensesData = expensesResponse.ok ? await expensesResponse.json() : { data: [], summary: { totalAmount: 0 } };
-      const entriesData = entriesResponse.ok ? await entriesResponse.json() : { data: [], summary: { totalAmount: 0 } };
-
-      setRawSalesData(salesData);
-      setRawExpensesData(expensesData);
-      setRawEntriesData(entriesData);
-      setTimeframeData({ description: "Aujourd'hui", start: today, end: today });
-      await fetchReservations(timeframeParams);
-
-    } catch (error) {
-      console.error("Error fetching today's data:", error);
-      throw error;
-    }
-  };
-
-  // Fetch data with timeframe filtering for admin users
-  const fetchDataWithTimeframe = async () => {
-    try {
-      // Build timeframe parameters (all regions — the region filter is
-      // applied client-side by the recompute effect)
-      const timeframeParams = getTimeframeParams(timeframe, selectedYear, selectedDate);
-
-      // Fetch sales, expenses, and entries with timeframe filtering
-      const [salesResponse, expensesResponse, entriesResponse, customersResponse] = await Promise.all([
-        fetch(`${serverUrl}/sales?${timeframeParams}`, {
-          headers: getHeaders(),
-        }),
-        fetch(`${serverUrl}/expenses?${timeframeParams}`, {
-          headers: getHeaders(),
-        }),
-        fetch(`${serverUrl}/entries?${timeframeParams}`, {
-          headers: getHeaders(),
-        }),
-        fetch(`${serverUrl}/customers?limit=0`, {
-          headers: getHeaders(),
-        })
-      ]);
-
-      if (!salesResponse.ok) {
-        throw new Error(`Failed to fetch sales: ${salesResponse.status}`);
-      }
-
-      const salesData = await salesResponse.json();
-      const expensesData = expensesResponse.ok ? await expensesResponse.json() : { data: [], summary: { totalAmount: 0 } };
-      const entriesData = entriesResponse.ok ? await entriesResponse.json() : { data: [], summary: { totalAmount: 0 } };
-      const customersData = customersResponse.ok ? await customersResponse.json() : [];
-
-      // Extract customers from response
-      const customers = Array.isArray(customersData)
-        ? customersData
-        : customersData.data || customersData.customers || [];
-
-      setRawSalesData(salesData);
-      setRawExpensesData(expensesData);
-      setRawEntriesData(entriesData);
-      setRawCustomers(customers);
-      setTimeframeData(salesData.timeframe);
-
-      // Extract available years for year selection
-      if (salesData.timeframe) {
-        const years = extractAvailableYears();
-        setAvailableYears(years);
-        if (years.length > 0 && !years.includes(selectedYear)) {
-          setSelectedYear(years[0]);
-        }
-      }
-
-      await fetchReservations(timeframeParams);
-
-    } catch (error) {
-      console.error("Error fetching analytics with timeframe:", error);
-      throw error;
-    }
-  };
-
-  // Process today's data for non-admin users
-  const processTodayData = (
-    salesData: any,
-    expensesData: any,
-    entriesData: any,
-    region: RegionFilter = ""
-  ): AnalyticsData => {
-    const sales = projectSalesToRegion((salesData.data || []) as Sale[], region);
-    const expenses = expensesData.data || [];
-    const entries = entriesData.data || [];
-
-    // Filter completed sales only (not voided, not corrected, not expense type)
-    const completedSales = sales.filter((sale: Sale) =>
-      isReportableSale(sale) && (sale.status === "completed" || sale.status === "pending")
-    );
-
-    const totalSales = completedSales.length;
-    const totalRevenue = completedSales.reduce((sum: number, sale: Sale) => sum + getRegionScopedTotal(sale, region), 0);
-    
-    // Calculate entries (active entries only). Legacy entries with no region
-    // are only included in the "All Regions" view since they can't be attributed.
-    const activeEntries = entries.filter((entry: Entry) =>
-      entry.status === "active" && (!region || entry.regionCode === region)
-    );
-    const totalEntries = activeEntries.reduce((sum: number, entry: Entry) => sum + entry.amount, 0);
-
-    // Calculate validated expenses (same legacy-record handling as entries above)
-    const validatedExpenses = expenses.filter((expense: Expense) =>
-      expense.status === "validated" && (!region || expense.regionCode === region)
-    );
-    const totalValidatedExpenses = validatedExpenses.reduce((sum: number, expense: Expense) => sum + expense.amount, 0);
-    
-    // Calculate net revenue
-    const netRevenue = (totalRevenue + totalEntries) - totalValidatedExpenses;
-
-    // Count unique products
-    const productIds = new Set();
-    completedSales.forEach((sale: Sale) => {
-      if (sale.items && Array.isArray(sale.items)) {
-        sale.items.forEach((item: SaleItem) => {
-          if (item.productId) {
-            productIds.add(item.productId);
-          }
-        });
-      }
-    });
-    const totalProducts = productIds.size;
-
-    // Count unique customers
-    const customerIds = new Set();
-    completedSales.forEach((sale: Sale) => {
-      // Walk-in sales share one fixed identity — they aren't a "customer" for
-      // this metric, so they're excluded rather than collapsed into one.
-      if (sale.customer?.isWalkIn) return;
-      if (sale.customerId) {
-        customerIds.add(sale.customerId);
-      } else if (sale.customer?.phone) {
-        customerIds.add(sale.customer.phone);
-      }
-    });
-    const totalCustomers = customerIds.size;
-
-    // Today's chart data
-    const today = new Date();
-    const salesByDay = [
-      {
-        date: today.toLocaleDateString("fr-FR", {
-          day: "numeric",
-          month: "short",
-        }),
-        dayName: today.toLocaleDateString("fr-FR", { weekday: "long" }),
-        sales: totalSales,
-        revenue: totalRevenue,
-      },
-    ];
-
-    // Top products from today's sales. Keyed by name+regionCode — two
-    // products can share a name across regions and must not be merged.
-    const productStats = new Map();
-    completedSales.forEach((sale: Sale) => {
-      if (sale.items && Array.isArray(sale.items)) {
-        sale.items.forEach((item: SaleItem) => {
-          if (region && item.regionCode !== region) return;
-          const productName = item.name || "Unknown Product";
-          const key = `${productName}|${item.regionCode || ""}`;
-          if (productStats.has(key)) {
-            const existing = productStats.get(key);
-            productStats.set(key, {
-              ...existing,
-              quantity: existing.quantity + (item.quantity || 0),
-              revenue: existing.revenue + (item.netTotal ?? item.total ?? 0),
-            });
-          } else {
-            productStats.set(key, {
-              name: productName,
-              regionCode: item.regionCode,
-              quantity: item.quantity || 0,
-              revenue: item.netTotal ?? item.total ?? 0,
-            });
-          }
-        });
-      }
-    });
-
-    const topProducts = Array.from(productStats.values())
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 50);
-
-    // Top customers from today's sales
-    const customerStats = new Map();
-    completedSales.forEach((sale: Sale) => {
-      const customerName = sale.customer?.name || sale.customerName || "Unknown Customer";
-      const key = customerName;
-      const saleTotal = getRegionScopedTotal(sale, region);
-
-      if (customerStats.has(key)) {
-        const existing = customerStats.get(key);
-        customerStats.set(key, {
-          name: customerName,
-          purchases: existing.purchases + 1,
-          totalSpent: existing.totalSpent + saleTotal,
-        });
-      } else {
-        customerStats.set(key, {
-          name: customerName,
-          purchases: 1,
-          totalSpent: saleTotal,
-        });
-      }
-    });
-
-    const topCustomers = Array.from(customerStats.values())
-      .filter(customer => customer.purchases > 0 && customer.name !== "Unknown Customer" && customer.name !== WALKIN_CUSTOMER_NAME)
-      .sort((a, b) => b.totalSpent - a.totalSpent)
-      .slice(0, 5);
-
-    // Simple growth trends (0 for today view)
-    const recentTrends = {
-      salesGrowth: 0,
-      revenueGrowth: 0,
-      customerGrowth: 0,
-    };
-
-    return {
-      totalSales,
-      totalRevenue,
-      totalCustomers,
-      totalProducts,
-      totalValidatedExpenses,
-      totalEntries,
-      netRevenue,
-      salesByDay,
-      salesByWeek: [],
-      salesByMonth: [],
-      salesByYear: [],
-      topProducts,
-      topCustomers,
-      recentTrends,
-    };
-  };
-
-  // Process analytics data with timeframe for admin users
-  const processAnalyticsData = (
-    salesData: any,
-    expensesData: any,
-    entriesData: any,
-    customers: Customer[],
-    region: RegionFilter = ""
-  ): AnalyticsData => {
-    const sales = projectSalesToRegion((salesData.data || []) as Sale[], region);
-    const expenses = expensesData.data || [];
-    const entries = entriesData.data || [];
-
-    // Filter completed sales
-    const completedSales = sales.filter((sale: Sale) =>
-      isReportableSale(sale) && (sale.status === "completed" || sale.status === "pending")
-    );
-
-    const totalSales = completedSales.length;
-    const totalRevenue = completedSales.reduce((sum: number, sale: Sale) => sum + getRegionScopedTotal(sale, region), 0);
-
-    // Computed from the raw (region-omitted) fetch and filtered here, rather
-    // than trusting a server-computed summary — the raw arrays are fetched
-    // once per timeframe and reused for every region click (see fetch layer).
-    // Legacy entries/expenses with no region are only included in "All Regions".
-    const activeEntries = entries.filter((entry: Entry) =>
-      entry.status === "active" && (!region || entry.regionCode === region)
-    );
-    const totalEntries = activeEntries.reduce((sum: number, entry: Entry) => sum + entry.amount, 0);
-
-    const validatedExpenses = expenses.filter((expense: Expense) =>
-      expense.status === "validated" && (!region || expense.regionCode === region)
-    );
-    const totalValidatedExpenses = validatedExpenses.reduce((sum: number, expense: Expense) => sum + expense.amount, 0);
-    const netRevenue = (totalRevenue + totalEntries) - totalValidatedExpenses;
-
-    // Count unique products
-    const productIds = new Set();
-    completedSales.forEach((sale: Sale) => {
-      if (sale.items && Array.isArray(sale.items)) {
-        sale.items.forEach((item: SaleItem) => {
-          if (region && item.regionCode !== region) return;
-          if (item.productId) {
-            productIds.add(item.productId);
-          }
-        });
-      }
-    });
-    const totalProducts = productIds.size;
-
-    // Count unique customers
-    const customerIds = new Set();
-    completedSales.forEach((sale: Sale) => {
-      // Walk-in sales share one fixed identity — they aren't a "customer" for
-      // this metric, so they're excluded rather than collapsed into one.
-      if (sale.customer?.isWalkIn) return;
-      if (sale.customerId) {
-        customerIds.add(sale.customerId);
-      } else if (sale.customer?.phone) {
-        customerIds.add(sale.customer.phone);
-      }
-    });
-    const totalCustomers = customerIds.size;
-
-    // Generate chart data based on timeframe
-    const chartData = generateChartData(completedSales);
-
-    // Top products. Keyed by name+regionCode — two products can share a
-    // name across regions and must not be merged.
-    const productStats = new Map();
-    completedSales.forEach((sale: Sale) => {
-      if (sale.items && Array.isArray(sale.items)) {
-        sale.items.forEach((item: SaleItem) => {
-          if (region && item.regionCode !== region) return;
-          const productName = item.name || "Unknown Product";
-          const key = `${productName}|${item.regionCode || ""}`;
-          if (productStats.has(key)) {
-            const existing = productStats.get(key);
-            productStats.set(key, {
-              ...existing,
-              quantity: existing.quantity + (item.quantity || 0),
-              revenue: existing.revenue + (item.netTotal ?? item.total ?? 0),
-            });
-          } else {
-            productStats.set(key, {
-              name: productName,
-              regionCode: item.regionCode,
-              quantity: item.quantity || 0,
-              revenue: item.netTotal ?? item.total ?? 0,
-            });
-          }
-        });
-      }
-    });
-
-    const topProducts = Array.from(productStats.values())
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 50);
-
-    // Top customers
-    const customerStats = new Map();
-    completedSales.forEach((sale: Sale) => {
-      const customerName = sale.customer?.name || sale.customerName || "Unknown Customer";
-      const key = customerName;
-      const saleTotal = getRegionScopedTotal(sale, region);
-
-      if (customerStats.has(key)) {
-        const existing = customerStats.get(key);
-        customerStats.set(key, {
-          name: customerName,
-          purchases: existing.purchases + 1,
-          totalSpent: existing.totalSpent + saleTotal,
-        });
-      } else {
-        customerStats.set(key, {
-          name: customerName,
-          purchases: 1,
-          totalSpent: saleTotal,
-        });
-      }
-    });
-
-    // Also include customers from the customers list (lifetime totals aren't
-    // region-scoped, so only merge these in when viewing all regions)
-    if (!region) {
-      customers.forEach((customer: Customer) => {
-        const key = customer.name || `Customer ${customer._id?.substring(0, 8)}...`;
-        if (!customerStats.has(key) && customer.totalSpent && customer.totalSpent > 0) {
-          customerStats.set(key, {
-            name: customer.name || `Customer ${customer._id?.substring(0, 8)}...`,
-            purchases: customer.totalPurchases || 0,
-            totalSpent: customer.totalSpent || 0,
-          });
-        }
-      });
-    }
-
-    const topCustomers = Array.from(customerStats.values())
-      .filter(customer => customer.purchases > 0 && customer.name !== "Unknown Customer" && customer.name !== WALKIN_CUSTOMER_NAME)
-      .sort((a, b) => b.totalSpent - a.totalSpent)
-      .slice(0, 5);
-
-    // Calculate growth trends
-    const recentTrends = calculateGrowthTrends(completedSales, chartData);
-
-    return {
-      totalSales,
-      totalRevenue,
-      totalCustomers,
-      totalProducts,
-      totalValidatedExpenses,
-      totalEntries,
-      netRevenue,
-      ...chartData,
-      topProducts,
-      topCustomers,
-      recentTrends,
-    };
-  };
-
-  // Generate chart data based on timeframe
-  const generateChartData = (sales: Sale[]) => {
-    if (!sales.length) {
-      return {
-        salesByDay: [],
-        salesByWeek: [],
-        salesByMonth: [],
-        salesByYear: [],
-      };
-    }
-
-    const now = new Date();
-    
-    // For day view - last 7 days
-    const salesByDay = getLast7Days().map((date: Date) => {
-      const daySales = sales.filter((sale: Sale) => {
-        try {
-          const saleDate = new Date(sale.createdAt || sale.date || sale.saleDate || "");
-          return saleDate.toDateString() === date.toDateString();
-        } catch (error) {
-          return false;
-        }
-      });
-      return {
-        date: date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }),
-        dayName: date.toLocaleDateString("fr-FR", { weekday: "long" }),
-        sales: daySales.length,
-        revenue: daySales.reduce((sum: number, sale: Sale) => sum + sale.total, 0),
-      };
-    });
-
-    // For week view - last 4 weeks
-    const salesByWeek = getLast4Weeks().map((week: { start: Date; end: Date }, index: number) => {
-      const weekSales = sales.filter((sale: Sale) => {
-        try {
-          const saleDate = new Date(sale.createdAt || sale.date || sale.saleDate || "");
-          return saleDate >= week.start && saleDate <= week.end;
-        } catch (error) {
-          return false;
-        }
-      });
-
-      const startDateStr = week.start.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-      const endDateStr = week.end.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-
-      return {
-        week: `Semaine ${index + 1}`,
-        startDate: startDateStr,
-        endDate: endDateStr,
-        sales: weekSales.length,
-        revenue: weekSales.reduce((sum: number, sale: Sale) => sum + sale.total, 0),
-      };
-    });
-
-    // For month view - last 6 months
-    const salesByMonth = getLast6Months().map((month: any) => {
-      const monthSales = sales.filter((sale: Sale) => {
-        try {
-          const saleDate = new Date(sale.createdAt || sale.date || sale.saleDate || "");
-          return saleDate.getMonth() === month.month && saleDate.getFullYear() === month.year;
-        } catch (error) {
-          return false;
-        }
-      });
-      return {
-        month: month.shortName,
-        monthName: month.fullName,
-        sales: monthSales.length,
-        revenue: monthSales.reduce((sum: number, sale: Sale) => sum + sale.total, 0),
-      };
-    });
-
-    // For year view - group by month for selected year
-    const currentYear = selectedYear || now.getFullYear();
-    const yearSales = sales.filter((sale: Sale) => {
-      try {
-        const saleDate = new Date(sale.createdAt || sale.date || sale.saleDate || "");
-        return saleDate.getFullYear() === currentYear;
-      } catch (error) {
-        return false;
-      }
-    });
-
-    const monthsData = Array.from({ length: 12 }, (_, i) => {
-      const monthSales = yearSales.filter((sale: Sale) => {
-        try {
-          const saleDate = new Date(sale.createdAt || sale.date || sale.saleDate || "");
-          return saleDate.getMonth() === i;
-        } catch (error) {
-          return false;
-        }
-      });
-      
-      const monthDate = new Date(currentYear, i, 1);
-      return {
-        month: String(i),
-        monthName: monthDate.toLocaleDateString("fr-FR", { month: "long" }),
-        sales: monthSales.length,
-        revenue: monthSales.reduce((sum: number, sale: Sale) => sum + sale.total, 0),
-      };
-    }).filter(month => month.sales > 0);
-
-    const salesByYear = [{
-      year: currentYear.toString(),
-      months: monthsData,
-    }];
-
-    return {
-      salesByDay,
-      salesByWeek,
-      salesByMonth,
-      salesByYear,
-    };
-  };
-
-  // Helper functions for chart data
-  const getLast7Days = (): Date[] => {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      days.push(date);
-    }
-    return days;
-  };
-
-  const getLast4Weeks = (): { start: Date; end: Date }[] => {
-    const weeks = [];
-    for (let i = 3; i >= 0; i--) {
-      const end = new Date();
-      end.setDate(end.getDate() - i * 7);
-      const start = new Date(end);
-      start.setDate(start.getDate() - 6);
-      weeks.push({ start, end });
-    }
-    return weeks;
-  };
-
-  const getLast6Months = (): any[] => {
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date();
-      date.setMonth(date.getMonth() - i);
-      months.push({
-        month: date.getMonth(),
-        year: date.getFullYear(),
-        shortName: date.toLocaleDateString("fr-FR", { month: "short" }),
-        fullName: date.toLocaleDateString("fr-FR", { month: "long" }),
-      });
-    }
-    return months;
-  };
-
-  // Calculate growth trends
-  const calculateGrowthTrends = (sales: Sale[], chartData: any) => {
-    const salesByMonth = chartData.salesByMonth || [];
-    
-    if (salesByMonth.length < 2) {
-      return {
-        salesGrowth: sales.length > 0 ? 5 : 0,
-        revenueGrowth: sales.length > 0 ? 8 : 0,
-        customerGrowth: sales.length > 0 ? 3 : 0,
-      };
-    }
-
-    const currentMonth = salesByMonth[salesByMonth.length - 1];
-    const previousMonth = salesByMonth[salesByMonth.length - 2];
-
-    const salesGrowth = previousMonth.sales > 0 
-      ? Math.round(((currentMonth.sales - previousMonth.sales) / previousMonth.sales) * 100)
-      : currentMonth.sales > 0 ? 100 : 0;
-
-    const revenueGrowth = previousMonth.revenue > 0 
-      ? Math.round(((currentMonth.revenue - previousMonth.revenue) / previousMonth.revenue) * 100)
-      : currentMonth.revenue > 0 ? 100 : 0;
-
-    return {
-      salesGrowth,
-      revenueGrowth,
-      customerGrowth: Math.round(salesGrowth * 0.8), // Rough estimate
-    };
-  };
-
-  // Extract available years from data
-  const extractAvailableYears = (): number[] => {
-    const yearsSet = new Set<number>();
-    const now = new Date();
-    
-    // Add current year
-    yearsSet.add(now.getFullYear());
-    
-    // Add previous 5 years as options
-    for (let i = 1; i <= 5; i++) {
-      yearsSet.add(now.getFullYear() - i);
-    }
-    
-    // Sort descending
-    return Array.from(yearsSet).sort((a, b) => b - a);
   };
 
   const formatCurrency = (amount: number) => {
@@ -1336,11 +575,12 @@ export default function Analytics() {
         return analytics.salesByWeek;
       case "month":
         return analytics.salesByMonth;
-      case "year":
+      case "year": {
         const yearData = analytics.salesByYear.find(
           (y) => y.year === selectedYear.toString()
         );
         return yearData ? yearData.months : [];
+      }
       default:
         return analytics.salesByWeek;
     }
