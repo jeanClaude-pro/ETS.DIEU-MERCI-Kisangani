@@ -37,7 +37,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api(?:\/|$)/],
+        navigateFallbackDenylist: [/^\/(?:api|sales|products|customers|expenses|entries|auth|exchangeRates|reports|print|users|categories)(?:\/|$)/],
         cleanupOutdatedCaches: true,
         clientsClaim: false,
         skipWaiting: false,
@@ -45,7 +45,8 @@ export default defineConfig({
           {
             // Authenticated operational data always comes from the API.
             urlPattern: ({ request, url }) =>
-              request.destination === '' && /^\/api(?:\/|$)/.test(url.pathname),
+              request.destination === '' &&
+              /^\/(?:api|sales|products|customers|expenses|entries|auth|exchangeRates|reports|print|users|categories)(?:\/|$)/.test(url.pathname),
             handler: 'NetworkOnly',
             method: 'GET',
             options: { cacheName: 'api-network-only' },

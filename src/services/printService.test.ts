@@ -6,6 +6,7 @@ import {
   SALE_BUSINESS,
   buildSaleReceiptHtml,
   buildSaleStubHtml,
+  calculateThermalPageHeightMm,
   normalizeSaleReceipt,
   printSaleReceiptAndStub,
   runPrintSequence,
@@ -51,8 +52,8 @@ test("saved sale snapshots normalize without consulting current product data or 
   assert.equal(receipt.exchangeRate, 2800);
 });
 
-test("automatic sale printing and browser document spacing use the required delays", () => {
-  assert.equal(POST_SAVE_PRINT_DELAY_MS, 500);
+test("committed sales print immediately and browser documents retain deliberate spacing", () => {
+  assert.equal(POST_SAVE_PRINT_DELAY_MS, 0);
   assert.equal(BROWSER_DOCUMENT_DELAY_MS, 2000);
 });
 
@@ -102,8 +103,20 @@ test("customer receipt uses the compact 80mm layout without changing the cashier
   const stubHtml = buildSaleStubHtml(receipt);
   assert.match(receiptHtml, /class="receipt"/);
   assert.match(receiptHtml, /receipt \.item \{ padding: \.65mm/);
+  assert.doesNotMatch(receiptHtml, /Bbbb|Cnnn|watermark|pwa-512x512/);
   assert.match(stubHtml, /class="stub"/);
   assert.match(stubHtml, /SOUCHE DE CAISSE/);
+});
+
+test("thermal page measurement rejects invalid values and clamps extreme lengths", () => {
+  assert.equal(calculateThermalPageHeightMm(Number.NaN), 180);
+  assert.equal(calculateThermalPageHeightMm(0), 180);
+  assert.equal(calculateThermalPageHeightMm(-10), 180);
+  assert.equal(calculateThermalPageHeightMm(1), 20);
+  assert.equal(calculateThermalPageHeightMm(Number.MAX_VALUE), 3000);
+  const normal = calculateThermalPageHeightMm(500);
+  assert.ok(Number.isFinite(normal));
+  assert.ok(normal > 20 && normal < 3000);
 });
 
 test("walk-in sales and reservations keep readable French labels", () => {

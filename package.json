@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "node --experimental-strip-types --test src/utils/regionalSales.test.ts src/services/printService.test.ts src/components/navigationConfig.test.ts",
+    "test:pwa-lifecycle": "node scripts/pwa-lifecycle-test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -9,11 +9,16 @@ export const SALE_BUSINESS = Object.freeze({
   registration: "RCCM/KIS : 22-A-267",
   thankYou: "Merci pour votre confiance.",
   salesNotice: "Marchandises vendues non reprises, non échangées.",
-  logoUrl: "/icons/pwa-512x512.png",
 });
 
-export const POST_SAVE_PRINT_DELAY_MS = 500;
+// The POST /sales response is the committed MongoDB snapshot. Waiting for the
+// database to "settle" after that response only delays printing and does not
+// make either the browser or USB printer more ready.
+export const POST_SAVE_PRINT_DELAY_MS = 0;
 export const BROWSER_DOCUMENT_DELAY_MS = 2000;
+export const THERMAL_PAGE_MIN_MM = 20;
+export const THERMAL_PAGE_MAX_MM = 3000;
+export const THERMAL_PAGE_FALLBACK_MM = 180;
 
 export type ReceiptDocumentType = "sale" | "reservation";
 export type PrintDocumentKind = "receipt" | "stub";
@@ -233,7 +238,7 @@ export const wait = (milliseconds: number): Promise<void> =>
   new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
 
 export async function printCommittedSaleAfterDelay(receipt: SaleReceiptData): Promise<"usb" | "browser"> {
-  await wait(POST_SAVE_PRINT_DELAY_MS);
+  if (POST_SAVE_PRINT_DELAY_MS > 0) await wait(POST_SAVE_PRINT_DELAY_MS);
   return printSaleReceiptAndStub(receipt);
 }
 
@@ -253,8 +258,7 @@ const thermalStyles = `
     print-color-adjust: exact;
   }
   .document { position: relative; width: 78mm; max-width: 100%; height: auto; min-height: 0; margin: 0; }
-  .document > *:not(.watermark) { position: relative; z-index: 1; }
-  .watermark { position: fixed; z-index: 0; inset: 24mm 14mm auto; width: 50mm; height: 50mm; object-fit: contain; opacity: .035; filter: grayscale(1); pointer-events: none; }
+  .document > * { position: relative; }
   .center { text-align: center; }
   .business { font-size: 16px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
   .business-meta { margin-top: .4mm; font-size: 10.5px; line-height: 1.2; }
@@ -317,7 +321,7 @@ function buildThermalDocument(title: string, kind: PrintDocumentKind, content: s
   <style>${thermalStyles}</style>
 </head>
 <body data-document-kind="${kind}">
-  <main class="document"><img class="watermark" src="${SALE_BUSINESS.logoUrl}" alt="">${content}<div class="cut-indicator">- - - - - - - ✂ - - - - - - -</div></main>
+  <main class="document">${content}<div class="cut-indicator">- - - - - - - ✂ - - - - - - -</div></main>
 </body>
 </html>`;
 }
@@ -351,7 +355,7 @@ export function buildSaleReceiptHtml(receipt: SaleReceiptData): string {
     </section>
     <div class="section-label">ARTICLES ACHETÉS</div>
     <section class="items">${receipt.items.map((item) => `<article class="item">
-      <div class="item-name">${escapeHtml(item.name)}${item.regionCode ? ` <span class="region">(${escapeHtml(item.regionCode)})</span>` : ""}</div>
+      <div class="item-name">${escapeHtml(item.name)}</div>
       <div class="item-calc"><span>${item.quantity}${itemUnit(item)} x ${formatUsd(item.unitPrice)}</span><strong>${formatUsd(item.lineTotal)}</strong></div>
     </article>`).join("")}</section>
     <div class="rule"></div>
@@ -429,9 +433,39 @@ function waitForDocumentReady(printWindow: Window): Promise<void> {
   });
 }
 
+export function calculateThermalPageHeightMm(contentPixels: number): number {
+  if (!Number.isFinite(contentPixels) || contentPixels <= 0) return THERMAL_PAGE_FALLBACK_MM;
+  const measuredMm = Math.ceil((contentPixels * 25.4 / 96 + 0.5) * 10) / 10;
+  if (!Number.isFinite(measuredMm)) return THERMAL_PAGE_MAX_MM;
+  if (measuredMm < THERMAL_PAGE_MIN_MM) {
+    return THERMAL_PAGE_MIN_MM;
+  }
+  if (measuredMm > THERMAL_PAGE_MAX_MM) return THERMAL_PAGE_MAX_MM;
+  return measuredMm;
+}
+
+function assertPrintableBrowserDocument(printWindow: Window): HTMLElement {
+  const { document: printDocument } = printWindow;
+  const printable = printDocument.querySelector<HTMLElement>("main.document");
+  const documentKind = printDocument.body?.dataset.documentKind;
+  const printableText = printable?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+  if (!printable || (documentKind !== "receipt" && documentKind !== "stub") || printableText.length < 20) {
+    throw new Error("Document d'impression vide ou incomplet; aucune page n'a été envoyée.");
+  }
+
+  const style = printWindow.getComputedStyle(printable);
+  const rect = printable.getBoundingClientRect();
+  const height = Math.max(rect.height, printable.scrollHeight, printDocument.body?.scrollHeight ?? 0);
+  if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0 ||
+      !Number.isFinite(rect.width) || rect.width <= 1 || !Number.isFinite(height) || height <= 1) {
+    throw new Error("Mise en page d'impression invisible ou invalide; aucune page n'a été envoyée.");
+  }
+  return printable;
+}
+
 function fitThermalPageToContent(printWindow: Window): void {
   const { document: printDocument } = printWindow;
-  if (!printDocument.body?.dataset.documentKind) return;
+  const printable = assertPrintableBrowserDocument(printWindow);
 
   // Measure using the same margins as print media. A concrete page length is
   // more consistently honoured by Chromium/printer drivers than `80mm auto`.
@@ -440,10 +474,17 @@ function fitThermalPageToContent(printWindow: Window): void {
   measurementStyle.textContent = `html[data-print-measuring="true"] body { margin: 0 !important; box-shadow: none !important; }`;
   printDocument.head.appendChild(measurementStyle);
   const contentPixels = Math.max(
+    printable.getBoundingClientRect().height,
+    printable.scrollHeight,
     printDocument.body.getBoundingClientRect().height,
     printDocument.body.scrollHeight,
   );
-  const pageHeightMm = Math.max(20, Math.ceil((contentPixels * 25.4 / 96 + 0.5) * 10) / 10);
+  const pageHeightMm = calculateThermalPageHeightMm(contentPixels);
+  console.info("Browser print layout ready", {
+    documentKind: printDocument.body.dataset.documentKind,
+    contentPixels: Math.round(contentPixels),
+    pageHeightMm,
+  });
   const pageStyle = printDocument.createElement("style");
   pageStyle.dataset.thermalPageSize = "true";
   pageStyle.textContent = `@page { size: 80mm ${pageHeightMm}mm; margin: 0; }`;
@@ -481,6 +522,12 @@ async function renderAndPrint(printWindow: Window, html: string): Promise<void> 
   await waitForDocumentReady(printWindow);
   fitThermalPageToContent(printWindow);
   await new Promise<void>((resolve) => printWindow.requestAnimationFrame(() => resolve()));
+  // Re-check after applying the dynamic @page rule. A browser/driver must never
+  // receive a document that collapsed during the final layout pass.
+  assertPrintableBrowserDocument(printWindow);
+  console.info("Browser print dialog starting", {
+    documentKind: printWindow.document.body.dataset.documentKind,
+  });
   await waitForPrintDialog(printWindow);
 }
 
@@ -557,6 +604,7 @@ async function printSaleReceiptOnUsb(receipt: SaleReceiptData): Promise<UsbPrint
     error?: string;
     printedDocuments?: unknown;
     documents?: unknown;
+    fallbackSafe?: unknown;
   };
   const reportedDocuments = Array.isArray(payload.printedDocuments)
     ? payload.printedDocuments
@@ -564,6 +612,12 @@ async function printSaleReceiptOnUsb(receipt: SaleReceiptData): Promise<UsbPrint
   const printedDocuments = reportedDocuments.filter(
     (value): value is PrintDocumentKind => value === "receipt" || value === "stub",
   );
+
+  if (!response.ok && payload.fallbackSafe !== true) {
+    throw new Error(
+      "État de l'impression USB inconnu. Vérifiez l'imprimante puis utilisez la réimpression; la vente est déjà enregistrée.",
+    );
+  }
 
   return {
     success: response.ok,
@@ -613,7 +667,7 @@ export function downloadSaleReceiptAndStubPdf(receipt: SaleReceiptData): void {
   const adjustmentCount = [receipt.discount, receipt.tax, receipt.transportCost, receipt.otherCharges]
     .filter((amount) => amount > 0).length;
   const itemNameLines = receipt.items.reduce((sum, item) =>
-    sum + Math.max(1, Math.ceil(`${item.name}${item.regionCode ? ` (${item.regionCode})` : ""}`.length / 40)), 0);
+    sum + Math.max(1, Math.ceil(item.name.length / 40)), 0);
   const optionalHeight = (receipt.customerPhone ? 4 : 0) + (receipt.exchangeRate ? 4 : 0) +
     (receipt.type === "reservation" ? 8 : 0);
   const receiptPageHeight = 79 + itemNameLines * 4 + receipt.items.length * (receipt.exchangeRate ? 8 : 4) + adjustmentCount * 4 + optionalHeight;
@@ -664,7 +718,7 @@ export function downloadSaleReceiptAndStubPdf(receipt: SaleReceiptData): void {
   centered("ARTICLES ACHETES", 8, true);
 
   for (const item of receipt.items) {
-    const names = doc.splitTextToSize(`${item.name}${item.regionCode ? ` (${item.regionCode})` : ""}`, 68) as string[];
+    const names = doc.splitTextToSize(item.name, 68) as string[];
     names.forEach((name) => text(name, 8, true));
     row(`${item.quantity}${item.unit ? ` ${item.unit}` : ""} x ${pdfMoney(item.unitPrice)}`, pdfMoney(item.lineTotal));
     if (receipt.exchangeRate) row("Equivalent FC", formatFc(item.lineTotal * receipt.exchangeRate));

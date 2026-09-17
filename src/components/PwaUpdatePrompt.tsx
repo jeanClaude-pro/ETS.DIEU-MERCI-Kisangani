@@ -12,6 +12,7 @@ export default function PwaUpdatePrompt() {
     useState<ServiceWorkerRegistration>();
   const [isApplying, setIsApplying] = useState(false);
   const [updateError, setUpdateError] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -109,7 +110,7 @@ export default function PwaUpdatePrompt() {
     }
   };
 
-  if (!needRefresh) return null;
+  if (!needRefresh || dismissed) return null;
 
   return (
     <section
@@ -140,18 +141,28 @@ export default function PwaUpdatePrompt() {
             </p>
           )}
 
-          <button
-            className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70 sm:w-auto"
-            disabled={isApplying}
-            onClick={() => void applyUpdate()}
-            type="button"
-          >
-            <RefreshCw
-              aria-hidden="true"
-              className={`size-4 ${isApplying ? "animate-spin" : ""}`}
-            />
-            {isApplying ? "Mise à jour…" : "Mettre à jour"}
-          </button>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70 sm:w-auto"
+              disabled={isApplying}
+              onClick={() => void applyUpdate()}
+              type="button"
+            >
+              <RefreshCw
+                aria-hidden="true"
+                className={`size-4 ${isApplying ? "animate-spin" : ""}`}
+              />
+              {isApplying ? "Mise à jour…" : "Mettre à jour"}
+            </button>
+            <button
+              className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50"
+              disabled={isApplying}
+              onClick={() => setDismissed(true)}
+              type="button"
+            >
+              Plus tard
+            </button>
+          </div>
         </div>
       </div>
     </section>
