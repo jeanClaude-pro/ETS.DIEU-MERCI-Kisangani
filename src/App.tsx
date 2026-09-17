@@ -11,6 +11,7 @@ import "react-toastify/dist/ReactToastify.css";
 
 import AdaptiveNavigation from "./components/AdaptiveNavigation";
 import ResponsiveTableEnhancer from "./components/ResponsiveTableEnhancer";
+import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import Products from "./pages/products/products";
 import SalesHistory from "./pages/history/SalesHistory";
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -228,6 +229,7 @@ export default function App() {
       <SidebarProvider>
         <Router>
           <ToastContainer position="top-right" autoClose={3000} newestOnTop />
+          <PwaUpdatePrompt />
           <AppLayout />
         </Router>
       </SidebarProvider>
