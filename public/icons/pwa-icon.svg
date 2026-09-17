@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Mr Clean">
+  <rect width="512" height="512" rx="112" fill="#ffffff"/>
+  <path d="M168 154l36 28 52-76 52 76 36-28 18 82H150z" fill="#0f172a"/>
+  <circle cx="256" cy="276" r="112" fill="#0f172a"/>
+  <circle cx="256" cy="276" r="89" fill="#ffffff"/>
+  <path d="M187 326V221h32l37 62 37-62h32v105h-33v-55l-36 57-37-57v55z" fill="#0f172a"/>
+  <text x="256" y="432" text-anchor="middle" fill="#0f172a" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="800" letter-spacing="8">CLEAN</text>
+</svg>

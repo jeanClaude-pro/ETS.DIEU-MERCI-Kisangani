@@ -34,8 +34,8 @@ const LoginPage = () => {
 
     try {
       if (mode === "register") {
-        await registerApi({ username, email, password });
-        toast.success("Inscription réussie ! Veuillez vous connecter.");
+        const result = await registerApi({ username, email, password });
+        toast.success(result.message || "Inscription réussie ! Un administrateur doit approuver votre compte.");
         setMode("login");
       } else {
         const { user, token } = await loginApi({ email, password });
@@ -53,21 +53,33 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden w-full max-w-md">
-        <div className="p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">
+    <div className="login-shell flex h-[100dvh] items-center justify-center overflow-hidden p-2 sm:p-6">
+      <div className="login-card relative z-10 grid w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl md:grid-cols-[1.1fr_.9fr]">
+        <section className="login-visual hidden md:flex" aria-label="Identité Mr Clean">
+          <div className="login-image-frame">
+            <img src="/Mrcleanlogo.png" alt="Logo complet Mr Clean" />
+          </div>
+          <div className="login-brand-caption">
+            <p>Kisangani</p>
+            <h2>Boutique C’EST DIEU QUI PARTAGE</h2>
+          </div>
+        </section>
+        <section className="login-panel">
+        <div className="login-form-content p-4 sm:p-8 md:p-10">
+          <div className="login-heading text-center mb-6 sm:mb-8">
+            <div className="login-mobile-logo md:hidden"><img src="/Mrcleanlogo.png" alt="Logo complet Mr Clean" /></div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-[.18em] text-blue-600 md:hidden">C’EST DIEU QUI PARTAGE</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
               {mode === "login" ? "Bon retour" : "Créer un compte"}
             </h1>
-            <p className="text-gray-600">
+            <p className="login-subtitle text-sm sm:text-base text-gray-600">
               {mode === "login"
-                ? "Connectez-vous pour continuer votre voyage"
-                : "Rejoignez-nous pour commencer"}
+                ? "Connectez-vous à votre espace de travail"
+                : "Créez votre accès à la boutique"}
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="login-form space-y-4 sm:space-y-5">
             {mode === "register" && (
               <div>
                 <label
@@ -82,7 +94,8 @@ const LoginPage = () => {
                   placeholder="Entrez votre nom d'utilisateur"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                  className="login-input"
+                  autoComplete="name"
                   required
                 />
               </div>
@@ -101,7 +114,8 @@ const LoginPage = () => {
                 placeholder="Entrez votre email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                className="login-input"
+                autoComplete="email"
                 required
               />
             </div>
@@ -119,7 +133,8 @@ const LoginPage = () => {
                 placeholder="Entrez votre mot de passe"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                className="login-input"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
                 required
               />
             </div>
@@ -138,7 +153,8 @@ const LoginPage = () => {
                   placeholder="Confirmez votre mot de passe"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                  className="login-input"
+                  autoComplete="new-password"
                   required
                 />
               </div>
@@ -153,7 +169,7 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition disabled:opacity-50"
+              className="login-submit"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
@@ -187,8 +203,8 @@ const LoginPage = () => {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-gray-600">
+          <div className="mt-4 sm:mt-6 text-center">
+            <p className="text-sm text-gray-600">
               {mode === "login"
                 ? "Vous n'avez pas de compte ? "
                 : "Vous avez déjà un compte ? "}
@@ -206,12 +222,13 @@ const LoginPage = () => {
         </div>
 
         {mode === "login" && (
-          <div className="bg-gray-50 p-4 border-t border-gray-200 text-center">
+          <div className="login-legal bg-gray-50 px-4 py-3 border-t border-gray-200 text-center">
             <p className="text-xs text-gray-500">
               En continuant, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité.
             </p>
           </div>
         )}
+        </section>
       </div>
 
       <ToastContainer

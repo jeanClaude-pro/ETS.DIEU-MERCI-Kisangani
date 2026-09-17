@@ -2,6 +2,7 @@
 import * as React from "react";
 import type { AuthState, User } from "../types/auth";
 import { AuthContext } from "./auth-context";
+import { fetchMe } from "../services/authService";
 
 export const AuthProvider: React.FC<React.PropsWithChildren> = ({
   children,
@@ -24,6 +25,20 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
 
     const user: User | null = userRaw ? JSON.parse(userRaw) : null;
     setState({ token, user, loading: false });
+
+    // The cached user is only a fast first paint. Refresh role/status/module
+    // permissions from the server so a change an admin made elsewhere (or an
+    // expired/invalid token) takes effect instead of trusting stale storage.
+    fetchMe()
+      .then((fresh) => {
+        localStorage.setItem("user", JSON.stringify(fresh));
+        setState((s) => ({ ...s, user: fresh }));
+      })
+      .catch(() => {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        setState({ token: null, user: null, loading: false });
+      });
   }, []);
 
   const setAuth = React.useCallback(

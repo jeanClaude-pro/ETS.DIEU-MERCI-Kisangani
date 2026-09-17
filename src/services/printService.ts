@@ -257,7 +257,7 @@ const thermalStyles = `
   .watermark { position: fixed; z-index: 0; inset: 24mm 14mm auto; width: 50mm; height: 50mm; object-fit: contain; opacity: .035; filter: grayscale(1); pointer-events: none; }
   .center { text-align: center; }
   .business { font-size: 16px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
-  .business-meta { margin-top: .8mm; font-size: 11px; line-height: 1.3; }
+  .business-meta { margin-top: .4mm; font-size: 10.5px; line-height: 1.2; }
   .rule { border-top: 1px dashed #000; margin: 1.8mm 0; }
   .double-rule { border-top: 2px double #000; margin: 1.8mm 0; }
   .title { margin: 1.5mm 0; text-align: center; font-size: 14px; font-weight: 800; }
@@ -277,6 +277,18 @@ const thermalStyles = `
   .rate { text-align: right; font-size: 11px; }
   .footer { margin-top: 2mm; text-align: center; font-size: 10.5px; line-height: 1.35; }
   .footer strong { font-size: 12px; text-transform: uppercase; }
+  .receipt .double-rule { margin: 1mm 0; }
+  .receipt .title { margin: .8mm 0; }
+  .receipt .meta { grid-template-columns: 1fr 1fr; gap: .4mm 2mm; }
+  .receipt .customer { padding: .7mm 1mm; }
+  .receipt .section-label { margin: .9mm 0 .4mm; padding: .6mm; }
+  .receipt .item { padding: .65mm .25mm; }
+  .receipt .item-calc { margin-top: .2mm; }
+  .receipt .rule { margin: .9mm 0; }
+  .receipt .totals { padding: .7mm 1mm; }
+  .receipt .total-row { margin: .35mm 0; }
+  .receipt .grand-total { padding-top: .7mm; }
+  .receipt .footer { margin-top: 1mm; line-height: 1.2; }
   .cut-indicator { margin-top: 1.4mm; text-align: center; font-size: 9px; font-weight: 400; white-space: nowrap; }
   .stub { border: 1px solid #000; padding: 2mm; height: auto; min-height: 0; break-inside: avoid; }
   .stub .business { font-size: 13px; }
@@ -318,31 +330,29 @@ export function buildSaleReceiptHtml(receipt: SaleReceiptData): string {
     ? `<div class="total-row secondary"><span>Total FC</span><strong>${formatFc(receipt.total * receipt.exchangeRate)}</strong></div>
        <div class="rate">Taux enregistré : 1 USD = ${formatFc(receipt.exchangeRate)}</div>`
     : "";
-  const content = `
+  const content = `<section class="receipt">
     <header class="center">
       <div class="business">${SALE_BUSINESS.name}</div>
       <div class="business-meta">${SALE_BUSINESS.address}</div>
-      <div class="business-meta">Tél. : ${SALE_BUSINESS.phone}</div>
-      <div class="business-meta">${SALE_BUSINESS.registration}</div>
+      <div class="business-meta">Tél. ${SALE_BUSINESS.phone} · ${SALE_BUSINESS.registration}</div>
     </header>
     <div class="double-rule"></div>
     <div class="title">${documentTitle}${isReservation ? ` — ${escapeHtml(receipt.status.toUpperCase())}` : ""}</div>
     <section class="meta">
       <div><strong>Référence :</strong> ${escapeHtml(receipt.reference)}</div>
       <div><strong>Date :</strong> ${escapeHtml(receipt.date)}</div>
-      <div><strong>Statut :</strong> ${escapeHtml(receipt.status.toUpperCase())}</div>
+      ${isReservation ? `<div><strong>Statut :</strong> ${escapeHtml(receipt.status.toUpperCase())}</div>` : ""}
       ${reservationSchedule(receipt)}
     </section>
     <div class="rule"></div>
     <section class="customer">
       <div><strong>Client :</strong> ${escapeHtml(customerLabel(receipt))}</div>
       ${receipt.customerPhone ? `<div><strong>Tél. :</strong> ${escapeHtml(receipt.customerPhone)}</div>` : ""}
-      ${receipt.customerEmail ? `<div><strong>Email :</strong> ${escapeHtml(receipt.customerEmail)}</div>` : ""}
     </section>
     <div class="section-label">ARTICLES ACHETÉS</div>
     <section class="items">${receipt.items.map((item) => `<article class="item">
       <div class="item-name">${escapeHtml(item.name)}${item.regionCode ? ` <span class="region">(${escapeHtml(item.regionCode)})</span>` : ""}</div>
-      <div class="item-calc"><span>${item.quantity}${itemUnit(item)} x ${formatUsd(item.unitPrice)} / ${itemFc(item.unitPrice, receipt)}</span><strong>${formatUsd(item.lineTotal)} / ${itemFc(item.lineTotal, receipt)}</strong></div>
+      <div class="item-calc"><span>${item.quantity}${itemUnit(item)} x ${formatUsd(item.unitPrice)}</span><strong>${formatUsd(item.lineTotal)}</strong></div>
     </article>`).join("")}</section>
     <div class="rule"></div>
     <section class="totals">
@@ -358,7 +368,7 @@ export function buildSaleReceiptHtml(receipt: SaleReceiptData): string {
     <div><strong>Paiement :</strong> ${escapeHtml(receipt.paymentMethod.toUpperCase())}</div>
     <div><strong>Agent de vente :</strong> ${escapeHtml(receipt.salesPerson)}</div>
     ${isReservation && receipt.notes ? `<div class="reservation"><strong>Notes :</strong> ${escapeHtml(receipt.notes)}</div>` : ""}
-    <footer class="footer"><strong>${SALE_BUSINESS.thankYou}</strong><br>${SALE_BUSINESS.salesNotice}</footer>`;
+    <footer class="footer"><strong>${SALE_BUSINESS.thankYou}</strong><br>${SALE_BUSINESS.salesNotice}</footer></section>`;
 
   return buildThermalDocument(`${documentTitle} ${receipt.reference}`, "receipt", content);
 }

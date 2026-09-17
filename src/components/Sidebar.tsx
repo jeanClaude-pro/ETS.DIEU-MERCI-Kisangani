@@ -1,143 +1,28 @@
 "use client";
 
-import type React from "react";
-
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LayoutDashboard,
-  ShoppingCart,
-  Package,
-  BarChart3,
-  Users,
   Settings,
   ChevronLeft,
   ChevronRight,
-  Store,
-  TrendingUp,
   Bell,
   LogOut,
   LogIn,
   User,
   Clock,
-  Wallet,
   Menu,
   X,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useSidebar } from "../context/SidebarContext";
+import { navigationSections as sidebarSections, effectiveModulesForUser, type NavigationItem } from "./navigationConfig";
 
 const clsx = (...classes: (string | undefined | null | false)[]): string => {
   return classes.filter(Boolean).join(" ");
 };
 
-interface SidebarItem {
-  id: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  path: string;
-  badge?: number;
-  roles?: string[];
-}
-
-interface SidebarSection {
-  title: string;
-  items: SidebarItem[];
-}
-
-const sidebarSections: SidebarSection[] = [
-  {
-    title: "Menu principal",
-    items: [
-      {
-        id: "taux",
-        label: "Taux d'echange",
-        icon: LayoutDashboard,
-        path: "/rate",
-        roles: ["admin"],
-      },
-      {
-        id: "pos",
-        label: "Point de Vente",
-        icon: ShoppingCart,
-        path: "/",
-        roles: ["admin", "manager", "cashier_supervisor", "inventory_manager"],
-      },
-      {
-        id: "entry",
-        label: "Entrée de caisse",
-        icon: Wallet,
-        path: "/entry",
-        roles: ["admin", "cashier_supervisor", "inventory_manager", "manager"],
-      },
-      {
-        id: "sortie",
-        label: "Sortie",
-        icon: Wallet,
-        path: "/sortie",
-        roles: ["admin", "cashier_supervisor", "inventory_manager", "manager"],
-      },
-    ],
-  },
-  {
-    title: "Stock",
-    items: [
-      {
-        id: "products",
-        label: "Articles",
-        icon: Package,
-        path: "/products",
-        roles: ["admin", "manager", "inventory_manager"],
-      },
-    ],
-  },
-  {
-    title: "Ventes & Rapports",
-    items: [
-      {
-        id: "sales",
-        label: "Historique de Vente",
-        icon: TrendingUp,
-        path: "/sales",
-        roles: ["admin", "manager", "cashier_supervisor", "inventory_manager"],
-      },
-      {
-        id: "entryhistory",
-        label: "Historique d'Entrée",
-        icon: Wallet,
-        path: "/EntryHistory",
-        roles: ["admin", "cashier_supervisor", "inventory_manager", "manager"],
-      },
-      {
-        id: "historicsortie",
-        label: "Historique de Sortie",
-        icon: Wallet,
-        path: "/sortiehistory",
-        roles: ["admin", "cashier_supervisor", "inventory_manager", "manager"],
-      },
-      {
-        id: "reports",
-        label: "Rapports",
-        icon: BarChart3,
-        path: "/reports",
-        roles: ["admin"],
-      },
-    ],
-  },
-  {
-    title: "Gestion",
-    items: [
-      {
-        id: "customers",
-        label: "Clients",
-        icon: Users,
-        path: "/customers",
-        roles: ["admin", "manager", "cashier_supervisor"],
-      },
-    ],
-  },
-];
 
 const isAllowedTime = (): boolean => {
   const now = new Date();
@@ -157,7 +42,6 @@ const hasRestrictedAccess = (userRole: string | undefined): boolean => {
 export default function Sidebar() {
   const { isCollapsed, setIsCollapsed, isMobile, isMobileOpen, setIsMobileOpen } = useSidebar();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [showTimeWarning, setShowTimeWarning] = useState(false);
   const location = useLocation();
   const { token, user, clearAuth } = useAuth();
 
@@ -169,6 +53,7 @@ export default function Sidebar() {
   const isAuthed = Boolean(token && user);
   const isNonAdmin = user?.role !== "admin";
   const isRestricted = isNonAdmin && hasRestrictedAccess(user?.role);
+  const showTimeWarning = isRestricted;
 
   // Update current time every minute
   useEffect(() => {
@@ -182,23 +67,21 @@ export default function Sidebar() {
   useEffect(() => {
     if (isAuthed && isNonAdmin) {
       if (isRestricted) {
-        setShowTimeWarning(true);
         const logoutTimer = setTimeout(() => {
-          handleAutoLogout();
+          clearAuth();
+          window.location.href = "/login?message=auto_logout";
         }, 10000);
         return () => clearTimeout(logoutTimer);
-      } else {
-        setShowTimeWarning(false);
       }
     }
-  }, [isAuthed, isNonAdmin, isRestricted, currentTime]);
+  }, [clearAuth, isAuthed, isNonAdmin, isRestricted, currentTime]);
 
   // Close mobile sidebar when route changes
   useEffect(() => {
     if (isMobile) {
       setIsMobileOpen(false);
     }
-  }, [location.pathname, isMobile]);
+  }, [location.pathname, isMobile, setIsMobileOpen]);
 
   // Touch swipe gestures for mobile
   useEffect(() => {
@@ -228,13 +111,10 @@ export default function Sidebar() {
       sidebarElement.removeEventListener("touchmove", handleTouchMove);
       sidebarElement.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [isMobile]);
+  }, [isMobile, setIsMobileOpen]);
 
-  const hasAccess = (item: SidebarItem): boolean => {
-    if (!item.roles) return true;
-    if (!user?.role) return false;
-    return item.roles.includes(user.role);
-  };
+  const allowedModules = effectiveModulesForUser(user);
+  const hasAccess = (item: NavigationItem): boolean => allowedModules.includes(item.id);
 
   const toggleSidebar = () => {
     if (isMobile) {
@@ -247,11 +127,6 @@ export default function Sidebar() {
   const handleLogout = () => {
     clearAuth();
     window.location.href = "/login";
-  };
-
-  const handleAutoLogout = () => {
-    clearAuth();
-    window.location.href = "/login?message=auto_logout";
   };
 
   const formatTime = (date: Date): string =>
@@ -269,16 +144,6 @@ export default function Sidebar() {
 
   const isExpanded = isMobile ? isMobileOpen : !isCollapsed;
 
-  const MobileOverlay = () => (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
-      onClick={() => setIsMobileOpen(false)}
-    />
-  );
-
   return (
     <>
       {/* Mobile hamburger button */}
@@ -294,7 +159,7 @@ export default function Sidebar() {
 
       {/* Mobile overlay backdrop */}
       <AnimatePresence>
-        {isMobile && isMobileOpen && <MobileOverlay />}
+        {isMobile && isMobileOpen && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setIsMobileOpen(false)} />}
       </AnimatePresence>
 
       {/* Sidebar — always fixed so main content margin controls spacing */}
@@ -352,8 +217,8 @@ export default function Sidebar() {
                   transition={{ duration: 0.2 }}
                   className="flex items-center gap-3 min-w-0"
                 >
-                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Store className="w-5 h-5 text-white" />
+                  <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <img src="/Mrcleanlogo.png" alt="" className="w-full h-full object-contain" />
                   </div>
                   <div className="min-w-0">
                     <h1 className="text-base font-bold text-white truncate">DIEU QUI PARTAGE</h1>
@@ -361,8 +226,8 @@ export default function Sidebar() {
                   </div>
                 </motion.div>
               ) : !isMobile ? (
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mx-auto">
-                  <Store className="w-5 h-5 text-white" />
+                <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center mx-auto overflow-hidden">
+                  <img src="/Mrcleanlogo.png" alt="Logo" className="w-full h-full object-contain" />
                 </div>
               ) : null}
             </AnimatePresence>
@@ -547,7 +412,6 @@ export default function Sidebar() {
                               onClick={(e) => {
                                 if (isItemDisabled) {
                                   e.preventDefault();
-                                  setShowTimeWarning(true);
                                 }
                                 if (isMobile) setIsMobileOpen(false);
                               }}

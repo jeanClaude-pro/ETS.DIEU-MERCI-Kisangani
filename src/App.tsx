@@ -9,7 +9,8 @@ import {
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-import Sidebar from "./components/Sidebar";
+import AdaptiveNavigation from "./components/AdaptiveNavigation";
+import ResponsiveTableEnhancer from "./components/ResponsiveTableEnhancer";
 import Products from "./pages/products/products";
 import SalesHistory from "./pages/history/SalesHistory";
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -25,8 +26,10 @@ import Rate from "./pages/Rate";
 import Entry from "./pages/Entry";
 import EntryHistory from "./pages/EntryHistory";
 import { RequireAuth } from "./components/RequireAuth";
+import { RequireModule } from "./components/RequireModule";
 import { AuthProvider } from "./context/AuthProvider";
 import { SidebarProvider, useSidebar } from "./context/SidebarContext";
+import Management from "./pages/management/Management";
 
 function AppLayout() {
   const token = localStorage.getItem("token");
@@ -35,22 +38,25 @@ function AppLayout() {
 
   return (
     <div className="min-h-screen flex bg-background">
-      <Sidebar />
+      <AdaptiveNavigation />
 
       {/* Main content shifts smoothly as sidebar expands/collapses */}
       <main
-        className="flex-1 overflow-auto min-h-screen"
+        className="app-main flex-1 overflow-auto min-h-screen min-w-0"
         style={{
-          marginLeft: sidebarWidth,
+          marginLeft: isAuthenticated ? sidebarWidth : 0,
           transition: "margin-left 0.3s ease-in-out",
         }}
       >
+        <ResponsiveTableEnhancer />
         <Routes>
           <Route
             path="/products"
             element={
               <RequireAuth>
-                <Products />
+                <RequireModule moduleId="products">
+                  <Products />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -58,7 +64,9 @@ function AppLayout() {
             path="/new-sale"
             element={
               <RequireAuth>
-                <NewSale />
+                <RequireModule moduleId="pos">
+                  <NewSale />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -66,7 +74,9 @@ function AppLayout() {
             path="/entry"
             element={
               <RequireAuth>
-                <Entry />
+                <RequireModule moduleId="entry">
+                  <Entry />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -74,7 +84,9 @@ function AppLayout() {
             path="/entryhistory"
             element={
               <RequireAuth>
-                <EntryHistory />
+                <RequireModule moduleId="entryhistory">
+                  <EntryHistory />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -82,7 +94,9 @@ function AppLayout() {
             path="/EntryHistory"
             element={
               <RequireAuth>
-                <EntryHistory />
+                <RequireModule moduleId="entryhistory">
+                  <EntryHistory />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -90,7 +104,9 @@ function AppLayout() {
             path="/rate"
             element={
               <RequireAuth>
-                <Rate />
+                <RequireModule moduleId="rate">
+                  <Rate />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -98,7 +114,9 @@ function AppLayout() {
             path="/sortie"
             element={
               <RequireAuth>
-                <Sortie />
+                <RequireModule moduleId="sortie">
+                  <Sortie />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -106,7 +124,9 @@ function AppLayout() {
             path="/reservation"
             element={
               <RequireAuth>
-                <Reservation />
+                <RequireModule moduleId="reservation">
+                  <Reservation />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -114,7 +134,9 @@ function AppLayout() {
             path="/reservationhistory"
             element={
               <RequireAuth>
-                <ReservationHistory />
+                <RequireModule moduleId="reservations">
+                  <ReservationHistory />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -122,7 +144,9 @@ function AppLayout() {
             path="/sortiehistory"
             element={
               <RequireAuth>
-                <SortieHistory />
+                <RequireModule moduleId="sortiehistory">
+                  <SortieHistory />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -130,7 +154,9 @@ function AppLayout() {
             path="/"
             element={
               <RequireAuth>
-                <NewSale />
+                <RequireModule moduleId="pos">
+                  <NewSale />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -138,7 +164,9 @@ function AppLayout() {
             path="/sales"
             element={
               <RequireAuth>
-                <SalesHistory />
+                <RequireModule moduleId="sales">
+                  <SalesHistory />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -146,7 +174,9 @@ function AppLayout() {
             path="/dashboard"
             element={
               <RequireAuth>
-                <Dashboard />
+                <RequireModule moduleId="dashboard">
+                  <Dashboard />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -154,7 +184,9 @@ function AppLayout() {
             path="/reports"
             element={
               <RequireAuth>
-                <Analytics />
+                <RequireModule moduleId="reports">
+                  <Analytics />
+                </RequireModule>
               </RequireAuth>
             }
           />
@@ -162,7 +194,19 @@ function AppLayout() {
             path="/customers"
             element={
               <RequireAuth>
-                <Customers />
+                <RequireModule moduleId="customers">
+                  <Customers />
+                </RequireModule>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/management"
+            element={
+              <RequireAuth>
+                <RequireModule moduleId="management">
+                  <Management />
+                </RequireModule>
               </RequireAuth>
             }
           />

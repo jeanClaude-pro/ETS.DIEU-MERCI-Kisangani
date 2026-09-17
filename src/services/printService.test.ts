@@ -90,10 +90,20 @@ test("long product names remain present and use wrapping-friendly columns", () =
   assert.match(html, /overflow-wrap: anywhere/);
   assert.match(html, /ARTICLES ACHETÉS/);
   assert.match(html, /class="item-calc"/);
-  // Compact single-row article line: qty x PU USD/FC on the left, PT USD/FC on the right.
+  // Compact single-row article line; FC remains in the final total and saved rate.
   assert.equal((html.match(/FC/g) || []).length >= 2, true);
   assert.match(html, /312,50 USD/);
   assert.match(html, /white-space: nowrap/);
+});
+
+test("customer receipt uses the compact 80mm layout without changing the cashier stub", () => {
+  const receipt = normalizeSaleReceipt(savedSale);
+  const receiptHtml = buildSaleReceiptHtml(receipt);
+  const stubHtml = buildSaleStubHtml(receipt);
+  assert.match(receiptHtml, /class="receipt"/);
+  assert.match(receiptHtml, /receipt \.item \{ padding: \.65mm/);
+  assert.match(stubHtml, /class="stub"/);
+  assert.match(stubHtml, /SOUCHE DE CAISSE/);
 });
 
 test("walk-in sales and reservations keep readable French labels", () => {

@@ -1,10 +1,15 @@
-export type Role = "admin" | "staff";
+export type Role = "admin" | "manager" | "inventory_manager" | "cashier_supervisor" | "staff";
+export type AccountStatus = "pending" | "active" | "suspended" | "rejected";
 
 export interface User {
   id: string;
   username: string;
   email: string;
   role: Role;
+  status?: AccountStatus;
+  modulePermissions?: string[];
+  approvedBy?: string | null;
+  approvedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

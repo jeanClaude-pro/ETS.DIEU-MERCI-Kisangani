@@ -1657,6 +1657,14 @@ export default function SalesHistory() {
                               <Eye className="w-4 h-4" />
                             </button>
                           )}
+                          <button
+                            onClick={() => printSavedSale(sale)}
+                            className="text-purple-600 hover:text-purple-900 p-2 min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg active:bg-purple-50"
+                            title="Réimprimer le reçu et la souche"
+                            aria-label={`Réimprimer la vente ${sale.saleId}`}
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
                           {!showEditedSales && (
                             <>
                               <button
@@ -1681,13 +1689,6 @@ export default function SalesHistory() {
                                 title="Télécharger le reçu et la souche PDF"
                               >
                                 <Download className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => printSavedSale(sale)}
-                                className="text-purple-600 hover:text-purple-900 p-1 rounded"
-                                title="Imprimer le reçu et la souche"
-                              >
-                                <Printer className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleVoidSale(sale)}
