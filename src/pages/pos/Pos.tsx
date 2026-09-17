@@ -11,6 +11,7 @@ import {
   DollarSign,
   Receipt,
 } from "lucide-react";
+import CategoriesDropdown from "../../components/CategoriesDropdown";
 
 // Types
 interface Product {
@@ -80,15 +81,6 @@ export default function Pos() {
   const [loading, setLoading] = useState(false);
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const categories = [
-    { id: "all", name: "All Categories" },
-    { id: "electronics", name: "Electronics" },
-    { id: "clothing", name: "Clothing" },
-    { id: "food", name: "Food & Beverages" },
-    { id: "books", name: "Books" },
-    { id: "home", name: "Home & Garden" },
-  ];
 
   // Fetch products
   useEffect(() => {
@@ -430,17 +422,14 @@ export default function Pos() {
                     placeholder="Rechercher des produits par nom ou code-barres..."
                   />
                 </div>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="w-full md:w-72">
+                  <CategoriesDropdown
+                    emptyLabel="Toutes les catégories"
+                    emptyValue="all"
+                    selectedCategory={selectedCategory}
+                    setSelectedCategory={setSelectedCategory}
+                  />
+                </div>
               </div>
 
               {/* Products Grid */}

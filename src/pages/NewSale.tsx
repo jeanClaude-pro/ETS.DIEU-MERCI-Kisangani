@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { DollarSign, RefreshCw, Calculator, Search } from "lucide-react";
+import CategoriesDropdown from "../components/CategoriesDropdown";
 import {
   normalizeSaleReceipt,
   printCommittedSaleAfterDelay,
@@ -13,6 +14,7 @@ interface Product {
   sku?: string;
   stock: number;
   price?: number;
+  category: string;
   region?: "Butembo" | "China";
   regionCode?: "Bbbb" | "Cnnn";
 }
@@ -68,6 +70,7 @@ export default function NewSale() {
   const [loadingRate, setLoadingRate] = useState(true);
   const [walkInCustomer, setWalkInCustomer] = useState<WalkInCustomer | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -210,14 +213,15 @@ export default function NewSale() {
     [products, form.productId]
   );
 
-  // Filter products based on search term
+  // Filter the committed inventory list by MongoDB-backed category and text.
   const filteredProducts = useMemo(() => {
-    if (!searchTerm.trim()) return products;
     return products.filter(product =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()))
+      (!selectedCategory || product.category === selectedCategory) &&
+      (!searchTerm.trim() ||
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase())))
     );
-  }, [products, searchTerm]);
+  }, [products, searchTerm, selectedCategory]);
 
   // Calculate USD price when FC price changes
   useEffect(() => {
@@ -654,6 +658,20 @@ export default function NewSale() {
 
         <div className="bg-white shadow-lg rounded-xl p-6 mb-6 border border-gray-200">
           <h3 className="text-lg font-semibold mb-4 text-gray-900">Ajouter les articles</h3>
+
+          <div className="mb-4">
+            <label className="mb-2 block font-medium text-gray-700">Filtrer par catégorie</label>
+            <div className="max-w-md">
+              <CategoriesDropdown
+                emptyLabel="Toutes les catégories"
+                selectedCategory={selectedCategory}
+                setSelectedCategory={(category) => {
+                  setSelectedCategory(category);
+                  setShowSearchResults(true);
+                }}
+              />
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="relative" ref={searchRef}>
