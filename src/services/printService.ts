@@ -11,6 +11,9 @@ export const SALE_BUSINESS = Object.freeze({
   salesNotice: "Marchandises vendues non reprises, non échangées.",
 });
 
+export const SALE_SYSTEM_PROMO =
+  "UN SYSTÈME POUR VOTRE BOUTIQUE OU ENTREPRISE ?\nGestion, ventes, stock & bien plus\nWhatsApp : +243 844 311 550";
+
 // The POST /sales response is the committed MongoDB snapshot. Waiting for the
 // database to "settle" after that response only delays printing and does not
 // make either the browser or USB printer more ready.
@@ -19,6 +22,10 @@ export const BROWSER_DOCUMENT_DELAY_MS = 2000;
 export const THERMAL_PAGE_MIN_MM = 20;
 export const THERMAL_PAGE_MAX_MM = 3000;
 export const THERMAL_PAGE_FALLBACK_MM = 180;
+// 0.8 mm above and below the document, plus 0.6 mm of cutter clearance.
+// This is deliberately applied to the printable wrapper measurement instead
+// of measuring the browser body/viewport.
+export const THERMAL_PAGE_ALLOWANCE_MM = 2.2;
 
 export type ReceiptDocumentType = "sale" | "reservation";
 export type PrintDocumentKind = "receipt" | "stub";
@@ -209,6 +216,9 @@ const escapeHtml = (value: string): string =>
     "'": "&#039;",
   })[character] ?? character);
 
+const escapeHtmlWithBreaks = (value: string): string =>
+  escapeHtml(value).replace(/\n/g, "<br>");
+
 const formatUsd = (amount: number): string =>
   `${new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)} USD`;
 
@@ -244,10 +254,17 @@ export async function printCommittedSaleAfterDelay(receipt: SaleReceiptData): Pr
 
 const thermalStyles = `
   * { box-sizing: border-box; }
-  @page { margin: 0; }
-  html, body { margin: 0; padding: 0; width: 80mm; height: auto; min-height: 0; }
+  @page { margin: 0 !important; }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 80mm;
+    height: auto;
+    min-height: 0;
+    background: #fff !important;
+    color: #000 !important;
+  }
   body {
-    padding: 1.5mm 1mm .8mm;
     color: #000;
     background: #fff;
     font-family: "Courier New", Courier, "Liberation Mono", monospace;
@@ -257,7 +274,7 @@ const thermalStyles = `
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .document { position: relative; width: 78mm; max-width: 100%; height: auto; min-height: 0; margin: 0; }
+  .document { position: relative; width: 78mm; max-width: 78mm; height: auto; min-height: 0; margin: 0 1mm; padding: .8mm 0; }
   .document > * { position: relative; }
   .center { text-align: center; }
   .business { font-size: 16px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
@@ -265,10 +282,10 @@ const thermalStyles = `
   .rule { border-top: 1px dashed #000; margin: 1.8mm 0; }
   .double-rule { border-top: 2px double #000; margin: 1.8mm 0; }
   .title { margin: 1.5mm 0; text-align: center; font-size: 14px; font-weight: 800; }
-  .section-label { margin: 1.6mm 0 1mm; padding: 1mm; color: #fff; background: #000; text-align: center; font-weight: 800; letter-spacing: .2px; }
+  .section-label { margin: 1.6mm 0 1mm; padding: 1mm; color: #000; background: #fff; border-top: 1px solid #000; border-bottom: 1px solid #000; text-align: center; font-weight: 800; letter-spacing: .2px; }
   .meta, .customer, .reservation { display: grid; gap: .7mm; overflow-wrap: anywhere; }
-  .customer, .totals { padding: 1.2mm; border: .2mm solid #d4d4d4; border-radius: 1.5mm; background: #f5f5f5; }
-  .item { padding: 1.2mm .4mm; border-bottom: .2mm dotted #555; break-inside: avoid; page-break-inside: avoid; }
+  .customer, .totals { padding: 1.2mm; border: 1px solid #000; border-radius: 1.5mm; background: #fff; }
+  .item { padding: 1.2mm .4mm; border-bottom: 1px solid #000; break-inside: avoid; page-break-inside: avoid; }
   .item:last-child { border-bottom: 0; }
   .item-name { font-weight: 800; overflow-wrap: anywhere; word-break: break-word; }
   .item-calc { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5mm 2mm; margin-top: .5mm; overflow-wrap: anywhere; font-weight: 800; }
@@ -279,6 +296,7 @@ const thermalStyles = `
   .grand-total { padding-top: 1.2mm; border-top: 1px solid #000; font-size: 15px; font-weight: 700; }
   .secondary { font-size: 12px; }
   .rate { text-align: right; font-size: 11px; }
+  .system-promo { margin-top: 1.2mm; padding-top: .9mm; border-top: 1px solid #000; text-align: center; font-size: 10px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
   .footer { margin-top: 2mm; text-align: center; font-size: 10.5px; line-height: 1.35; }
   .footer strong { font-size: 12px; text-transform: uppercase; }
   .receipt .double-rule { margin: 1mm 0; }
@@ -293,31 +311,37 @@ const thermalStyles = `
   .receipt .total-row { margin: .35mm 0; }
   .receipt .grand-total { padding-top: .7mm; }
   .receipt .footer { margin-top: 1mm; line-height: 1.2; }
-  .cut-indicator { margin-top: 1.4mm; text-align: center; font-size: 9px; font-weight: 400; white-space: nowrap; }
+  .cut-indicator { margin-top: 1.4mm; text-align: center; font-size: 9px; font-weight: 600; white-space: nowrap; }
   .stub { border: 1px solid #000; padding: 2mm; height: auto; min-height: 0; break-inside: avoid; }
   .stub .business { font-size: 13px; }
   .stub-grid { display: grid; gap: .8mm; margin-top: 1.5mm; overflow-wrap: anywhere; }
   .stub-items { margin-top: 1.2mm; }
-  .stub-item { padding: .8mm .2mm; border-bottom: .2mm dotted #555; }
+  .stub-item { padding: .8mm .2mm; border-bottom: 1px solid #000; }
   .stub-item span:first-child { overflow-wrap: anywhere; word-break: break-word; }
   .stub-item-detail { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5mm 2mm; margin-top: .3mm; font-size: 10.5px; overflow-wrap: anywhere; }
   .stub-total { display: flex; justify-content: space-between; gap: 2mm; border-top: 1px solid #000; margin-top: 1.2mm; padding-top: 1.2mm; font-size: 14px; font-weight: 700; }
   .stub-total strong { text-align: right; white-space: nowrap; }
-  @media screen { body { margin: 8px auto; border: 1px solid #ddd; box-shadow: 0 0 12px #bbb; } }
   @media print {
-    html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; }
-    body { margin: 0 !important; padding: 1.5mm 1mm .8mm !important; border: 0 !important; box-shadow: none !important; }
-    .document { width: 78mm; height: auto !important; min-height: 0 !important; }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+      color: #000 !important;
+      background: #fff !important;
+    }
+    .document { width: 78mm; max-width: 78mm; height: auto !important; min-height: 0 !important; margin: 0 1mm; padding: .8mm 0; }
   }
 `;
 
-function buildThermalDocument(title: string, kind: PrintDocumentKind, content: string): string {
+function buildThermalDocument(kind: PrintDocumentKind, content: string): string {
   return `<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(title)}</title>
+  <title></title>
   <style>${thermalStyles}</style>
 </head>
 <body data-document-kind="${kind}">
@@ -371,10 +395,11 @@ export function buildSaleReceiptHtml(receipt: SaleReceiptData): string {
     <div class="rule"></div>
     <div><strong>Paiement :</strong> ${escapeHtml(receipt.paymentMethod.toUpperCase())}</div>
     <div><strong>Agent de vente :</strong> ${escapeHtml(receipt.salesPerson)}</div>
+    <aside class="system-promo">${escapeHtmlWithBreaks(SALE_SYSTEM_PROMO)}</aside>
     ${isReservation && receipt.notes ? `<div class="reservation"><strong>Notes :</strong> ${escapeHtml(receipt.notes)}</div>` : ""}
     <footer class="footer"><strong>${SALE_BUSINESS.thankYou}</strong><br>${SALE_BUSINESS.salesNotice}</footer></section>`;
 
-  return buildThermalDocument(`${documentTitle} ${receipt.reference}`, "receipt", content);
+  return buildThermalDocument("receipt", content);
 }
 
 /** Builds only the intentionally compact stub. */
@@ -401,7 +426,124 @@ export function buildSaleStubHtml(receipt: SaleReceiptData): string {
     ${receipt.exchangeRate ? `<div class="total-row"><span>Total FC</span><strong>${formatFc(receipt.total * receipt.exchangeRate)}</strong></div>` : ""}
     <footer class="footer"><strong>SOUCHE DE CAISSE</strong><br>À conserver</footer>
   </section>`;
-  return buildThermalDocument(`${stubTitle} ${receipt.reference}`, "stub", content);
+  return buildThermalDocument("stub", content);
+}
+
+export interface CashEntryReceiptData {
+  entryId: string;
+  date: string;
+  source: string;
+  category: string;
+  paymentMethod: string;
+  description?: string;
+  receivedFrom: { name: string; phone: string; email?: string };
+  agent: string;
+  amount: number;
+  exchangeRate?: number;
+}
+
+/** Builds the customer-facing document for a recorded cash entry. */
+export function buildCashEntryReceiptHtml(entry: CashEntryReceiptData): string {
+  const content = `<section class="receipt">
+    <header class="center">
+      <div class="business">${SALE_BUSINESS.name}</div>
+      <div class="business-meta">${SALE_BUSINESS.address}</div>
+      <div class="business-meta">Tél. ${SALE_BUSINESS.phone} · ${SALE_BUSINESS.registration}</div>
+    </header>
+    <div class="double-rule"></div>
+    <div class="title">REÇU D'ENTRÉE D'ARGENT</div>
+    <section class="meta">
+      <div><strong>Reçu # :</strong> ${escapeHtml(entry.entryId)}</div>
+      <div><strong>Date :</strong> ${escapeHtml(entry.date)}</div>
+    </section>
+    <div class="rule"></div>
+    <section class="customer">
+      <div><strong>Reçu de :</strong> ${escapeHtml(entry.receivedFrom.name.toUpperCase())}</div>
+      <div><strong>Tél. :</strong> ${escapeHtml(entry.receivedFrom.phone)}</div>
+      ${entry.receivedFrom.email ? `<div><strong>Email :</strong> ${escapeHtml(entry.receivedFrom.email)}</div>` : ""}
+    </section>
+    ${entry.description ? `<div class="rule"></div><section class="customer"><div><strong>Description :</strong> ${escapeHtml(entry.description)}</div></section>` : ""}
+    <div class="section-label">DÉTAILS DE L'ENTRÉE</div>
+    <section class="meta">
+      <div><strong>Source :</strong> ${escapeHtml(entry.source)}</div>
+      <div><strong>Catégorie :</strong> ${escapeHtml(entry.category)}</div>
+    </section>
+    <div class="rule"></div>
+    <section class="totals">
+      <div class="total-row grand-total"><span>MONTANT REÇU</span><strong>${formatUsd(entry.amount)}</strong></div>
+      ${entry.exchangeRate ? `<div class="total-row secondary"><span>Équivalent FC</span><strong>${formatFc(entry.amount * entry.exchangeRate)}</strong></div>` : ""}
+    </section>
+    <div class="rule"></div>
+    <div><strong>Méthode de paiement :</strong> ${escapeHtml(entry.paymentMethod.toUpperCase())}</div>
+    <div><strong>Enregistré par :</strong> ${escapeHtml(entry.agent.toUpperCase())}</div>
+    <footer class="footer"><strong>ENTRÉE ENREGISTRÉE AVEC SUCCÈS</strong><br>Conserver ce reçu comme preuve · Merci pour votre confiance</footer></section>`;
+  return buildThermalDocument("receipt", content);
+}
+
+/** Builds the compact cashier stub for a recorded cash entry. */
+export function buildCashEntryStubHtml(entry: CashEntryReceiptData): string {
+  const content = `<section class="stub">
+    <div class="center business">${SALE_BUSINESS.name}</div>
+    <div class="title">SOUCHE D'ENTRÉE D'ARGENT</div>
+    <div class="stub-grid">
+      <div><strong>Reçu # :</strong> ${escapeHtml(entry.entryId)}</div>
+      <div><strong>Date :</strong> ${escapeHtml(entry.date)}</div>
+      <div><strong>Reçu de :</strong> ${escapeHtml(entry.receivedFrom.name.toUpperCase())}</div>
+      <div><strong>Tél. :</strong> ${escapeHtml(entry.receivedFrom.phone)}</div>
+      ${entry.description ? `<div><strong>Description :</strong> ${escapeHtml(entry.description)}</div>` : ""}
+      <div><strong>Source :</strong> ${escapeHtml(entry.source)}</div>
+      <div><strong>Catégorie :</strong> ${escapeHtml(entry.category)}</div>
+      <div><strong>Méthode de paiement :</strong> ${escapeHtml(entry.paymentMethod.toUpperCase())}</div>
+      <div><strong>Enregistré par :</strong> ${escapeHtml(entry.agent.toUpperCase())}</div>
+    </div>
+    <div class="stub-total"><span>MONTANT REÇU</span><strong>${formatUsd(entry.amount)}</strong></div>
+    <footer class="footer"><strong>SOUCHE D'ENTRÉE</strong><br>À conserver</footer>
+  </section>`;
+  return buildThermalDocument("stub", content);
+}
+
+export interface CashExpenseReceiptData {
+  expenseId: string;
+  date: string;
+  validatedDate: string;
+  reason: string;
+  recipientName: string;
+  recipientPhone: string;
+  amount: number;
+  paymentMethod: string;
+  validatedBy: string;
+}
+
+/** Builds the single receipt/stub document for a validated cash-out expense. */
+export function buildCashExpenseReceiptHtml(expense: CashExpenseReceiptData): string {
+  const content = `<section class="receipt">
+    <header class="center">
+      <div class="business">${SALE_BUSINESS.name}</div>
+      <div class="business-meta">${SALE_BUSINESS.address}</div>
+      <div class="business-meta">Tél. ${SALE_BUSINESS.phone} · ${SALE_BUSINESS.registration}</div>
+    </header>
+    <div class="double-rule"></div>
+    <div class="title">REÇU DE SORTIE DE CAISSE</div>
+    <section class="meta">
+      <div><strong>Reçu # :</strong> ${escapeHtml(expense.expenseId)}</div>
+      <div><strong>Date :</strong> ${escapeHtml(expense.date)}</div>
+    </section>
+    <div class="rule"></div>
+    <section class="customer">
+      <div><strong>Raison :</strong> ${escapeHtml(expense.reason.toUpperCase())}</div>
+      <div><strong>Bénéficiaire :</strong> ${escapeHtml(expense.recipientName.toUpperCase())}</div>
+      <div><strong>Tél. :</strong> ${escapeHtml(expense.recipientPhone)}</div>
+    </section>
+    <div class="rule"></div>
+    <section class="totals">
+      <div class="total-row"><span>Paiement</span><strong>${escapeHtml(expense.paymentMethod.toUpperCase())}</strong></div>
+      <div class="total-row grand-total"><span>MONTANT TOTAL</span><strong>${formatUsd(expense.amount)}</strong></div>
+    </section>
+    <div class="rule"></div>
+    <div><strong>Validé par :</strong> ${escapeHtml(expense.validatedBy)}</div>
+    <div><strong>Le :</strong> ${escapeHtml(expense.validatedDate)}</div>
+    <footer class="footer"><strong>SOUCHE DE SORTIE DE CAISSE</strong><br>Conserver cette souche</footer></section>`;
+  return buildThermalDocument("receipt", content);
 }
 
 /** Pure sequencing helper used by browser printing and unit tests. */
@@ -435,7 +577,7 @@ function waitForDocumentReady(printWindow: Window): Promise<void> {
 
 export function calculateThermalPageHeightMm(contentPixels: number): number {
   if (!Number.isFinite(contentPixels) || contentPixels <= 0) return THERMAL_PAGE_FALLBACK_MM;
-  const measuredMm = Math.ceil((contentPixels * 25.4 / 96 + 0.5) * 10) / 10;
+  const measuredMm = Math.ceil((contentPixels * 25.4 / 96 + THERMAL_PAGE_ALLOWANCE_MM) * 10) / 10;
   if (!Number.isFinite(measuredMm)) return THERMAL_PAGE_MAX_MM;
   if (measuredMm < THERMAL_PAGE_MIN_MM) {
     return THERMAL_PAGE_MIN_MM;
@@ -455,7 +597,7 @@ function assertPrintableBrowserDocument(printWindow: Window): HTMLElement {
 
   const style = printWindow.getComputedStyle(printable);
   const rect = printable.getBoundingClientRect();
-  const height = Math.max(rect.height, printable.scrollHeight, printDocument.body?.scrollHeight ?? 0);
+  const height = Math.max(rect.height, printable.scrollHeight);
   if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0 ||
       !Number.isFinite(rect.width) || rect.width <= 1 || !Number.isFinite(height) || height <= 1) {
     throw new Error("Mise en page d'impression invisible ou invalide; aucune page n'a été envoyée.");
@@ -467,17 +609,11 @@ function fitThermalPageToContent(printWindow: Window): void {
   const { document: printDocument } = printWindow;
   const printable = assertPrintableBrowserDocument(printWindow);
 
-  // Measure using the same margins as print media. A concrete page length is
-  // more consistently honoured by Chromium/printer drivers than `80mm auto`.
-  printDocument.documentElement.dataset.printMeasuring = "true";
-  const measurementStyle = printDocument.createElement("style");
-  measurementStyle.textContent = `html[data-print-measuring="true"] body { margin: 0 !important; box-shadow: none !important; }`;
-  printDocument.head.appendChild(measurementStyle);
+  // Only the rendered receipt/stub wrapper is authoritative. Body and viewport
+  // heights may include popup chrome or screen-preview spacing.
   const contentPixels = Math.max(
     printable.getBoundingClientRect().height,
     printable.scrollHeight,
-    printDocument.body.getBoundingClientRect().height,
-    printDocument.body.scrollHeight,
   );
   const pageHeightMm = calculateThermalPageHeightMm(contentPixels);
   console.info("Browser print layout ready", {
@@ -487,7 +623,7 @@ function fitThermalPageToContent(printWindow: Window): void {
   });
   const pageStyle = printDocument.createElement("style");
   pageStyle.dataset.thermalPageSize = "true";
-  pageStyle.textContent = `@page { size: 80mm ${pageHeightMm}mm; margin: 0; }`;
+  pageStyle.textContent = `@page { size: 80mm ${pageHeightMm}mm; margin: 0 !important; }`;
   printDocument.head.appendChild(pageStyle);
 }
 
@@ -664,20 +800,13 @@ const pdfMoney = (amount: number): string => `${amount.toFixed(2)} USD`;
 /** PDF export uses the same normalized saved transaction and includes its stub. */
 export function downloadSaleReceiptAndStubPdf(receipt: SaleReceiptData): void {
   validateSaleReceipt(receipt);
-  const adjustmentCount = [receipt.discount, receipt.tax, receipt.transportCost, receipt.otherCharges]
-    .filter((amount) => amount > 0).length;
-  const itemNameLines = receipt.items.reduce((sum, item) =>
-    sum + Math.max(1, Math.ceil(item.name.length / 40)), 0);
-  const optionalHeight = (receipt.customerPhone ? 4 : 0) + (receipt.exchangeRate ? 4 : 0) +
-    (receipt.type === "reservation" ? 8 : 0);
-  const receiptPageHeight = 79 + itemNameLines * 4 + receipt.items.length * (receipt.exchangeRate ? 8 : 4) + adjustmentCount * 4 + optionalHeight;
-  const stubNameLines = receipt.items.reduce((sum, item) => sum + Math.max(1, Math.ceil(item.name.length / 44)), 0);
-  const stubPageHeight = 57 + stubNameLines * 4 + receipt.items.length * (receipt.exchangeRate ? 8 : 4) +
-    (receipt.type === "reservation" ? 5 : 0);
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [80, receiptPageHeight] });
+  const pdfTopAllowanceMm = 2;
+  const pdfBottomAllowanceMm = 2.5;
+  const draftPageHeightMm = THERMAL_PAGE_MAX_MM;
+  let doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [80, draftPageHeightMm] });
   const left = 5;
   const right = 75;
-  let y = 7;
+  let y = pdfTopAllowanceMm;
   const line = () => { doc.line(left, y, right, y); y += 4; };
   const text = (value: string, size = 8, bold = false) => {
     doc.setFont("courier", bold ? "bold" : "normal");
@@ -699,63 +828,79 @@ export function downloadSaleReceiptAndStubPdf(receipt: SaleReceiptData): void {
     y += bold ? 5 : 4;
   };
 
-  centered(SALE_BUSINESS.name, 10, true);
-  centered(SALE_BUSINESS.address, 7);
-  centered(SALE_BUSINESS.registration, 7);
-  line();
-  centered(receipt.type === "reservation" ? "RECU DE RESERVATION" : "RECU DE VENTE", 9, true);
-  text(`Reference: ${receipt.reference}`);
-  text(`Date: ${receipt.date}`);
-  text(`Statut: ${receipt.status.toUpperCase()}`);
-  if (receipt.type === "reservation") {
-    if (receipt.reservationDate || receipt.reservationTime) {
+  const renderReceiptPage = (): number => {
+    y = pdfTopAllowanceMm;
+    centered(SALE_BUSINESS.name, 10, true);
+    centered(SALE_BUSINESS.address, 7);
+    centered(SALE_BUSINESS.registration, 7);
+    line();
+    centered(receipt.type === "reservation" ? "RECU DE RESERVATION" : "RECU DE VENTE", 9, true);
+    text(`Reference: ${receipt.reference}`);
+    text(`Date: ${receipt.date}`);
+    text(`Statut: ${receipt.status.toUpperCase()}`);
+    if (receipt.type === "reservation" && (receipt.reservationDate || receipt.reservationTime)) {
       text(`Retrait: ${[receipt.reservationDate, receipt.reservationTime].filter(Boolean).join(" a ")}`);
     }
-  }
-  text(`Client: ${customerLabel(receipt)}`);
-  if (receipt.customerPhone) text(`Tel: ${receipt.customerPhone}`);
-  line();
-  centered("ARTICLES ACHETES", 8, true);
+    text(`Client: ${customerLabel(receipt)}`);
+    if (receipt.customerPhone) text(`Tel: ${receipt.customerPhone}`);
+    line();
+    centered("ARTICLES ACHETES", 8, true);
 
-  for (const item of receipt.items) {
-    const names = doc.splitTextToSize(item.name, 68) as string[];
-    names.forEach((name) => text(name, 8, true));
-    row(`${item.quantity}${item.unit ? ` ${item.unit}` : ""} x ${pdfMoney(item.unitPrice)}`, pdfMoney(item.lineTotal));
-    if (receipt.exchangeRate) row("Equivalent FC", formatFc(item.lineTotal * receipt.exchangeRate));
-  }
-  line();
-  row("Sous-total", pdfMoney(receipt.subtotal));
-  if (receipt.discount > 0) row("Remise", `- ${pdfMoney(receipt.discount)}`);
-  if (receipt.transportCost > 0) row("Transport", pdfMoney(receipt.transportCost));
-  if (receipt.tax > 0) row("Taxes", pdfMoney(receipt.tax));
-  if (receipt.otherCharges > 0) row("Autres frais", pdfMoney(receipt.otherCharges));
-  row("TOTAL", pdfMoney(receipt.total), true);
-  if (receipt.exchangeRate) row("TOTAL FC", formatFc(receipt.total * receipt.exchangeRate));
-  text(`Paiement: ${receipt.paymentMethod.toUpperCase()}`);
-  text(`Agent de vente: ${receipt.salesPerson}`);
-  centered(SALE_BUSINESS.thankYou, 7, true);
-  centered(SALE_BUSINESS.salesNotice, 6);
+    for (const item of receipt.items) {
+      const names = doc.splitTextToSize(item.name, 68) as string[];
+      names.forEach((name) => text(name, 8, true));
+      row(`${item.quantity}${item.unit ? ` ${item.unit}` : ""} x ${pdfMoney(item.unitPrice)}`, pdfMoney(item.lineTotal));
+      if (receipt.exchangeRate) row("Equivalent FC", formatFc(item.lineTotal * receipt.exchangeRate));
+    }
+    line();
+    row("Sous-total", pdfMoney(receipt.subtotal));
+    if (receipt.discount > 0) row("Remise", `- ${pdfMoney(receipt.discount)}`);
+    if (receipt.transportCost > 0) row("Transport", pdfMoney(receipt.transportCost));
+    if (receipt.tax > 0) row("Taxes", pdfMoney(receipt.tax));
+    if (receipt.otherCharges > 0) row("Autres frais", pdfMoney(receipt.otherCharges));
+    row("TOTAL", pdfMoney(receipt.total), true);
+    if (receipt.exchangeRate) row("TOTAL FC", formatFc(receipt.total * receipt.exchangeRate));
+    text(`Paiement: ${receipt.paymentMethod.toUpperCase()}`);
+    text(`Agent de vente: ${receipt.salesPerson}`);
+    const promotionLines = doc.splitTextToSize(SALE_SYSTEM_PROMO, 68) as string[];
+    promotionLines.forEach((promotionLine) => text(promotionLine, 7, true));
+    centered(SALE_BUSINESS.thankYou, 7, true);
+    centered(SALE_BUSINESS.salesNotice, 6);
+    return y;
+  };
+
+  const renderStubPage = (): number => {
+    y = pdfTopAllowanceMm;
+    centered(receipt.type === "reservation" ? "SOUCHE DE RESERVATION" : "SOUCHE DE VENTE", 9, true);
+    text(SALE_BUSINESS.name, 8, true);
+    text(`Ref: ${receipt.reference}`);
+    text(`Date: ${receipt.date}`);
+    text(`Client: ${customerLabel(receipt)}`);
+    text(`Paiement: ${receipt.paymentMethod.toUpperCase()}`);
+    text(`Statut: ${receipt.status.toUpperCase()}`);
+    centered("ARTICLES VENDUS", 8, true);
+    receipt.items.forEach((item) => {
+      const names = doc.splitTextToSize(item.name, 58) as string[];
+      names.forEach((name) => text(name, 7));
+      row(`${item.quantity}${item.unit ? ` ${item.unit}` : ""} x ${pdfMoney(item.unitPrice)}`, pdfMoney(item.lineTotal));
+      if (receipt.exchangeRate) row("Total FC", formatFc(item.lineTotal * receipt.exchangeRate));
+    });
+    row("TOTAL", pdfMoney(receipt.total), true);
+    if (receipt.exchangeRate) row("TOTAL FC", formatFc(receipt.total * receipt.exchangeRate));
+    text(`Agent de vente: ${receipt.salesPerson}`);
+    centered("SOUCHE DE CAISSE", 8, true);
+    centered("A conserver", 7);
+    return y;
+  };
+
+  // Measure with jsPDF's real wrapping before creating the final pages. This
+  // keeps every variable-length receipt close to its actual rendered content.
+  const receiptPageHeight = Math.ceil((renderReceiptPage() + pdfBottomAllowanceMm) * 10) / 10;
+  const stubPageHeight = Math.ceil((renderStubPage() + pdfBottomAllowanceMm) * 10) / 10;
+  doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [80, receiptPageHeight] });
+  renderReceiptPage();
   doc.addPage([80, stubPageHeight], "portrait");
-  y = 7;
-  centered(receipt.type === "reservation" ? "SOUCHE DE RESERVATION" : "SOUCHE DE VENTE", 9, true);
-  text(SALE_BUSINESS.name, 8, true);
-  text(`Ref: ${receipt.reference}`);
-  text(`Date: ${receipt.date}`);
-  text(`Client: ${customerLabel(receipt)}`);
-  text(`Paiement: ${receipt.paymentMethod.toUpperCase()}`);
-  text(`Statut: ${receipt.status.toUpperCase()}`);
-  centered("ARTICLES VENDUS", 8, true);
-  receipt.items.forEach((item) => {
-    const names = doc.splitTextToSize(item.name, 58) as string[];
-    names.forEach((name) => text(name, 7));
-    row(`${item.quantity}${item.unit ? ` ${item.unit}` : ""} x ${pdfMoney(item.unitPrice)}`, pdfMoney(item.lineTotal));
-    if (receipt.exchangeRate) row("Total FC", formatFc(item.lineTotal * receipt.exchangeRate));
-  });
-  row("TOTAL", pdfMoney(receipt.total), true);
-  if (receipt.exchangeRate) row("TOTAL FC", formatFc(receipt.total * receipt.exchangeRate));
-  text(`Agent de vente: ${receipt.salesPerson}`);
-  centered("SOUCHE DE CAISSE", 8, true);
-  centered("A conserver", 7);
+  renderStubPage();
 
   doc.save(`recu-${receipt.reference}.pdf`);
 }

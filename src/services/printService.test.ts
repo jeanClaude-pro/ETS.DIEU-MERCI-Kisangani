@@ -4,6 +4,8 @@ import {
   BROWSER_DOCUMENT_DELAY_MS,
   POST_SAVE_PRINT_DELAY_MS,
   SALE_BUSINESS,
+  SALE_SYSTEM_PROMO,
+  THERMAL_PAGE_ALLOWANCE_MM,
   buildSaleReceiptHtml,
   buildSaleStubHtml,
   calculateThermalPageHeightMm,
@@ -70,11 +72,22 @@ test("browser receipt and stub are distinct auto-height thermal documents", () =
   assert.doesNotMatch(stubHtml, /REÇU DE VENTE/);
   assert.equal(receiptHtml.split(SALE_BUSINESS.name).length - 1, 1);
   assert.equal(stubHtml.split(SALE_BUSINESS.name).length - 1, 1);
+  for (const promotionLine of SALE_SYSTEM_PROMO.split("\n")) {
+    assert.ok(receiptHtml.includes(promotionLine.replace("&", "&amp;")));
+  }
+  assert.match(receiptHtml, /ENTREPRISE \?<br>Gestion, ventes, stock &amp; bien plus<br>WhatsApp/);
+  assert.doesNotMatch(stubHtml, /UN SYSTÈME POUR VOTRE BOUTIQUE/);
+  assert.ok(receiptHtml.indexOf("Agent de vente") < receiptHtml.indexOf("UN SYSTÈME POUR VOTRE BOUTIQUE"));
 
   for (const html of [receiptHtml, stubHtml]) {
-    assert.match(html, /@page \{ margin: 0; \}/);
+    assert.match(html, /@page \{ margin: 0 !important; \}/);
+    assert.match(html, /html, body \{[\s\S]*?margin: 0 !important;[\s\S]*?padding: 0 !important;/);
+    assert.match(html, /\.document \{[^}]*width: 78mm;[^}]*margin: 0 1mm;[^}]*padding: \.8mm 0;/);
+    assert.match(html, /<title><\/title>/);
     assert.match(html, /height: auto/);
     assert.match(html, /min-height: 0/);
+    assert.match(html, /color: #000/);
+    assert.doesNotMatch(html, /#d4d4d4|#555|dotted/);
     assert.doesNotMatch(html, /100vh|297mm|80mm auto|window\.print|setTimeout/);
   }
 });
@@ -109,12 +122,14 @@ test("customer receipt uses the compact 80mm layout without changing the cashier
 });
 
 test("thermal page measurement rejects invalid values and clamps extreme lengths", () => {
+  assert.equal(THERMAL_PAGE_ALLOWANCE_MM, 2.2);
   assert.equal(calculateThermalPageHeightMm(Number.NaN), 180);
   assert.equal(calculateThermalPageHeightMm(0), 180);
   assert.equal(calculateThermalPageHeightMm(-10), 180);
   assert.equal(calculateThermalPageHeightMm(1), 20);
   assert.equal(calculateThermalPageHeightMm(Number.MAX_VALUE), 3000);
   const normal = calculateThermalPageHeightMm(500);
+  assert.equal(normal, 134.5);
   assert.ok(Number.isFinite(normal));
   assert.ok(normal > 20 && normal < 3000);
 });

@@ -24,7 +24,10 @@ import {
 } from "lucide-react";
 import RegionFilterPills from "../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../types";
-import { printHtmlDocumentsSequentially } from "../services/printService";
+import {
+  printHtmlDocumentsSequentially,
+  buildCashExpenseReceiptHtml,
+} from "../services/printService";
 
 interface ExpenseItem {
   _id: string;
@@ -772,15 +775,10 @@ export default function SortieHistory() {
     }
   };
 
-  // Print function for expense receipt
+  // Print function for expense receipt. Uses the shared canonical thermal
+  // document builder (same architecture as sale/reservation receipts)
+  // instead of a duplicated inline HTML/CSS document.
   const printExpenseReceipt = (expense: ExpenseItem) => {
-      // Format the amount directly for the print window
-      const formattedAmount = new Intl.NumberFormat("fr-FR", {
-        style: "currency",
-        currency: "USD",
-      }).format(expense.amount);
-
-      // Format the date directly for the print window
       const formattedDate = new Date(expense.createdAt).toLocaleString("fr-FR", {
         day: "2-digit",
         month: "2-digit",
@@ -801,259 +799,17 @@ export default function SortieHistory() {
           })
         : formattedDate;
 
-      const html = `
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Reçu de sortie de caisse</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      body { 
-        font-family: 'Courier New', Courier, monospace; 
-        margin: 0; 
-        padding: 0; 
-        font-size: 13px;
-        font-weight: normal;
-        line-height: 1.2;
-        width: 72mm;
-        background-color: white;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-        display: flex;
-        justify-content: center;
-      }
-      .receipt-container { 
-        width: 70mm;
-        margin: 0 auto;
-        padding: 0.5mm;
-        border: none;
-        text-align: center;
-      }
-      .header { 
-        text-align: center; 
-        margin-bottom: 1mm; 
-        padding-bottom: 1mm;
-        border-bottom: 2px double #000;
-      }
-      .shop-name {
-        font-size: 15px;
-        font-weight: bold;
-        margin-bottom: 0.5mm;
-        text-transform: uppercase;
-      }
-      .shop-details {
-        font-size: 11px;
-        margin-bottom: 0.3mm;
-        line-height: 1;
-        font-weight: bold;
-      }
-      .receipt-info {
-        margin: 1mm 0;
-        padding: 1mm;
-        background-color: #f8f8f8;
-        border-left: 3px solid #000;
-      }
-      .receipt-title {
-        font-size: 13px;
-        font-weight: bold;
-        margin: 1mm 0;
-        text-transform: uppercase;
-        background-color: #000;
-        color: white;
-        padding: 1mm;
-        border-radius: 2px;
-      }
-      .expense-details {
-        margin: 1mm 0;
-        padding: 1mm;
-        background-color: #fafafa;
-        border: 1px solid #eee;
-      }
-      .detail-row { 
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 0.5mm;
-        padding: 0 1mm;
-        border-bottom: 1px dotted #ddd;
-      }
-      .detail-label {
-        text-align: left;
-        font-weight: bold;
-        font-size: 12px;
-        flex: 1;
-      }
-      .detail-value {
-        text-align: right;
-        font-weight: bold;
-        font-size: 12px;
-        flex: 1;
-      }
-      .total-section { 
-        font-weight: bold; 
-        margin-top: 1mm;
-        padding: 1mm;
-        background-color: #f0f0f0;
-        border: 1px solid #ddd;
-        border-radius: 3px;
-      }
-      .total-row {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 0.3mm;
-        font-size: 13px;
-        padding: 0 1mm;
-      }
-      .payment-method {
-        text-transform: uppercase;
-        font-weight: bold;
-        font-size: 13px;
-        color: #000;
-      }
-      .footer { 
-        text-align: center; 
-        margin-top: 1mm; 
-        font-size: 11px;
-        font-weight: bold;
-        padding: 1mm;
-        background-color: #f8f8f8;
-        border-top: 1px dashed #000;
-      }
-      .validation-info {
-        margin-top: 1mm;
-        text-align: center;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 1mm;
-        background-color: #e8f5e8;
-        border: 1px solid #4caf50;
-        border-radius: 2px;
-      }
-      .section-divider {
-        height: 2px;
-        background: linear-gradient(to right, transparent, #000, transparent);
-        margin: 1mm 0;
-      }
-      .cut-line {
-        text-align: center;
-        margin: 1mm 0;
-        font-weight: bold;
-        font-size: 11px;
-        color: #000;
-        letter-spacing: 1px;
-      }
-      @media print {
-        @page {
-          margin: 0 !important;
-          size: 72mm auto !important;
-        }
-        body { 
-          margin: 0 !important; 
-          padding: 0 !important; 
-          width: 72mm !important;
-          font-size: 13px !important;
-          background: white !important;
-          font-weight: normal !important;
-          height: auto !important;
-          min-height: 0 !important;
-          overflow: visible !important;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-          display: flex !important;
-          justify-content: center !important;
-        }
-        .receipt-container { 
-          border: none !important; 
-          box-shadow: none !important; 
-          margin: 0 auto !important;
-          padding: 0.5mm !important;
-          width: 70mm !important;
-          page-break-after: avoid !important;
-          page-break-inside: avoid !important;
-        }
-        .cut-line { display: none !important; }
-        body::after,
-        body::before {
-          display: none !important;
-          content: none !important;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="receipt-container">
-      <div class="header">
-        <div class="shop-name"><strong>Boutique C'EST DIEU QUI PARTAGE</strong></div>
-        <div class="shop-details"><strong>Av du 1er Janvier N°13, C. Makiso, Kisangani</strong></div>
-        <div class="shop-details">TEL: <strong>+243 839 336 794</strong></div>
-        <div class="shop-details"><strong>RCCM/KIS : 22-A-267</strong></div>
-      </div>
-      
-      <div class="section-divider"></div>
-      
-      <div class="receipt-info">
-        <div class="shop-details">DATE: <strong>${formattedDate}</strong></div>
-        <div class="shop-details">RECU #: <strong>${
-          expense.expenseId
-        }</strong></div>
-      </div>
-      
-      <div class="receipt-title">RECU DE SORTIE DE CAISSE</div>
-      
-      <div class="expense-details">
-        <div class="detail-row">
-          <div class="detail-label"><strong>RAISON:</strong></div>
-          <div class="detail-value"><strong>${expense.reason.toUpperCase()}</strong></div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label"><strong>BÉNÉFICIAIRE:</strong></div>
-          <div class="detail-value"><strong>${expense.recipientName.toUpperCase()}</strong></div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label"><strong>TÉLÉPHONE:</strong></div>
-          <div class="detail-value"><strong>${
-            expense.recipientPhone
-          }</strong></div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label"><strong>MONTANT:</strong></div>
-          <div class="detail-value"><strong>${formattedAmount}</strong></div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label"><strong>PAIEMENT:</strong></div>
-          <div class="detail-value"><strong>${expense.paymentMethod.toUpperCase()}</strong></div>
-        </div>
-      </div>
-      
-      <div class="total-section">
-        <div class="total-row">
-          <div><strong>MONTANT TOTAL:</strong></div>
-          <div><strong>${formattedAmount}</strong></div>
-        </div>
-      </div>
-      
-      <div class="validation-info">
-        Validé par: <strong>${expense.validatedBy || "ADMIN"}</strong><br>
-        Le: <strong>${validatedDate}</strong>
-      </div>
-      
-      <div class="footer">
-        <div class="thank-you"><strong>SOUCHE DE SORTIE DE CAISSE</strong></div>
-        <div class="warning"><strong>Conserver cette souche</strong></div>
-        <div class="warning">Reçu #: <strong>${
-          expense.expenseId
-        }</strong></div>
-        <div class="warning">Date: <strong>${formattedDate}</strong></div>
-      </div>
-      
-    </div>
-  </body>
-</html>
-`;
+      const html = buildCashExpenseReceiptHtml({
+        expenseId: expense.expenseId,
+        date: formattedDate,
+        validatedDate,
+        reason: expense.reason,
+        recipientName: expense.recipientName,
+        recipientPhone: expense.recipientPhone,
+        amount: expense.amount,
+        paymentMethod: expense.paymentMethod,
+        validatedBy: expense.validatedBy || "ADMIN",
+      });
       void printHtmlDocumentsSequentially([html]).catch((printError: unknown) => {
         setError(printError instanceof Error ? printError.message : "Échec de l'impression.");
       });
