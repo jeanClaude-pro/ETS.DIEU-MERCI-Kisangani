@@ -3,7 +3,7 @@
 "use client";
 
 import React from "react";
-import { ToastContainer, toast } from "react-toastify";
+import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import { useAuth } from "../../hooks/useAuth";
@@ -12,15 +12,18 @@ import {
   login as loginApi,
   register as registerApi,
 } from "../../services/authService";
+import { Eye, EyeOff } from "lucide-react";
 
 type Mode = "login" | "register";
+const REMEMBERED_LOGIN_KEY = "erp.rememberedLoginEmail";
 
 const LoginPage = () => {
   const [mode, setMode] = React.useState<Mode>("login");
   const [username, setUsername] = React.useState("");
-  const [email, setEmail] = React.useState("");
+  const [email, setEmail] = React.useState(() => localStorage.getItem(REMEMBERED_LOGIN_KEY) || "");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
@@ -39,7 +42,9 @@ const LoginPage = () => {
         setMode("login");
       } else {
         const { user, token } = await loginApi({ email, password });
+        localStorage.setItem(REMEMBERED_LOGIN_KEY, email.trim());
         setAuth({ token, user });
+        setPassword("");
         toast.success("Connexion réussie !");
         navigate("/");
       }
@@ -110,12 +115,14 @@ const LoginPage = () => {
               </label>
               <input
                 id="email"
+                name={mode === "login" ? "username" : "email"}
                 type="email"
                 placeholder="Entrez votre email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="login-input"
-                autoComplete="email"
+                autoComplete={mode === "login" ? "username" : "email"}
+                inputMode="email"
                 required
               />
             </div>
@@ -127,16 +134,28 @@ const LoginPage = () => {
               >
                 Mot de passe
               </label>
-              <input
-                id="password"
-                type="password"
-                placeholder="Entrez votre mot de passe"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="login-input"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                required
-              />
+              <div className="login-password-field">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Entrez votre mot de passe"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="login-input"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  required
+                />
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
 
             {mode === "register" && (
@@ -161,7 +180,7 @@ const LoginPage = () => {
             )}
 
             {error && (
-              <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">
+              <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm" role="alert">
                 {error}
               </div>
             )}
@@ -212,6 +231,9 @@ const LoginPage = () => {
                 onClick={() => {
                   setMode(mode === "login" ? "register" : "login");
                   setError("");
+                  setPassword("");
+                  setConfirmPassword("");
+                  setShowPassword(false);
                 }}
                 className="text-indigo-600 font-medium hover:text-indigo-800 focus:outline-none focus:underline transition"
               >
@@ -230,18 +252,6 @@ const LoginPage = () => {
         )}
         </section>
       </div>
-
-      <ToastContainer
-        position="top-right"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-      />
     </div>
   );
 };

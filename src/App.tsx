@@ -5,11 +5,13 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
 } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import AdaptiveNavigation from "./components/AdaptiveNavigation";
+import AppHeader from "./components/AppHeader";
 import ResponsiveTableEnhancer from "./components/ResponsiveTableEnhancer";
 import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import Products from "./pages/products/products";
@@ -31,25 +33,34 @@ import { RequireModule } from "./components/RequireModule";
 import { AuthProvider } from "./context/AuthProvider";
 import { SidebarProvider, useSidebar } from "./context/SidebarContext";
 import Management from "./pages/management/Management";
+import Welcome from "./pages/Welcome";
+import { useAuth } from "./hooks/useAuth";
 
 function AppLayout() {
-  const token = localStorage.getItem("token");
-  const isAuthenticated = !!token;
+  const { token, loading } = useAuth();
+  const { pathname } = useLocation();
+  const isAuthenticated = Boolean(token);
+  const showWorkspaceNavigation = isAuthenticated && pathname !== "/" && pathname !== "/login";
   const { sidebarWidth } = useSidebar();
+
+  if (loading) {
+    return <div className="app-loading" role="status" aria-live="polite"><span className="app-loading-spinner" />Chargement de votre espace…</div>;
+  }
 
   return (
     <div className="min-h-screen flex bg-background">
-      <AdaptiveNavigation />
+      {showWorkspaceNavigation && <AdaptiveNavigation />}
 
       {/* Main content shifts smoothly as sidebar expands/collapses */}
       <main
         className="app-main flex-1 overflow-auto min-h-screen min-w-0"
         style={{
-          marginLeft: isAuthenticated ? sidebarWidth : 0,
+          marginLeft: showWorkspaceNavigation ? sidebarWidth : 0,
           transition: "margin-left 0.3s ease-in-out",
         }}
       >
         <ResponsiveTableEnhancer />
+        {showWorkspaceNavigation && <AppHeader />}
         <Routes>
           <Route
             path="/products"
@@ -155,9 +166,7 @@ function AppLayout() {
             path="/"
             element={
               <RequireAuth>
-                <RequireModule moduleId="pos">
-                  <NewSale />
-                </RequireModule>
+                <Welcome />
               </RequireAuth>
             }
           />
@@ -217,6 +226,7 @@ function AppLayout() {
               isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />
             }
           />
+          <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />} />
         </Routes>
       </main>
     </div>

@@ -4,6 +4,7 @@ import {
   CalendarClock,
   ClipboardList,
   Gauge,
+  Home,
   Package,
   ShieldCheck,
   ShoppingCart,
@@ -22,6 +23,7 @@ export type NavigationItem = {
   roles: string[];
   phonePriority?: number;
   badge?: number;
+  description?: string;
 };
 
 export type NavigationSection = { title: string; items: NavigationItem[] };
@@ -29,45 +31,56 @@ export type NavigationSection = { title: string; items: NavigationItem[] };
 const operationalRoles = ["admin", "manager", "cashier_supervisor", "inventory_manager"];
 const historyRoles = [...operationalRoles, "staff"];
 
+export const homeNavigationItem: NavigationItem = {
+  id: "home",
+  label: "Accueil",
+  shortLabel: "Accueil",
+  icon: Home,
+  path: "/",
+  roles: [],
+  phonePriority: 1,
+  description: "Choisir un module et commencer votre travail",
+};
+
 // One source of truth for desktop, tablet, and phone navigation permissions.
 export const navigationSections: NavigationSection[] = [
   {
     title: "Menu principal",
     items: [
-      { id: "dashboard", label: "Tableau de bord", shortLabel: "Accueil", icon: Gauge, path: "/dashboard", roles: ["admin", "manager"] },
-      { id: "rate", label: "Taux d’échange", shortLabel: "Taux", icon: BarChart3, path: "/rate", roles: ["admin"] },
-      { id: "pos", label: "Point de vente", shortLabel: "Vente", icon: ShoppingCart, path: "/", roles: operationalRoles, phonePriority: 1 },
-      { id: "reservation", label: "Nouvelle réservation", shortLabel: "Réserver", icon: CalendarClock, path: "/reservation", roles: operationalRoles },
-      { id: "entry", label: "Entrée de caisse", shortLabel: "Entrée", icon: WalletCards, path: "/entry", roles: operationalRoles, phonePriority: 3 },
-      { id: "sortie", label: "Sortie de caisse", shortLabel: "Sortie", icon: WalletCards, path: "/sortie", roles: operationalRoles, phonePriority: 4 },
+      { id: "dashboard", label: "Tableau de bord", shortLabel: "Tableau", icon: Gauge, path: "/dashboard", roles: ["admin", "manager"], description: "Suivre les principaux indicateurs de la boutique" },
+      { id: "rate", label: "Taux d’échange", shortLabel: "Taux", icon: BarChart3, path: "/rate", roles: ["admin", "manager"], description: "Consulter et actualiser le taux USD/FC" },
+      { id: "pos", label: "Nouvelle vente", shortLabel: "Vente", icon: ShoppingCart, path: "/new-sale", roles: operationalRoles, phonePriority: 2, description: "Enregistrer une vente rapidement" },
+      { id: "reservation", label: "Nouvelle réservation", shortLabel: "Réserver", icon: CalendarClock, path: "/reservation", roles: operationalRoles, description: "Préparer une commande à retirer plus tard" },
+      { id: "entry", label: "Entrée de caisse", shortLabel: "Entrée", icon: WalletCards, path: "/entry", roles: operationalRoles, description: "Enregistrer une entrée d’argent" },
+      { id: "sortie", label: "Sortie de caisse", shortLabel: "Sortie", icon: WalletCards, path: "/sortie", roles: operationalRoles, description: "Enregistrer une dépense ou une sortie" },
     ],
   },
   {
     title: "Stock",
     items: [
-      { id: "products", label: "Articles", shortLabel: "Articles", icon: Package, path: "/products", roles: ["admin", "manager", "inventory_manager"] },
+      { id: "products", label: "Articles & stock", shortLabel: "Stock", icon: Package, path: "/products", roles: ["admin", "manager", "inventory_manager"], phonePriority: 4, description: "Gérer les articles, les prix et le stock" },
     ],
   },
   {
     title: "Ventes & rapports",
     items: [
-      { id: "sales", label: "Historique des ventes", shortLabel: "Ventes", icon: TrendingUp, path: "/sales", roles: historyRoles, phonePriority: 2 },
-      { id: "reservations", label: "Historique des réservations", shortLabel: "Réserv.", icon: ClipboardList, path: "/reservationhistory", roles: operationalRoles },
-      { id: "entryhistory", label: "Historique des entrées", shortLabel: "Entrées", icon: WalletCards, path: "/EntryHistory", roles: operationalRoles },
-      { id: "sortiehistory", label: "Historique des sorties", shortLabel: "Sorties", icon: WalletCards, path: "/sortiehistory", roles: operationalRoles },
-      { id: "reports", label: "Rapports", shortLabel: "Rapports", icon: BarChart3, path: "/reports", roles: ["admin"] },
+      { id: "sales", label: "Historique des ventes", shortLabel: "Ventes", icon: TrendingUp, path: "/sales", roles: historyRoles, phonePriority: 3, description: "Retrouver, consulter et réimprimer les ventes" },
+      { id: "reservations", label: "Historique des réservations", shortLabel: "Réserv.", icon: ClipboardList, path: "/reservationhistory", roles: operationalRoles, description: "Suivre les réservations enregistrées" },
+      { id: "entryhistory", label: "Historique des entrées", shortLabel: "Entrées", icon: WalletCards, path: "/EntryHistory", roles: operationalRoles, description: "Consulter les mouvements d’entrée" },
+      { id: "sortiehistory", label: "Historique des sorties", shortLabel: "Sorties", icon: WalletCards, path: "/sortiehistory", roles: operationalRoles, description: "Consulter les dépenses et sorties" },
+      { id: "reports", label: "Rapports & analyses", shortLabel: "Rapports", icon: BarChart3, path: "/reports", roles: ["admin"], description: "Analyser l’activité commerciale" },
     ],
   },
   {
     title: "Gestion",
     items: [
-      { id: "customers", label: "Clients", shortLabel: "Clients", icon: Users, path: "/customers", roles: ["admin", "manager", "cashier_supervisor"] },
+      { id: "customers", label: "Clients", shortLabel: "Clients", icon: Users, path: "/customers", roles: ["admin", "manager", "cashier_supervisor"], description: "Consulter et gérer le fichier clients" },
     ],
   },
   {
     title: "Administration",
     items: [
-      { id: "management", label: "Gestion des utilisateurs", shortLabel: "Gestion", icon: ShieldCheck, path: "/management", roles: ["admin"] },
+      { id: "management", label: "Gestion des utilisateurs", shortLabel: "Gestion", icon: ShieldCheck, path: "/management", roles: ["admin"], description: "Administrer les comptes et les accès" },
     ],
   },
 ];
@@ -92,9 +105,10 @@ export const effectiveModulesForUser = (user?: Pick<User, "role" | "modulePermis
 
 export const permittedNavigationSections = (user?: Pick<User, "role" | "modulePermissions"> | null): NavigationSection[] => {
   const allowed = effectiveModulesForUser(user);
-  return navigationSections
+  const permitted = navigationSections
     .map((section) => ({ ...section, items: section.items.filter((item) => allowed.includes(item.id)) }))
     .filter((section) => section.items.length > 0);
+  return user ? [{ title: "Accueil", items: [homeNavigationItem] }, ...permitted] : [];
 };
 
 export const permittedNavigationItems = (user?: Pick<User, "role" | "modulePermissions"> | null): NavigationItem[] =>

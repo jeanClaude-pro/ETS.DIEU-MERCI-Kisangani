@@ -3,10 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Settings,
   ChevronLeft,
   ChevronRight,
-  Bell,
   LogOut,
   LogIn,
   User,
@@ -17,7 +15,7 @@ import {
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useSidebar } from "../context/SidebarContext";
-import { navigationSections as sidebarSections, effectiveModulesForUser, type NavigationItem } from "./navigationConfig";
+import { isNavigationItemActive, permittedNavigationSections } from "./navigationConfig";
 
 const clsx = (...classes: (string | undefined | null | false)[]): string => {
   return classes.filter(Boolean).join(" ");
@@ -113,8 +111,7 @@ export default function Sidebar() {
     };
   }, [isMobile, setIsMobileOpen]);
 
-  const allowedModules = effectiveModulesForUser(user);
-  const hasAccess = (item: NavigationItem): boolean => allowedModules.includes(item.id);
+  const sidebarSections = permittedNavigationSections(user);
 
   const toggleSidebar = () => {
     if (isMobile) {
@@ -379,9 +376,6 @@ export default function Sidebar() {
             {/* Authenticated navigation */}
             <nav className="flex-1 overflow-y-auto p-4 space-y-6">
               {sidebarSections.map((section) => {
-                const accessibleItems = section.items.filter(hasAccess);
-                if (accessibleItems.length === 0) return null;
-
                 return (
                   <div key={section.title}>
                     <AnimatePresence mode="wait">
@@ -400,8 +394,8 @@ export default function Sidebar() {
                     </AnimatePresence>
 
                     <ul className="space-y-1">
-                      {accessibleItems.map((item) => {
-                        const isActive = location.pathname === item.path;
+                      {section.items.map((item) => {
+                        const isActive = isNavigationItemActive(location.pathname, item.path);
                         const Icon = item.icon;
                         const isItemDisabled = isNonAdmin && isRestricted;
 
@@ -505,63 +499,6 @@ export default function Sidebar() {
                 )}
               </button>
 
-              {["admin", "manager", "cashier_supervisor"].includes(user?.role || "") && (
-                <Link
-                  to="/notifications"
-                  onClick={() => isMobile && setIsMobileOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors group relative"
-                >
-                  <Bell className="w-5 h-5 text-gray-400 group-hover:text-white flex-shrink-0" />
-                  <AnimatePresence mode="wait">
-                    {isExpanded && (
-                      <motion.span
-                        key="notif-label"
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="font-medium text-sm"
-                      >
-                        Notifications
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                  {isCollapsed && !isMobile && (
-                    <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                      Notifications
-                    </div>
-                  )}
-                </Link>
-              )}
-
-              {["admin", "manager"].includes(user?.role || "") && (
-                <Link
-                  to="/settings"
-                  onClick={() => isMobile && setIsMobileOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors group relative"
-                >
-                  <Settings className="w-5 h-5 text-gray-400 group-hover:text-white flex-shrink-0" />
-                  <AnimatePresence mode="wait">
-                    {isExpanded && (
-                      <motion.span
-                        key="settings-label"
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="font-medium text-sm"
-                      >
-                        Paramètres
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                  {isCollapsed && !isMobile && (
-                    <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                      Paramètres
-                    </div>
-                  )}
-                </Link>
-              )}
             </div>
           </>
         )}

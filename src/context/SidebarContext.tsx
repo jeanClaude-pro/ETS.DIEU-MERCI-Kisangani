@@ -29,16 +29,16 @@ export const useSidebar = () => useContext(SidebarContext);
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 1024);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [tabletOpen, setTabletOpen] = useState(false);
   const [deviceMode, setDeviceMode] = useState<"phone" | "tablet" | "desktop">(() =>
-    window.innerWidth <= 480 ? "phone" : window.innerWidth < 1024 ? "tablet" : "desktop"
+    window.innerWidth <= 480 ? "phone" : window.innerWidth <= 1024 ? "tablet" : "desktop"
   );
 
   useEffect(() => {
     const checkMobile = () => {
-      const mobile = window.innerWidth < 1024;
+      const mobile = window.innerWidth <= 1024;
       setDeviceMode(window.innerWidth <= 480 ? "phone" : mobile ? "tablet" : "desktop");
       setIsMobile(mobile);
       if (mobile) {

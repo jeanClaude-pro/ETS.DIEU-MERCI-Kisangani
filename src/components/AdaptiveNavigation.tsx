@@ -35,6 +35,19 @@ function MobileNavigation() {
   const items = useMemo(() => permittedNavigationItems(user), [user]);
   const primary = useMemo(() => items.filter((item) => item.phonePriority).sort((a, b) => (a.phonePriority || 99) - (b.phonePriority || 99)).slice(0, 4), [items]);
   const secondary = items.filter((item) => !primary.some((primaryItem) => primaryItem.id === item.id));
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
   return (
     <>
       <nav className="phone-tab-bar" aria-label="Navigation principale" style={{ gridTemplateColumns: `repeat(${primary.length + 1}, minmax(0, 1fr))` }}>
@@ -50,7 +63,7 @@ function MobileNavigation() {
               <div className="native-sheet-handle" />
               <div className="flex items-center justify-between px-5 pb-3">
                 <div><p className="font-bold text-gray-900">Autres modules</p><p className="text-sm text-gray-500">{user?.username}</p></div>
-                <button type="button" className="touch-icon-button" onClick={() => setOpen(false)} aria-label="Fermer"><X className="h-5 w-5" /></button>
+                <button type="button" className="touch-icon-button" onClick={() => setOpen(false)} aria-label="Fermer" autoFocus><X className="h-5 w-5" /></button>
               </div>
               <div className="native-sheet-grid">
                 {secondary.map((item) => <NavLink key={item.id} item={item} onNavigate={() => setOpen(false)} />)}
@@ -81,7 +94,7 @@ function TabletNavigation() {
       <AnimatePresence>
         {tabletOpen && (<motion.div className="tablet-drawer-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setTabletOpen(false)}>
           <motion.aside className="tablet-drawer" initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }} transition={{ duration: .22 }} onClick={(event) => event.stopPropagation()}>
-            <header className="tablet-drawer-header"><div className="flex items-center gap-3"><img src="/Mrcleanlogo.png" alt="Logo Mr Clean" /><div><strong>DIEU QUI PARTAGE</strong><small>Kisangani</small></div></div><button className="touch-icon-button" onClick={() => setTabletOpen(false)}><X className="h-5 w-5" /></button></header>
+            <header className="tablet-drawer-header"><div className="flex items-center gap-3"><img src="/Mrcleanlogo.png" alt="Logo de la boutique" /><div><strong>C'EST DIEU QUI PARTAGE</strong><small>Kisangani</small></div></div><button type="button" className="touch-icon-button" onClick={() => setTabletOpen(false)} aria-label="Fermer le menu"><X className="h-5 w-5" /></button></header>
             <nav className="tablet-drawer-nav">{sections.map((section) => <section key={section.title}><h2>{section.title}</h2>{section.items.map((item) => <NavLink key={item.id} item={item} />)}</section>)}</nav>
           </motion.aside>
         </motion.div>
