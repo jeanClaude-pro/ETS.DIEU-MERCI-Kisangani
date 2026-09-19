@@ -16,6 +16,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useSidebar } from "../context/SidebarContext";
 import { isNavigationItemActive, permittedNavigationSections } from "./navigationConfig";
+import { useOfflineQueueCounts } from "../hooks/useOfflineQueue";
 
 const clsx = (...classes: (string | undefined | null | false)[]): string => {
   return classes.filter(Boolean).join(" ");
@@ -42,6 +43,7 @@ export default function Sidebar() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const location = useLocation();
   const { token, user, clearAuth } = useAuth();
+  const { pending, attention } = useOfflineQueueCounts();
 
   const sidebarRef = useRef<HTMLElement>(null);
   const touchStartX = useRef(0);
@@ -111,7 +113,10 @@ export default function Sidebar() {
     };
   }, [isMobile, setIsMobileOpen]);
 
-  const sidebarSections = permittedNavigationSections(user);
+  const sidebarSections = permittedNavigationSections(user).map((section) => ({
+    ...section,
+    items: section.items.map((item) => item.id === "sync" ? { ...item, badge: pending + attention || undefined } : item),
+  }));
 
   const toggleSidebar = () => {
     if (isMobile) {

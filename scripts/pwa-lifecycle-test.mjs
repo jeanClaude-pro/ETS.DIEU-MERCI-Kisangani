@@ -97,7 +97,20 @@ class CdpClient {
   send(method, params = {}) {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timeoutId = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`Chrome DevTools timed out while running ${method}`));
+      }, 10_000);
+      this.pending.set(id, {
+        resolve: (value) => {
+          clearTimeout(timeoutId);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        },
+      });
       this.socket.send(JSON.stringify({ id, method, params }));
     });
   }
@@ -118,8 +131,11 @@ try {
   chrome = spawn(chromePath, [
     "--headless=new",
     "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--no-sandbox",
     "--no-first-run",
     "--no-default-browser-check",
+    "--remote-allow-origins=*",
     `--remote-debugging-port=${debuggingPort}`,
     `--user-data-dir=${profileDirectory}`,
     "about:blank",

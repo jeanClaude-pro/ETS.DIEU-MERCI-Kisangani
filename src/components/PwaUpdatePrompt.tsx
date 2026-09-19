@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, RefreshCw } from "lucide-react";
+import { Download, RefreshCw, TriangleAlert } from "lucide-react";
 import { useRegisterSW } from "virtual:pwa-register/react";
+import { useOfflineQueueCounts } from "../hooks/useOfflineQueue";
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -13,6 +14,9 @@ export default function PwaUpdatePrompt() {
   const [isApplying, setIsApplying] = useState(false);
   const [updateError, setUpdateError] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [confirmingWithPending, setConfirmingWithPending] = useState(false);
+  const { pending, attention } = useOfflineQueueCounts();
+  const unsafeToUpdateSilently = pending + attention > 0;
 
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -97,6 +101,15 @@ export default function PwaUpdatePrompt() {
   const applyUpdate = async () => {
     if (isApplying) return;
 
+    // Never silently reload over unsynchronized work — the first tap while
+    // sales are pending/need attention only asks for confirmation. IndexedDB
+    // itself survives a service-worker update regardless; this is purely
+    // about not surprising the cashier mid-shift.
+    if (unsafeToUpdateSilently && !confirmingWithPending) {
+      setConfirmingWithPending(true);
+      return;
+    }
+
     setIsApplying(true);
     setUpdateError(false);
     activationRequestedRef.current = true;
@@ -135,6 +148,13 @@ export default function PwaUpdatePrompt() {
             Une nouvelle version de l&apos;application est prête.
           </p>
 
+          {unsafeToUpdateSilently && (
+            <p className="mt-2 flex items-start gap-1.5 text-sm font-medium text-amber-800" role="alert">
+              <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              {pending + attention} vente{pending + attention > 1 ? "s" : ""} non synchronisée{pending + attention > 1 ? "s" : ""} sur cet appareil — vérifiez le Centre de synchronisation avant de mettre à jour.
+            </p>
+          )}
+
           {updateError && (
             <p className="mt-2 text-sm font-medium text-red-700" role="alert">
               La mise à jour n&apos;a pas pu démarrer. Veuillez réessayer.
@@ -152,12 +172,12 @@ export default function PwaUpdatePrompt() {
                 aria-hidden="true"
                 className={`size-4 ${isApplying ? "animate-spin" : ""}`}
               />
-              {isApplying ? "Mise à jour…" : "Mettre à jour"}
+              {isApplying ? "Mise à jour…" : confirmingWithPending ? "Confirmer la mise à jour" : "Mettre à jour"}
             </button>
             <button
               className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50"
               disabled={isApplying}
-              onClick={() => setDismissed(true)}
+              onClick={() => { setDismissed(true); setConfirmingWithPending(false); }}
               type="button"
             >
               Plus tard

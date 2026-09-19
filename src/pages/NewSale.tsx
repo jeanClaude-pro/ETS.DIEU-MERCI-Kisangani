@@ -7,6 +7,13 @@ import {
   normalizeSaleReceipt,
   printCommittedSaleAfterDelay,
 } from "../services/printService";
+import { useConnectivity } from "../context/ConnectivityContext";
+import { canSellOffline } from "../services/authorizationService";
+import { generateBarcodeToken, formatReceiptNumber, generateClientSaleId } from "../utils/barcodeId.ts";
+import { offlineDb, commitOfflineSale, getLastSnapshotAt, setLastSnapshotAt, type OfflineSale } from "../lib/offlineDb";
+import { getCachedWalkInCustomer, refreshOfflineSnapshot, snapshotProducts, snapshotExchangeRate, snapshotWalkInCustomer } from "../services/offlineProductSnapshot";
+import { runOfflineSyncPass } from "../services/offlineSyncService";
+import { useOfflineReadiness } from "../hooks/useOfflineReadiness";
 
 interface Product {
   _id: string;
@@ -69,6 +76,7 @@ export default function NewSale() {
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [loadingRate, setLoadingRate] = useState(true);
   const [walkInCustomer, setWalkInCustomer] = useState<WalkInCustomer | null>(null);
+  const [lastSnapshotAt, setSnapshotAt] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -123,6 +131,7 @@ export default function NewSale() {
       if (response.ok) {
         const data = await response.json();
         setExchangeRate(data);
+        void snapshotExchangeRate(data);
       } else {
         console.warn('Failed to load exchange rate');
       }
@@ -146,6 +155,7 @@ export default function NewSale() {
       if (response.ok) {
         const data = await response.json();
         setWalkInCustomer(data);
+        void snapshotWalkInCustomer(data);
       } else {
         console.warn("Failed to load walk-in customer");
       }
@@ -162,6 +172,19 @@ export default function NewSale() {
       setError(null);
 
       try {
+        // Hydrate durable operational data first so a cold PWA restart works
+        // while the laptop is still offline.
+        const [cachedProducts, cachedRate, cachedCustomer, cachedAt] = await Promise.all([
+          offlineDb.products.toArray(),
+          offlineDb.exchangeRateCache.get("current"),
+          getCachedWalkInCustomer(),
+          getLastSnapshotAt(),
+        ]);
+        if (!cancelled && cachedProducts.length) setProducts(cachedProducts.map((item) => ({ ...item, _id: item.productId })));
+        if (!cancelled && cachedRate) setExchangeRate({ _id: cachedRate.rateId || "cached", rate: cachedRate.rate, effectiveFrom: cachedRate.effectiveFrom || cachedRate.cachedAt, lastUpdated: cachedRate.cachedAt });
+        if (!cancelled && cachedCustomer) setWalkInCustomer(cachedCustomer);
+        if (!cancelled) setSnapshotAt(cachedAt);
+
         // Load products, exchange rate, and the walk-in customer concurrently
         await Promise.all([
           loadProducts(),
@@ -177,7 +200,7 @@ export default function NewSale() {
 
     async function loadProducts() {
       try {
-        const res = await fetch(`${API_BASE}/products`, {
+        const res = await fetch(`${API_BASE}/products/offline-snapshot`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
@@ -197,8 +220,13 @@ export default function NewSale() {
           ? (data as any)
           : [];
         if (!cancelled) setProducts(list);
+        await snapshotProducts(list);
+        const snapshotTime = new Date().toISOString();
+        await setLastSnapshotAt(snapshotTime);
+        if (!cancelled) setSnapshotAt(snapshotTime);
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to load products");
+        const cachedCount = await offlineDb.products.count();
+        if (!cancelled && cachedCount === 0) setError(e?.message || "Aucune donnée produit hors ligne n'est disponible.");
       }
     }
 
@@ -492,6 +520,172 @@ export default function NewSale() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
+  function buildSaleCustomer() {
+    return form.isWalkIn
+      ? { name: form.customerName, phone: "", email: "", isWalkIn: true }
+      : { name: form.customerName, phone: form.customerPhone, email: form.customerEmail || "" };
+  }
+
+  function resetFormAndCart() {
+    setForm({
+      productId: "",
+      quantity: "",
+      unitPrice: "",
+      priceInFC: "",
+      customerName: "",
+      customerPhone: "",
+      customerEmail: "",
+      isWalkIn: true,
+      paymentMethod: form.paymentMethod,
+      currencyMode: "usd"
+    });
+    setCart([]);
+    setSearchTerm("");
+  }
+
+  // Genuinely unavailable — never navigator.onLine alone (Part F). A device
+  // can have Wi-Fi while the API/MongoDB itself is unreachable.
+  const connectivity = useConnectivity();
+  const offlineReadiness = useOfflineReadiness();
+
+  // Whenever this screen sees the API become reachable, give the queue a
+  // chance to drain. Cheap and idempotent to call repeatedly.
+  useEffect(() => {
+    if (connectivity.status === "online") {
+      void runOfflineSyncPass();
+    }
+  }, [connectivity.status]);
+
+  /**
+   * Durable local sale creation (Part F/G). Validates against the cached
+   * product projection, writes sale + stock projection + audit ledger
+   * atomically to IndexedDB, and only then prints. If persistence fails,
+   * nothing is reported as saved and nothing is printed.
+   */
+  async function submitOffline(options?: {
+    clientSaleId: string;
+    barcodeToken: string;
+    receiptNumber: string;
+    occurredAt: string;
+    syncState: "PENDING" | "PENDING_CONFIRMATION";
+    origin: "offline" | "online";
+  }) {
+    const authorization = canSellOffline();
+    if (!authorization.allowed) {
+      throw new Error(authorization.reason || "Vente hors-ligne non autorisée sur cet appareil.");
+    }
+
+    // Spec: never silently fall back to 1 USD = 1 FC. If this device has
+    // never cached a trusted exchange rate, offline selling must be blocked
+    // outright rather than recording a sale with no rate snapshot.
+    if (!offlineReadiness.hasExchangeRate) {
+      throw new Error("Aucun taux de change fiable n'est enregistré sur cet appareil. Connectez-vous en ligne au moins une fois avant de vendre hors ligne.");
+    }
+
+    const canonicalItems: Array<{
+      productId: string; name: string; quantity: number; price: number;
+      region: "Butembo" | "China"; regionCode: "Bbbb" | "Cnnn";
+    }> = [];
+    for (const item of cart) {
+      const cached = await offlineDb.products.get(item.productId);
+      if (!cached) throw new Error(`Article introuvable dans les données locales : ${item.name}`);
+      if (cached.stock < item.quantity) {
+        throw new Error(`Stock local insuffisant pour ${cached.name}. Disponible : ${cached.stock}`);
+      }
+      canonicalItems.push({
+        productId: cached.productId,
+        name: cached.name,
+        quantity: item.quantity,
+        price: item.unitPrice,
+        region: cached.region,
+        regionCode: cached.regionCode,
+      });
+    }
+
+    const barcodeToken = options?.barcodeToken || generateBarcodeToken();
+    const receiptNumber = options?.receiptNumber || formatReceiptNumber(barcodeToken) || barcodeToken;
+    const clientSaleId = options?.clientSaleId || generateClientSaleId();
+    const occurredAt = options?.occurredAt || new Date().toISOString();
+    const customer = buildSaleCustomer();
+    // A PIN-only offline session has no `currentUser` (no token/user at
+    // all) — attribute the sale to whichever of the two paths actually
+    // authorized it above.
+    const salesPerson = authorization.identity?.username || currentUser?.username || "unknown";
+    const rateSnapshot = exchangeRate
+      ? { rateId: exchangeRate._id, rate: exchangeRate.rate, effectiveFrom: exchangeRate.effectiveFrom }
+      : null;
+
+    const paymentMethod = uiToModelPayment(form.paymentMethod);
+
+    // Built once, up front, and stored verbatim on the record — a later
+    // reprint (from the sync center or a future offline-reprint action)
+    // must reproduce exactly this receipt, never recompute it from mutable
+    // state.
+    const receipt = normalizeSaleReceipt({
+      _id: clientSaleId,
+      receiptNumber,
+      barcodeToken,
+      createdAt: occurredAt,
+      customer,
+      items: canonicalItems.map((item) => ({ name: item.name, quantity: item.quantity, price: item.price, regionCode: item.regionCode })),
+      subtotal: cartTotal,
+      total: cartTotal,
+      paymentMethod,
+      salesPerson,
+      status: "completed",
+      type: "sale",
+      exchangeRateSnapshot: rateSnapshot ?? undefined,
+    }, { type: "sale", exchangeRate: exchangeRate?.rate });
+
+    const offlineSale: OfflineSale = {
+      clientSaleId,
+      barcodeToken,
+      receiptNumber,
+      occurredAt,
+      payload: {
+        customer,
+        items: canonicalItems,
+        subtotal: cartTotal,
+        total: cartTotal,
+        paymentMethod,
+        salesPerson,
+        exchangeRateSnapshot: rateSnapshot,
+        clientSaleId,
+        barcodeToken,
+        receiptNumber,
+        clientOccurredAt: occurredAt,
+        origin: options?.origin || "offline",
+      },
+      receiptSnapshot: receipt,
+      syncState: options?.syncState || "PENDING",
+      attempts: 0,
+      lastError: null,
+      lastAttemptAt: null,
+      syncedSaleId: null,
+      syncedAt: null,
+      createdAt: occurredAt,
+    };
+
+    const stockDeltas = canonicalItems.map((item) => ({ productId: item.productId, quantityDelta: -item.quantity }));
+
+    // Atomic: if this throws, no partial sale/stock/ledger write happened,
+    // and nothing below (print, form reset) runs — the sale is never
+    // reported as saved.
+    await commitOfflineSale(offlineSale, stockDeltas);
+
+    resetFormAndCart();
+    setMessage(options?.syncState === "PENDING_CONFIRMATION"
+      ? "Vente conservée en sécurité. Confirmation du serveur en attente; elle sera vérifiée automatiquement sans créer de doublon."
+      : "Vente enregistrée hors ligne. Reçu enregistré et ajouté à la file de synchronisation.");
+    try {
+      await printCommittedSaleAfterDelay(receipt);
+    } catch (printError: unknown) {
+      setError(printError instanceof Error
+        ? printError.message
+        : "La vente hors-ligne est enregistrée, mais l'impression a échoué.");
+    }
+  }
+
   async function handleSale(e: React.FormEvent) {
     e.preventDefault();
     if (!isFormValid) return;
@@ -501,19 +695,22 @@ export default function NewSale() {
     setError(null);
 
     try {
+      const connectivityState = await connectivity.forceCheck();
+
+      if (connectivityState !== "online") {
+        await submitOffline();
+        return;
+      }
+
+      // Create one permanent identity before transmission. If the response
+      // is lost, the same identity is persisted and retried idempotently.
+      const barcodeToken = generateBarcodeToken();
+      const receiptNumber = formatReceiptNumber(barcodeToken) || barcodeToken;
+      const clientSaleId = generateClientSaleId();
+      const occurredAt = new Date().toISOString();
+
       const body = {
-        customer: form.isWalkIn
-          ? {
-              name: form.customerName,
-              phone: "",
-              email: "",
-              isWalkIn: true,
-            }
-          : {
-              name: form.customerName,
-              phone: form.customerPhone,
-              email: form.customerEmail || "",
-            },
+        customer: buildSaleCustomer(),
         items: cart.map((item) => ({
           productId: item.productId,
           name: item.name,
@@ -534,16 +731,37 @@ export default function NewSale() {
               effectiveFrom: exchangeRate.effectiveFrom,
             }
           : null,
+        // Makes a lost response safely retryable (Part V) without risking a
+        // duplicate sale/stock decrement — the server recognizes a repeat.
+        clientSaleId,
+        barcodeToken,
+        receiptNumber,
       };
 
-      const res = await fetch(`${API_BASE}/sales`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...authHeader(),
-        },
-        body: JSON.stringify(body),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE}/sales`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeader(),
+          },
+          body: JSON.stringify(body),
+        });
+      } catch {
+        // The server may have committed before the response disappeared.
+        // Persist this same identity; never manufacture a second sale.
+        void connectivity.forceCheck();
+        await submitOffline({
+          clientSaleId,
+          barcodeToken,
+          receiptNumber,
+          occurredAt,
+          syncState: "PENDING_CONFIRMATION",
+          origin: "online",
+        });
+        return;
+      }
 
       const data = await readJsonSafe(res);
       if (!res.ok) {
@@ -554,27 +772,34 @@ export default function NewSale() {
         throw new Error(msg);
       }
 
+      // Keep the durable operational snapshot authoritative after an online
+      // sale, so an immediate later outage cannot expose pre-sale stock.
+      try {
+        const token = localStorage.getItem("token") || "";
+        await refreshOfflineSnapshot(token);
+        const refreshed = await offlineDb.products.toArray();
+        setProducts(refreshed.map((item) => ({ ...item, _id: item.productId })));
+        setSnapshotAt(await getLastSnapshotAt());
+      } catch {
+        // The server already committed. Conservatively project the known
+        // quantities locally until the next authenticated refresh succeeds.
+        try {
+          await offlineDb.transaction("rw", offlineDb.products, async () => {
+            for (const item of cart) {
+              const cached = await offlineDb.products.get(item.productId);
+              if (cached) await offlineDb.products.update(item.productId, { stock: Math.max(0, cached.stock - item.quantity) });
+            }
+          });
+        } catch { /* Receipt printing must still proceed for the committed sale. */ }
+      }
+
       // Always print from the committed server snapshot, never from the mutable cart.
       const newReceiptData = normalizeSaleReceipt(data, {
         type: "sale",
         exchangeRate: exchangeRate?.rate,
       });
 
-      // Reset form and cart
-      setForm({
-        productId: "",
-        quantity: "",
-        unitPrice: "",
-        priceInFC: "",
-        customerName: "",
-        customerPhone: "",
-        customerEmail: "",
-        isWalkIn: true,
-        paymentMethod: form.paymentMethod,
-        currencyMode: "usd"
-      });
-      setCart([]);
-      setSearchTerm("");
+      resetFormAndCart();
 
       setMessage(
         "✅ Vente effectuée avec succès ! Impression du reçu et de la souche..."
@@ -646,6 +871,21 @@ export default function NewSale() {
             </div>
           </div>
         </div>
+
+        {connectivity.status !== "online" && (
+          offlineReadiness.ready ? (
+            <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900" role="status">
+              <p className="font-bold">Mode hors ligne prêt</p>
+              <p className="mt-0.5">Cette vente sera enregistrée sur cet appareil et synchronisée automatiquement lorsque la connexion sera rétablie.</p>
+              {lastSnapshotAt && <p className="mt-1 text-xs text-blue-700">Données mises à jour à {new Date(lastSnapshotAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</p>}
+            </div>
+          ) : (
+            <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+              <p className="font-bold">Mode hors ligne non préparé</p>
+              <p className="mt-0.5">Reconnectez cet appareil pour télécharger les données nécessaires (produits, taux de change) avant de pouvoir vendre hors ligne.</p>
+            </div>
+          )
+        )}
 
         {message && (
           <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">

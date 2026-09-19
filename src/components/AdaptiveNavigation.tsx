@@ -11,6 +11,7 @@ import {
   permittedNavigationSections,
   type NavigationItem,
 } from "./navigationConfig";
+import { useOfflineQueueCounts } from "../hooks/useOfflineQueue";
 
 const NavLink = ({ item, compact = false, onNavigate }: { item: NavigationItem; compact?: boolean; onNavigate?: () => void }) => {
   const { pathname } = useLocation();
@@ -25,14 +26,16 @@ const NavLink = ({ item, compact = false, onNavigate }: { item: NavigationItem; 
     >
       <Icon className="h-5 w-5 shrink-0" />
       <span>{compact ? item.shortLabel : item.label}</span>
+      {Boolean(item.badge) && <span className="ml-auto min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[11px] font-bold text-white" aria-label={`${item.badge} ventes à traiter`}>{item.badge}</span>}
     </Link>
   );
 };
 
 function MobileNavigation() {
   const { user, clearAuth } = useAuth();
+  const { pending, attention } = useOfflineQueueCounts();
   const [open, setOpen] = useState(false);
-  const items = useMemo(() => permittedNavigationItems(user), [user]);
+  const items = useMemo(() => permittedNavigationItems(user).map((item) => item.id === "sync" ? { ...item, badge: pending + attention || undefined } : item), [user, pending, attention]);
   const primary = useMemo(() => items.filter((item) => item.phonePriority).sort((a, b) => (a.phonePriority || 99) - (b.phonePriority || 99)).slice(0, 4), [items]);
   const secondary = items.filter((item) => !primary.some((primaryItem) => primaryItem.id === item.id));
   useEffect(() => {
@@ -79,9 +82,13 @@ function MobileNavigation() {
 
 function TabletNavigation() {
   const { user, clearAuth } = useAuth();
+  const { pending, attention } = useOfflineQueueCounts();
   const { tabletOpen, setTabletOpen } = useSidebar();
   const location = useLocation();
-  const sections = useMemo(() => permittedNavigationSections(user), [user]);
+  const sections = useMemo(() => permittedNavigationSections(user).map((section) => ({
+    ...section,
+    items: section.items.map((item) => item.id === "sync" ? { ...item, badge: pending + attention || undefined } : item),
+  })), [user, pending, attention]);
   useEffect(() => setTabletOpen(false), [location.pathname, setTabletOpen]);
   return (
     <>

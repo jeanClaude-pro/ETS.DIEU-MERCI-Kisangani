@@ -15,8 +15,8 @@ test("a user without stored modulePermissions keeps exactly today's role-based a
   assert.ok(!staff.includes("management"));
 });
 
-test("an explicit modulePermissions array overrides the role default", () => {
-  assert.deepEqual(effectiveModulesForUser({ role: "staff", modulePermissions: ["pos"] }), ["pos"]);
+test("explicit POS access also exposes its synchronization safety companion", () => {
+  assert.deepEqual(effectiveModulesForUser({ role: "staff", modulePermissions: ["pos"] }), ["pos", "sync"]);
 });
 
 test("no user returns no modules", () => {
@@ -39,15 +39,15 @@ test("the point-of-sale module opens after the welcome route", () => {
 test("default frontend roles mirror the server module registry", () => {
   assert.deepEqual(defaultModulesForRole("manager"), [
     "dashboard", "rate", "pos", "reservation", "entry", "sortie", "products",
-    "sales", "reservations", "entryhistory", "sortiehistory", "customers",
+    "sales", "sync", "scanner", "reservations", "entryhistory", "sortiehistory", "customers",
   ]);
   assert.deepEqual(defaultModulesForRole("inventory_manager"), [
-    "pos", "reservation", "entry", "sortie", "products", "sales",
+    "pos", "reservation", "entry", "sortie", "products", "sales", "sync", "scanner",
     "reservations", "entryhistory", "sortiehistory",
   ]);
   assert.deepEqual(defaultModulesForRole("cashier_supervisor"), [
-    "pos", "reservation", "entry", "sortie", "sales", "reservations",
+    "pos", "reservation", "entry", "sortie", "sales", "sync", "scanner", "reservations",
     "entryhistory", "sortiehistory", "customers",
   ]);
-  assert.deepEqual(defaultModulesForRole("staff"), ["sales"]);
+  assert.deepEqual(defaultModulesForRole("staff"), ["sales", "scanner"]);
 });

@@ -32,9 +32,13 @@ import { RequireAuth } from "./components/RequireAuth";
 import { RequireModule } from "./components/RequireModule";
 import { AuthProvider } from "./context/AuthProvider";
 import { SidebarProvider, useSidebar } from "./context/SidebarContext";
+import { ConnectivityProvider } from "./context/ConnectivityContext";
 import Management from "./pages/management/Management";
 import Welcome from "./pages/Welcome";
 import { useAuth } from "./hooks/useAuth";
+import ScanReceipt from "./pages/scanner/ScanReceipt";
+import SyncCenter from "./pages/sync/SyncCenter";
+import OfflinePinSetup from "./pages/security/OfflinePinSetup";
 
 function AppLayout() {
   const { token, loading } = useAuth();
@@ -181,6 +185,36 @@ function AppLayout() {
             }
           />
           <Route
+            path="/scan"
+            element={
+              <RequireAuth>
+                <RequireModule moduleId="scanner">
+                  <ScanReceipt />
+                </RequireModule>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/sync-center"
+            element={
+              <RequireAuth>
+                <RequireModule moduleId="sync">
+                  <SyncCenter />
+                </RequireModule>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/offline-pin-setup"
+            element={
+              <RequireAuth>
+                <RequireModule moduleId="pos">
+                  <OfflinePinSetup />
+                </RequireModule>
+              </RequireAuth>
+            }
+          />
+          <Route
             path="/dashboard"
             element={
               <RequireAuth>
@@ -236,13 +270,15 @@ function AppLayout() {
 export default function App() {
   return (
     <AuthProvider>
-      <SidebarProvider>
-        <Router>
-          <ToastContainer position="top-right" autoClose={3000} newestOnTop />
-          <PwaUpdatePrompt />
-          <AppLayout />
-        </Router>
-      </SidebarProvider>
+      <ConnectivityProvider>
+        <SidebarProvider>
+          <Router>
+            <ToastContainer position="top-right" autoClose={3000} newestOnTop />
+            <PwaUpdatePrompt />
+            <AppLayout />
+          </Router>
+        </SidebarProvider>
+      </ConnectivityProvider>
     </AuthProvider>
   );
 }

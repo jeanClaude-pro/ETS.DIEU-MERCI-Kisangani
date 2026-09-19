@@ -54,6 +54,27 @@ test("saved sale snapshots normalize without consulting current product data or 
   assert.equal(receipt.exchangeRate, 2800);
 });
 
+test("a legacy sale with no barcodeToken normalizes with no barcode and the saleId as reference", () => {
+  const receipt = normalizeSaleReceipt(savedSale);
+  assert.equal(receipt.barcodeToken, undefined);
+  assert.equal(receipt.reference, "SALE-100");
+});
+
+test("a barcode-era sale prefers receiptNumber over saleId and carries the token through", () => {
+  const receipt = normalizeSaleReceipt({
+    ...savedSale,
+    receiptNumber: "ABCD-EFGH-JKMN",
+    barcodeToken: "ABCDEFGHJKMN",
+  });
+  assert.equal(receipt.reference, "ABCD-EFGH-JKMN");
+  assert.equal(receipt.barcodeToken, "ABCDEFGHJKMN");
+});
+
+test("a malformed barcodeToken from the server is not trusted", () => {
+  const receipt = normalizeSaleReceipt({ ...savedSale, barcodeToken: "not valid!!" });
+  assert.equal(receipt.barcodeToken, undefined);
+});
+
 test("committed sales print immediately and browser documents retain deliberate spacing", () => {
   assert.equal(POST_SAVE_PRINT_DELAY_MS, 0);
   assert.equal(BROWSER_DOCUMENT_DELAY_MS, 2000);

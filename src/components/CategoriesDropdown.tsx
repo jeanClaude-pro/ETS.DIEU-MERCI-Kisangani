@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { serverUrl } from "../utils/constants";
+import { getCachedCategories, refreshCategorySnapshot } from "../services/offlineCategorySnapshot";
 import type { Category } from "../types";
 
 type Props = {
@@ -24,27 +24,38 @@ const CategoriesDropdown = ({
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const token = localStorage.getItem("authToken") || localStorage.getItem("token") || "";
-        const response = await fetch(`${serverUrl}/categories`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (!response.ok) {
-          console.error("Failed to fetch categories:", await response.text());
-          setLoadError(true);
-          return;
-        }
-        const data = await response.json() as Category[];
-        setCategories([...data].sort((left, right) => left.name.localeCompare(right.name, "fr")));
-      } catch (error) {
-        console.error("Error fetching categories:", error);
-        setLoadError(true);
-      } finally {
+    let cancelled = false;
+
+    const loadCategories = async () => {
+      // Hydrate from the durable local cache first so the filter never goes
+      // blank just because the network call hasn't resolved (or fails) —
+      // mirrors NewSale.tsx's product-snapshot hydration pattern.
+      const cached = await getCachedCategories().catch(() => []);
+      if (!cancelled && cached.length) {
+        setCategories(cached.map((category) => ({ _id: category.id, name: category.name, description: "" })));
         setLoading(false);
       }
+
+      try {
+        const token = localStorage.getItem("authToken") || localStorage.getItem("token") || "";
+        const fresh = await refreshCategorySnapshot(token);
+        if (!cancelled) {
+          setCategories([...fresh].map((category) => ({ _id: category._id, name: category.name, description: "" }))
+            .sort((left, right) => left.name.localeCompare(right.name, "fr")));
+          setLoadError(false);
+        }
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        // A failed refresh must never erase a previously valid local cache —
+        // only surface an error when there is truly nothing to show.
+        if (!cancelled && cached.length === 0) setLoadError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-    fetchCategories();
+
+    void loadCategories();
+    return () => { cancelled = true; };
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

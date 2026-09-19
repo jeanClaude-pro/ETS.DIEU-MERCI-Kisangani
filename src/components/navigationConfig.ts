@@ -2,10 +2,12 @@ import type React from "react";
 import {
   BarChart3,
   CalendarClock,
+  CloudOff,
   ClipboardList,
   Gauge,
   Home,
   Package,
+  ScanLine,
   ShieldCheck,
   ShoppingCart,
   TrendingUp,
@@ -65,6 +67,8 @@ export const navigationSections: NavigationSection[] = [
     title: "Ventes & rapports",
     items: [
       { id: "sales", label: "Historique des ventes", shortLabel: "Ventes", icon: TrendingUp, path: "/sales", roles: historyRoles, phonePriority: 3, description: "Retrouver, consulter et réimprimer les ventes" },
+      { id: "sync", label: "Ventes non synchronisées", shortLabel: "À synchroniser", icon: CloudOff, path: "/sync-center", roles: operationalRoles, description: "Suivre les ventes conservées sur cet appareil" },
+      { id: "scanner", label: "Scanner un reçu", shortLabel: "Scanner", icon: ScanLine, path: "/scan", roles: historyRoles, description: "Vérifier un reçu à partir de son code-barres" },
       { id: "reservations", label: "Historique des réservations", shortLabel: "Réserv.", icon: ClipboardList, path: "/reservationhistory", roles: operationalRoles, description: "Suivre les réservations enregistrées" },
       { id: "entryhistory", label: "Historique des entrées", shortLabel: "Entrées", icon: WalletCards, path: "/EntryHistory", roles: operationalRoles, description: "Consulter les mouvements d’entrée" },
       { id: "sortiehistory", label: "Historique des sorties", shortLabel: "Sorties", icon: WalletCards, path: "/sortiehistory", roles: operationalRoles, description: "Consulter les dépenses et sorties" },
@@ -99,7 +103,14 @@ export const defaultModulesForRole = (role?: string): string[] =>
 export const effectiveModulesForUser = (user?: Pick<User, "role" | "modulePermissions"> | null): string[] => {
   if (!user) return [];
   if (user.role === "admin") return ALL_MODULE_IDS;
-  if (Array.isArray(user.modulePermissions)) return user.modulePermissions;
+  if (Array.isArray(user.modulePermissions)) {
+    // Sync Center is an operational safety companion to POS. Existing
+    // customized users who already have POS access must not lose access just
+    // because their stored array predates the new module id.
+    return user.modulePermissions.includes("pos") && !user.modulePermissions.includes("sync")
+      ? [...user.modulePermissions, "sync"]
+      : user.modulePermissions;
+  }
   return defaultModulesForRole(user.role);
 };
 

@@ -2,18 +2,24 @@ import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { effectiveModulesForUser } from "./navigationConfig";
+import { isOfflineSessionExpired } from "../services/authorizationService";
 import { ShieldAlert } from "lucide-react";
 
 // Backend enforcement (requireModulePermission middleware) is the real
 // security boundary; this only decides what the UI renders/navigates to.
 export const RequireModule: React.FC<React.PropsWithChildren<{ moduleId: string }>> = ({ moduleId, children }) => {
-  const { token, user, loading } = useAuth();
+  const { token, user, offlineSession, loading } = useAuth();
   const location = useLocation();
+  const hasOfflineSession = Boolean(offlineSession) && !isOfflineSessionExpired(offlineSession!);
 
   if (loading) return null;
-  if (!token) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (!token && !hasOfflineSession) return <Navigate to="/login" replace state={{ from: location }} />;
 
-  const allowed = effectiveModulesForUser(user).includes(moduleId);
+  // A device-local PIN session is capped to its own allowlist (spec §16),
+  // never the user's full server-side permission set.
+  const allowed = token
+    ? effectiveModulesForUser(user).includes(moduleId)
+    : offlineSession!.modules.includes(moduleId);
   if (!allowed) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-8 text-center">

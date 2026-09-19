@@ -1,0 +1,58 @@
+import { useSyncExternalStore } from "react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, CloudCheck, CloudOff, KeyRound, LoaderCircle, RefreshCw, ServerOff } from "lucide-react";
+import { useConnectivity } from "../context/ConnectivityContext";
+import { useOfflineQueueCounts } from "../hooks/useOfflineQueue";
+import { getSyncProgress, subscribeSyncProgress } from "../services/offlineSyncService";
+
+export default function SyncStatusIndicator() {
+  const connectivity = useConnectivity();
+  const { counts, pending, attention } = useOfflineQueueCounts();
+  const progress = useSyncExternalStore(subscribeSyncProgress, getSyncProgress, getSyncProgress);
+
+  let label = "En ligne · Synchronisé";
+  let icon = <CloudCheck className="h-3.5 w-3.5" />;
+  let tone = "border-emerald-200 bg-emerald-50 text-emerald-700";
+
+  if (attention > 0) {
+    label = `Attention · ${attention} à vérifier`;
+    icon = <AlertTriangle className="h-3.5 w-3.5" />;
+    tone = "border-amber-300 bg-amber-50 text-amber-800";
+  } else if (progress.pausedForAuth && pending > 0) {
+    // Server reachable, session rejected (401) — spec's AUTH_REQUIRED: this
+    // is never a connectivity problem, so it must never read as "offline".
+    label = "Connexion requise";
+    icon = <KeyRound className="h-3.5 w-3.5" />;
+    tone = "border-violet-300 bg-violet-50 text-violet-800";
+  } else if (progress.running || counts.SYNCING > 0) {
+    label = `Synchronisation · ${progress.completed}/${progress.total}`;
+    icon = <RefreshCw className="h-3.5 w-3.5 motion-safe:animate-spin" />;
+    tone = "border-blue-200 bg-blue-50 text-blue-700";
+  } else if (connectivity.status === "degraded") {
+    label = "Service temporairement indisponible";
+    icon = <ServerOff className="h-3.5 w-3.5" />;
+    tone = "border-orange-200 bg-orange-50 text-orange-800";
+  } else if (connectivity.status === "checking" || connectivity.status === "reconnecting") {
+    label = connectivity.status === "checking" ? "Vérification de la connexion..." : "Reconnexion...";
+    icon = <LoaderCircle className="h-3.5 w-3.5 motion-safe:animate-spin" />;
+    tone = "border-slate-200 bg-slate-50 text-slate-700";
+  } else if (connectivity.status === "offline") {
+    label = pending > 0 ? `Hors ligne · ${pending} vente${pending > 1 ? "s" : ""} en attente` : "Hors ligne";
+    icon = <CloudOff className="h-3.5 w-3.5" />;
+    tone = "border-slate-300 bg-slate-100 text-slate-700";
+  } else if (pending > 0) {
+    label = `En ligne · ${pending} en attente`;
+    icon = <RefreshCw className="h-3.5 w-3.5" />;
+    tone = "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  return (
+    <Link
+      to="/sync-center"
+      className={`inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${tone}`}
+      aria-label={`État de synchronisation : ${label}`}
+    >
+      {icon}<span className="max-w-[16rem] truncate">{label}</span>
+    </Link>
+  );
+}

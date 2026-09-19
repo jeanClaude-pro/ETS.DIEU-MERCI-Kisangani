@@ -58,7 +58,7 @@ export const units = [
     "packs",
 ];
 
-export const serverUrl = import.meta.env.VITE_API_URL;
+export const serverUrl = (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || "";
 
 export const REGIONS: { region: Region; regionCode: RegionCode }[] = [
     { region: "Butembo", regionCode: "Bbbb" },

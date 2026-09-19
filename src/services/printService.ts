@@ -1,4 +1,6 @@
 import jsPDF from "jspdf";
+import { isValidBarcodeToken } from "../utils/barcodeId.ts";
+import { renderBarcodeDataUrl } from "../utils/barcode.ts";
 
 const API_BASE = import.meta.env?.VITE_API_URL ?? "";
 
@@ -44,6 +46,9 @@ export interface SaleReceiptData {
   type: ReceiptDocumentType;
   status: string;
   reference: string;
+  // Present only for sales created with barcode support (Part R); absent on
+  // legacy sales, which simply render no barcode image.
+  barcodeToken?: string;
   date: string;
   customerName: string;
   customerPhone: string;
@@ -78,6 +83,8 @@ interface PrintableItemSource {
 interface PrintableSaleSource {
   _id?: unknown;
   saleId?: unknown;
+  receiptNumber?: unknown;
+  barcodeToken?: unknown;
   createdAt?: unknown;
   date?: unknown;
   customer?: {
@@ -184,7 +191,10 @@ export function normalizeSaleReceipt(
     savedSaleId: stringValue(sale._id),
     type,
     status: stringValue(sale.status) || (type === "reservation" ? "pending" : "completed"),
-    reference: stringValue(sale.saleId ?? sale._id) || "N/A",
+    // A receiptNumber (barcode-era sales) always wins over the legacy saleId
+    // so the printed reference matches what's encoded in the barcode.
+    reference: stringValue(sale.receiptNumber ?? sale.saleId ?? sale._id) || "N/A",
+    barcodeToken: isValidBarcodeToken(sale.barcodeToken) ? sale.barcodeToken : undefined,
     date: formatSaleDate(sale.createdAt ?? sale.date),
     customerName: stringValue(sale.customer?.name) || "Walk-in Customer",
     customerPhone: stringValue(sale.customer?.phone),
@@ -311,6 +321,9 @@ const thermalStyles = `
   .receipt .total-row { margin: .35mm 0; }
   .receipt .grand-total { padding-top: .7mm; }
   .receipt .footer { margin-top: 1mm; line-height: 1.2; }
+  .barcode-block { margin-top: 1.6mm; padding-top: 1mm; border-top: 1px solid #000; text-align: center; }
+  .barcode-block img { display: inline-block; width: 62mm; max-width: 100%; height: 11mm; image-rendering: pixelated; }
+  .barcode-number { margin-top: .4mm; font-size: 10px; letter-spacing: .5px; font-weight: 700; }
   .cut-indicator { margin-top: 1.4mm; text-align: center; font-size: 9px; font-weight: 600; white-space: nowrap; }
   .stub { border: 1px solid #000; padding: 2mm; height: auto; min-height: 0; break-inside: avoid; }
   .stub .business { font-size: 13px; }
@@ -334,6 +347,17 @@ const thermalStyles = `
     .document { width: 78mm; max-width: 78mm; height: auto !important; min-height: 0 !important; margin: 0 1mm; padding: .8mm 0; }
   }
 `;
+
+// Absent entirely on legacy sales (Part R) — the layout simply has no
+// barcode block rather than a broken/empty image.
+function barcodeSection(receipt: SaleReceiptData): string {
+  if (!receipt.barcodeToken) return "";
+  const dataUrl = renderBarcodeDataUrl(receipt.barcodeToken);
+  return `<div class="barcode-block">
+    <img src="${dataUrl}" alt="Code-barres du reçu ${escapeHtml(receipt.reference)}">
+    <div class="barcode-number">${escapeHtml(receipt.reference)}</div>
+  </div>`;
+}
 
 function buildThermalDocument(kind: PrintDocumentKind, content: string): string {
   return `<!doctype html>
@@ -397,6 +421,7 @@ export function buildSaleReceiptHtml(receipt: SaleReceiptData): string {
     <div><strong>Agent de vente :</strong> ${escapeHtml(receipt.salesPerson)}</div>
     <aside class="system-promo">${escapeHtmlWithBreaks(SALE_SYSTEM_PROMO)}</aside>
     ${isReservation && receipt.notes ? `<div class="reservation"><strong>Notes :</strong> ${escapeHtml(receipt.notes)}</div>` : ""}
+    ${barcodeSection(receipt)}
     <footer class="footer"><strong>${SALE_BUSINESS.thankYou}</strong><br>${SALE_BUSINESS.salesNotice}</footer></section>`;
 
   return buildThermalDocument("receipt", content);
@@ -424,6 +449,7 @@ export function buildSaleStubHtml(receipt: SaleReceiptData): string {
     </div>
     <div class="stub-total"><span>TOTAL</span><strong>${formatUsd(receipt.total)}</strong></div>
     ${receipt.exchangeRate ? `<div class="total-row"><span>Total FC</span><strong>${formatFc(receipt.total * receipt.exchangeRate)}</strong></div>` : ""}
+    ${barcodeSection(receipt)}
     <footer class="footer"><strong>SOUCHE DE CAISSE</strong><br>À conserver</footer>
   </section>`;
   return buildThermalDocument("stub", content);

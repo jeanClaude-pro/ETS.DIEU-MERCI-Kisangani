@@ -33,7 +33,7 @@ button, input, select, textarea { font: inherit; }
 .app-loading-spinner { width: 1.35rem; height: 1.35rem; border: 2px solid #cbd5e1; border-top-color: #2563eb; border-radius: 999px; animation: app-spin .7s linear infinite; }
 @keyframes app-spin { to { transform: rotate(360deg); } }
 
-.app-header { position: sticky; top: 0; z-index: 35; min-height: 4rem; padding: max(.65rem, env(safe-area-inset-top)) clamp(1rem, 3vw, 2rem) .65rem; border-bottom: 1px solid rgb(226 232 240 / .9); background: rgb(255 255 255 / .94); backdrop-filter: blur(12px); }
+.app-header { position: sticky; top: 0; z-index: 35; display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 4rem; padding: max(.65rem, env(safe-area-inset-top)) clamp(1rem, 3vw, 2rem) .65rem; border-bottom: 1px solid rgb(226 232 240 / .9); background: rgb(255 255 255 / .94); backdrop-filter: blur(12px); }
 .app-header-brand { display: inline-flex; min-width: 0; align-items: center; gap: .7rem; color: var(--app-ink); text-decoration: none; }
 .app-header-mark { display: grid; width: 2.35rem; height: 2.35rem; flex: none; place-items: center; border-radius: .7rem; background: #eff6ff; color: #1d4ed8; }
 .app-header-brand strong, .app-header-brand small { display: block; }
