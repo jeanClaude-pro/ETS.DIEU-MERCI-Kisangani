@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { DollarSign, RefreshCw, Calculator, Search } from "lucide-react";
-import CategoriesDropdown from "../components/CategoriesDropdown";
 import {
   normalizeSaleReceipt,
   printCommittedSaleAfterDelay,
@@ -10,9 +9,8 @@ import {
 import { useConnectivity } from "../context/ConnectivityContext";
 import { canSellOffline } from "../services/authorizationService";
 import { generateBarcodeToken, formatReceiptNumber, generateClientSaleId } from "../utils/barcodeId.ts";
-import { offlineDb, commitOfflineSale, getLastSnapshotAt, setLastSnapshotAt, type OfflineSale } from "../lib/offlineDb";
-import { getCachedWalkInCustomer, refreshOfflineSnapshot, snapshotProducts, snapshotExchangeRate, snapshotWalkInCustomer } from "../services/offlineProductSnapshot";
-import { runOfflineSyncPass } from "../services/offlineSyncService";
+import { offlineDb, commitOfflineSale, type OfflineSale } from "../lib/offlineDb";
+import { refreshFromServer, subscribeLocal } from "../services/offlineProductSnapshot";
 import { useOfflineReadiness } from "../hooks/useOfflineReadiness";
 
 interface Product {
@@ -21,7 +19,6 @@ interface Product {
   sku?: string;
   stock: number;
   price?: number;
-  category: string;
   region?: "Butembo" | "China";
   regionCode?: "Bbbb" | "Cnnn";
 }
@@ -78,12 +75,13 @@ export default function NewSale() {
   const [walkInCustomer, setWalkInCustomer] = useState<WalkInCustomer | null>(null);
   const [lastSnapshotAt, setSnapshotAt] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
   // Get the current user from your auth context
-  const { user: currentUser } = useAuth();
+  const { activeUser: currentUser, token } = useAuth();
+  const connectivity = useConnectivity();
+  const offlineReadiness = useOfflineReadiness();
 
   const [form, setForm] = useState({
     productId: "",
@@ -118,138 +116,57 @@ export default function NewSale() {
     };
   }, []);
 
-  // Load exchange rate
-  const loadExchangeRate = async () => {
-    try {
-      setLoadingRate(true);
-      const response = await fetch(`${API_BASE}/exchange-rates/current`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setExchangeRate(data);
-        void snapshotExchangeRate(data);
-      } else {
-        console.warn('Failed to load exchange rate');
-      }
-    } catch (error) {
-      console.error('Error loading exchange rate:', error);
-    } finally {
-      setLoadingRate(false);
-    }
-  };
-
-  // Load the permanent Walk-in Customer record, so the default customer
-  // sent with a sale always matches the real system record instead of a
-  // hardcoded guess.
-  const loadWalkInCustomer = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/customers/walkin`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setWalkInCustomer(data);
-        void snapshotWalkInCustomer(data);
-      } else {
-        console.warn("Failed to load walk-in customer");
-      }
-    } catch (error) {
-      console.error("Error loading walk-in customer:", error);
-    }
-  };
-
   useEffect(() => {
     let cancelled = false;
-
-    async function loadInitialData() {
-      setLoadingProducts(true);
-      setError(null);
-
-      try {
-        // Hydrate durable operational data first so a cold PWA restart works
-        // while the laptop is still offline.
-        const [cachedProducts, cachedRate, cachedCustomer, cachedAt] = await Promise.all([
-          offlineDb.products.toArray(),
-          offlineDb.exchangeRateCache.get("current"),
-          getCachedWalkInCustomer(),
-          getLastSnapshotAt(),
-        ]);
-        if (!cancelled && cachedProducts.length) setProducts(cachedProducts.map((item) => ({ ...item, _id: item.productId })));
-        if (!cancelled && cachedRate) setExchangeRate({ _id: cachedRate.rateId || "cached", rate: cachedRate.rate, effectiveFrom: cachedRate.effectiveFrom || cachedRate.cachedAt, lastUpdated: cachedRate.cachedAt });
-        if (!cancelled && cachedCustomer) setWalkInCustomer(cachedCustomer);
-        if (!cancelled) setSnapshotAt(cachedAt);
-
-        // Load products, exchange rate, and the walk-in customer concurrently
-        await Promise.all([
-          loadProducts(),
-          loadExchangeRate(),
-          loadWalkInCustomer()
-        ]);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to load initial data");
-      } finally {
-        if (!cancelled) setLoadingProducts(false);
-      }
-    }
-
-    async function loadProducts() {
-      try {
-        const res = await fetch(`${API_BASE}/products/offline-snapshot`, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-          },
-        });
-        const data = await readJsonSafe(res);
-        if (!res.ok) {
-          const msg =
-            (data as any)?.error ||
-            (data as any)?.text ||
-            `Products fetch failed: ${res.status}`;
-          throw new Error(msg);
-        }
-        const list: Product[] = Array.isArray((data as any)?.products)
-          ? (data as any).products
-          : Array.isArray(data) && !(data as any).__nonJson
-          ? (data as any)
-          : [];
-        if (!cancelled) setProducts(list);
-        await snapshotProducts(list);
-        const snapshotTime = new Date().toISOString();
-        await setLastSnapshotAt(snapshotTime);
-        if (!cancelled) setSnapshotAt(snapshotTime);
-      } catch (e: any) {
-        const cachedCount = await offlineDb.products.count();
-        if (!cancelled && cachedCount === 0) setError(e?.message || "Aucune donnée produit hors ligne n'est disponible.");
-      }
-    }
-
-    loadInitialData();
+    const unsubscribe = subscribeLocal(
+      (snapshot) => {
+        if (cancelled) return;
+        setProducts(snapshot.products.map((item) => ({ ...item, _id: item.productId })));
+        setExchangeRate(snapshot.exchangeRate);
+        setWalkInCustomer(snapshot.walkInCustomer);
+        setSnapshotAt(snapshot.lastUpdated);
+        setLoadingProducts(false);
+        setLoadingRate(false);
+      },
+      (cause) => {
+        if (cancelled) return;
+        setLoadingProducts(false);
+        setLoadingRate(false);
+        setError(cause instanceof Error ? cause.message : "Impossible de lire les données locales.");
+      },
+    );
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
+
+  // This background refresh never blocks the local first paint. The live
+  // subscription above applies only a fully committed trusted snapshot.
+  useEffect(() => {
+    if (connectivity.status !== "online" || !token) return;
+    let cancelled = false;
+    void refreshFromServer(token).catch(async (cause) => {
+      if (!cancelled && await offlineDb.products.count() === 0) {
+        setError(cause instanceof Error ? cause.message : "Aucune donnée produit n'est disponible.");
+      }
+    });
+    return () => { cancelled = true; };
+  }, [connectivity.status, token]);
 
   const product = useMemo(
     () => products.find((p) => p._id === form.productId),
     [products, form.productId]
   );
 
-  // Filter the committed inventory list by MongoDB-backed category and text.
+  // Product search is intentionally independent of categories.
   const filteredProducts = useMemo(() => {
     return products.filter(product =>
-      (!selectedCategory || product.category === selectedCategory) &&
       (!searchTerm.trim() ||
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase())))
     );
-  }, [products, searchTerm, selectedCategory]);
+  }, [products, searchTerm]);
 
   // Calculate USD price when FC price changes
   useEffect(() => {
@@ -545,17 +462,6 @@ export default function NewSale() {
 
   // Genuinely unavailable — never navigator.onLine alone (Part F). A device
   // can have Wi-Fi while the API/MongoDB itself is unreachable.
-  const connectivity = useConnectivity();
-  const offlineReadiness = useOfflineReadiness();
-
-  // Whenever this screen sees the API become reachable, give the queue a
-  // chance to drain. Cheap and idempotent to call repeatedly.
-  useEffect(() => {
-    if (connectivity.status === "online") {
-      void runOfflineSyncPass();
-    }
-  }, [connectivity.status]);
-
   /**
    * Durable local sale creation (Part F/G). Validates against the cached
    * product projection, writes sale + stock projection + audit ledger
@@ -695,7 +601,7 @@ export default function NewSale() {
     setError(null);
 
     try {
-      const connectivityState = await connectivity.forceCheck();
+      const connectivityState = await connectivity.checkNow();
 
       if (connectivityState !== "online") {
         await submitOffline();
@@ -751,7 +657,7 @@ export default function NewSale() {
       } catch {
         // The server may have committed before the response disappeared.
         // Persist this same identity; never manufacture a second sale.
-        void connectivity.forceCheck();
+        connectivity.reportNetworkFailure();
         await submitOffline({
           clientSaleId,
           barcodeToken,
@@ -776,10 +682,7 @@ export default function NewSale() {
       // sale, so an immediate later outage cannot expose pre-sale stock.
       try {
         const token = localStorage.getItem("token") || "";
-        await refreshOfflineSnapshot(token);
-        const refreshed = await offlineDb.products.toArray();
-        setProducts(refreshed.map((item) => ({ ...item, _id: item.productId })));
-        setSnapshotAt(await getLastSnapshotAt());
+        await refreshFromServer(token);
       } catch {
         // The server already committed. Conservatively project the known
         // quantities locally until the next authenticated refresh succeeds.
@@ -898,20 +801,6 @@ export default function NewSale() {
 
         <div className="bg-white shadow-lg rounded-xl p-6 mb-6 border border-gray-200">
           <h3 className="text-lg font-semibold mb-4 text-gray-900">Ajouter les articles</h3>
-
-          <div className="mb-4">
-            <label className="mb-2 block font-medium text-gray-700">Filtrer par catégorie</label>
-            <div className="max-w-md">
-              <CategoriesDropdown
-                emptyLabel="Toutes les catégories"
-                selectedCategory={selectedCategory}
-                setSelectedCategory={(category) => {
-                  setSelectedCategory(category);
-                  setShowSearchResults(true);
-                }}
-              />
-            </div>
-          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="relative" ref={searchRef}>

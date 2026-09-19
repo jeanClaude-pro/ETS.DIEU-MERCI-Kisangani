@@ -49,8 +49,8 @@ export default function ScanReceipt() {
     }
     setState("looking-up");
 
-    const online = await connectivity.forceCheck();
-    if (online) {
+    const online = await connectivity.checkNow();
+    if (online === "online") {
       try {
         const response = await fetch(`${serverUrl}/sales/barcode/${value}`, {
           headers: { Authorization: `Bearer ${token || ""}` },

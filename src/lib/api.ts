@@ -20,11 +20,7 @@ export async function apiFetch<T>(
     const data = (await res.json().catch(() => ({}))) as any;
 
     if (res.status === 401 && typeof window !== 'undefined' && localStorage.getItem('token')) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        if (window.location.pathname !== '/login') {
-            window.location.href = '/login?message=session_expired';
-        }
+        window.dispatchEvent(new CustomEvent('auth-required'));
     }
 
     if (!res.ok) {

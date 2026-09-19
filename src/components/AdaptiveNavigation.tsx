@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, Menu, MoreHorizontal, X } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSidebar } from "../context/SidebarContext";
@@ -32,7 +32,8 @@ const NavLink = ({ item, compact = false, onNavigate }: { item: NavigationItem; 
 };
 
 function MobileNavigation() {
-  const { user, clearAuth } = useAuth();
+  const { activeUser: user, clearAuth } = useAuth();
+  const navigate = useNavigate();
   const { pending, attention } = useOfflineQueueCounts();
   const [open, setOpen] = useState(false);
   const items = useMemo(() => permittedNavigationItems(user).map((item) => item.id === "sync" ? { ...item, badge: pending + attention || undefined } : item), [user, pending, attention]);
@@ -71,7 +72,7 @@ function MobileNavigation() {
               <div className="native-sheet-grid">
                 {secondary.map((item) => <NavLink key={item.id} item={item} onNavigate={() => setOpen(false)} />)}
               </div>
-              <button type="button" className="native-sheet-logout" onClick={() => { clearAuth(); window.location.href = "/login"; }}><LogOut className="h-5 w-5" />Se déconnecter</button>
+              <button type="button" className="native-sheet-logout" onClick={() => { clearAuth(); navigate("/login", { replace: true }); }}><LogOut className="h-5 w-5" />Se déconnecter</button>
             </motion.section>
           </motion.div>
         )}
@@ -81,7 +82,8 @@ function MobileNavigation() {
 }
 
 function TabletNavigation() {
-  const { user, clearAuth } = useAuth();
+  const { activeUser: user, clearAuth } = useAuth();
+  const navigate = useNavigate();
   const { pending, attention } = useOfflineQueueCounts();
   const { tabletOpen, setTabletOpen } = useSidebar();
   const location = useLocation();
@@ -96,7 +98,7 @@ function TabletNavigation() {
         <button type="button" className="tablet-brand" onClick={() => setTabletOpen(true)} aria-label="Ouvrir tous les modules"><img src="/Mrcleanlogo.png" alt="" /></button>
         <button type="button" className="tablet-menu-button" onClick={() => setTabletOpen(true)} aria-label="Menu"><Menu className="h-5 w-5" /></button>
         <div className="tablet-rail-items">{sections.flatMap((section) => section.items).map((item) => <NavLink key={item.id} item={item} compact />)}</div>
-        <button type="button" className="tablet-logout" onClick={() => { clearAuth(); window.location.href = "/login"; }} aria-label="Se déconnecter"><LogOut className="h-5 w-5" /></button>
+        <button type="button" className="tablet-logout" onClick={() => { clearAuth(); navigate("/login", { replace: true }); }} aria-label="Se déconnecter"><LogOut className="h-5 w-5" /></button>
       </aside>
       <AnimatePresence>
         {tabletOpen && (<motion.div className="tablet-drawer-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setTabletOpen(false)}>
@@ -113,7 +115,8 @@ function TabletNavigation() {
 
 export default function AdaptiveNavigation() {
   const { deviceMode } = useSidebar();
-  const { token, user, clearAuth } = useAuth();
+  const { token, activeUser: user, clearAuth } = useAuth();
+  const navigate = useNavigate();
   const [clock, setClock] = useState(() => new Date());
   const restricted = deviceMode !== "desktop" && user?.role !== "admin" && (clock.getDay() === 0 || clock.getHours() < 7 || clock.getHours() >= 20);
   useEffect(() => {
@@ -125,11 +128,11 @@ export default function AdaptiveNavigation() {
     if (!token || !restricted) return;
     const timer = window.setTimeout(() => {
       clearAuth();
-      window.location.href = "/login?message=auto_logout";
+      navigate("/login?message=auto_logout", { replace: true });
     }, 10_000);
     return () => window.clearTimeout(timer);
-  }, [clearAuth, restricted, token]);
-  if (!token || !user) return null;
+  }, [clearAuth, navigate, restricted, token]);
+  if (!user) return null;
   if (deviceMode === "desktop") return <Sidebar />;
   return <>
     {deviceMode === "phone" ? <MobileNavigation /> : <TabletNavigation />}

@@ -41,9 +41,8 @@ import SyncCenter from "./pages/sync/SyncCenter";
 import OfflinePinSetup from "./pages/security/OfflinePinSetup";
 
 function AppLayout() {
-  const { token, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const { pathname } = useLocation();
-  const isAuthenticated = Boolean(token);
   const showWorkspaceNavigation = isAuthenticated && pathname !== "/" && pathname !== "/login";
   const { sidebarWidth } = useSidebar();
 

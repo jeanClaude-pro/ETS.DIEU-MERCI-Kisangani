@@ -45,7 +45,7 @@ const sortForRole = (items: NavigationItem[], role: Role): NavigationItem[] => {
 };
 
 export default function Welcome() {
-  const { user, clearAuth } = useAuth();
+  const { activeUser: user, clearAuth } = useAuth();
   const navigate = useNavigate();
   const role = user?.role ?? "staff";
   const roleDetails = ROLE_DETAILS[role];

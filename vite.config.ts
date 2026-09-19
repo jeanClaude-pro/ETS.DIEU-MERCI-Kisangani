@@ -41,17 +41,12 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: false,
         skipWaiting: false,
-        runtimeCaching: [
-          {
-            // Authenticated operational data always comes from the API.
-            urlPattern: ({ request, url }) =>
-              request.destination === '' &&
-              /^\/(?:api|sales|products|customers|expenses|entries|auth|exchangeRates|reports|print|users|categories)(?:\/|$)/.test(url.pathname),
-            handler: 'NetworkOnly',
-            method: 'GET',
-            options: { cacheName: 'api-network-only' },
-          },
-        ],
+        // Operational/API requests are intentionally not registered with
+        // Workbox at all. The browser owns their normal network failure and
+        // IndexedDB owns controlled offline business data. This avoids
+        // Workbox's rejected `NetworkOnly` response (`no-response`) while
+        // still guaranteeing that no API response enters Cache Storage.
+        runtimeCaching: [],
       },
       devOptions: { enabled: false },
     }),

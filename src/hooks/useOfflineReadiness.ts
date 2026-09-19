@@ -8,11 +8,9 @@ import { canSellOffline } from "../services/authorizationService";
 // `ready` is the strict gate used to block a sale (currently: a trusted
 // exchange rate must have been cached at least once — never silently fall
 // back to 1 USD = 1 FC). The other flags are surfaced for the readiness
-// banner/messaging even when they don't individually block a sale (e.g. a
-// missing category cache only degrades filtering, never the ability to sell).
+// banner/messaging. Categories are deliberately outside POS readiness.
 export interface OfflineReadiness {
   hasProducts: boolean;
-  hasCategories: boolean;
   hasExchangeRate: boolean;
   hasWalkInCustomer: boolean;
   hasLocalAuthorization: boolean;
@@ -21,7 +19,6 @@ export interface OfflineReadiness {
 
 const EMPTY: OfflineReadiness = {
   hasProducts: false,
-  hasCategories: false,
   hasExchangeRate: false,
   hasWalkInCustomer: false,
   hasLocalAuthorization: false,
@@ -29,20 +26,17 @@ const EMPTY: OfflineReadiness = {
 };
 
 async function computeReadiness(): Promise<OfflineReadiness> {
-  const [productCount, categoryCount, rate, walkIn] = await Promise.all([
+  const [productCount, rate, walkIn] = await Promise.all([
     offlineDb.products.count(),
-    offlineDb.categories.count(),
     offlineDb.exchangeRateCache.get("current"),
     offlineDb.syncMeta.get("walkInCustomer"),
   ]);
   const hasProducts = productCount > 0;
-  const hasCategories = categoryCount > 0;
   const hasExchangeRate = Boolean(rate);
   const hasWalkInCustomer = Boolean(walkIn);
   const hasLocalAuthorization = canSellOffline().allowed;
   return {
     hasProducts,
-    hasCategories,
     hasExchangeRate,
     hasWalkInCustomer,
     hasLocalAuthorization,

@@ -4,92 +4,122 @@ import * as React from "react";
 import { toast } from "react-toastify";
 import { countOfflineSalesByState } from "../lib/offlineDb";
 import { runOfflineSyncPass } from "../services/offlineSyncService";
+import {
+  ConnectivityController,
+  type ConnectivityPhase,
+  type ConnectivitySnapshot,
+} from "../services/connectivityService";
 import { serverUrl } from "../utils/constants";
-import { beginConnectivityCheck, probeBackendHealth } from "../services/connectivityService";
+import { useAuth } from "../hooks/useAuth";
 
-export type ConnectivityStatus = "online" | "offline" | "degraded" | "checking" | "reconnecting";
+export type ConnectivityStatus = ConnectivityPhase;
 
-interface ConnectivityContextValue {
-  status: ConnectivityStatus;
+interface ConnectivityContextValue extends ConnectivitySnapshot {
+  /** Compatibility alias for older consumers. */
   lastCheckedAt: number | null;
+  checkNow: () => Promise<ConnectivityStatus>;
   forceCheck: () => Promise<ConnectivityStatus>;
+  reportNetworkFailure: () => void;
 }
 
+const unavailableCheck = async (): Promise<ConnectivityStatus> => "offline";
 const ConnectivityContext = React.createContext<ConnectivityContextValue>({
   status: "checking",
+  lastSuccessfulCheck: null,
+  lastAttempt: null,
   lastCheckedAt: null,
-  forceCheck: async () => "offline",
+  consecutiveFailures: 0,
+  checkNow: unavailableCheck,
+  forceCheck: unavailableCheck,
+  reportNetworkFailure: () => undefined,
 });
 
 export const useConnectivity = () => React.useContext(ConnectivityContext);
 
-const POLL_INTERVAL_MS = 20_000;
-
 export const ConnectivityProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
-  const [status, setStatus] = React.useState<ConnectivityStatus>("checking");
-  const [lastCheckedAt, setLastCheckedAt] = React.useState<number | null>(null);
-  const inFlight = React.useRef<Promise<ConnectivityStatus> | null>(null);
-  const previousStable = React.useRef<ConnectivityStatus | null>(null);
-
-  const forceCheck = React.useCallback(async (): Promise<ConnectivityStatus> => {
-    if (inFlight.current) return inFlight.current;
-    setStatus((current) => beginConnectivityCheck(current));
-    const request = probeBackendHealth(`${serverUrl}/health`).then(async (next) => {
-      const before = previousStable.current;
-      previousStable.current = next;
-      setStatus(next);
-      setLastCheckedAt(Date.now());
-      inFlight.current = null;
-
-      if (before === "online" && next !== "online") {
-        toast.info("Connexion perdue. Le mode hors ligne est actif. Les ventes seront enregistrées sur cet appareil.");
-      }
-      if (before !== "online" && next === "online") {
-        if (before) toast.info("Connexion rétablie. Synchronisation des ventes en attente...");
-        window.dispatchEvent(new CustomEvent("backend-online"));
-      }
-      // Also drain rows created by an ambiguous request while connectivity
-      // remained nominally online. The sync engine applies retry backoff and
-      // single-flight protection, so this periodic trigger cannot overlap.
-      if (next === "online") {
-        const counts = await countOfflineSalesByState();
-        const pending = counts.PENDING + counts.PENDING_CONFIRMATION + counts.SYNCING + counts.FAILED_RETRYABLE;
-        if (pending > 0) {
-          const result = await runOfflineSyncPass();
-          if (before && result.synced > 0 && result.synced === result.processed && !result.paused && result.attention === 0) {
-            toast.success("Toutes les ventes sont synchronisées.");
-          }
-        }
-      }
-      return next;
-    }).catch(() => {
-      inFlight.current = null;
-      previousStable.current = "offline";
-      setStatus("offline");
-      return "offline" as const;
-    });
-    inFlight.current = request;
-    return request;
-  }, []);
+  const [controller] = React.useState(
+    () => new ConnectivityController(`${serverUrl}/health`),
+  );
+  const snapshot = React.useSyncExternalStore(
+    controller.subscribe,
+    controller.getSnapshot,
+    controller.getSnapshot,
+  );
+  const { token } = useAuth();
+  const previousStable = React.useRef<"online" | "offline" | "degraded" | null>(null);
+  const handledOnlineToken = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    void forceCheck();
-    const interval = globalThis.setInterval(() => { void forceCheck(); }, POLL_INTERVAL_MS);
-    const checkNow = () => { void forceCheck(); };
-    const handleVisibility = () => { if (document.visibilityState === "visible") void forceCheck(); };
-    window.addEventListener("online", checkNow);
-    window.addEventListener("offline", checkNow);
-    window.addEventListener("focus", checkNow);
+    controller.start();
+
+    const handleOnline = () => { void controller.browserOnline(); };
+    const handleOffline = () => controller.browserOffline();
+    const handleFocus = () => { void controller.activityHint(); };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void controller.activityHint();
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
     return () => {
-      globalThis.clearInterval(interval);
-      window.removeEventListener("online", checkNow);
-      window.removeEventListener("offline", checkNow);
-      window.removeEventListener("focus", checkNow);
+      controller.stop();
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [forceCheck]);
+  }, [controller]);
 
-  const value = React.useMemo(() => ({ status, lastCheckedAt, forceCheck }), [status, lastCheckedAt, forceCheck]);
+  React.useEffect(() => {
+    if (snapshot.status === "checking" || snapshot.status === "reconnecting") return;
+
+    const before = previousStable.current;
+    previousStable.current = snapshot.status;
+    if (snapshot.status !== "online") {
+      handledOnlineToken.current = null;
+      if (before === "online") {
+        toast.info("Connexion perdue. Le mode hors ligne est actif. Les ventes seront enregistrées sur cet appareil.");
+      }
+      return;
+    }
+
+    // A fresh online login is a new synchronization opportunity even when
+    // connectivity itself never transitioned.
+    if (!token || handledOnlineToken.current === token) return;
+    handledOnlineToken.current = token;
+    if (before && before !== "online") {
+      toast.info("Connexion rétablie. Synchronisation des ventes en attente...");
+    }
+    window.dispatchEvent(new CustomEvent("backend-online"));
+
+    void (async () => {
+      const counts = await countOfflineSalesByState();
+      const pending = counts.PENDING + counts.PENDING_CONFIRMATION + counts.SYNCING + counts.FAILED_RETRYABLE;
+      if (pending === 0) return;
+      const result = await runOfflineSyncPass();
+      if (result.synced > 0 && result.synced === result.processed && !result.paused && result.attention === 0) {
+        toast.success("Toutes les ventes sont synchronisées.");
+      }
+    })();
+  }, [snapshot.status, token]);
+
+  const checkNow = React.useCallback(
+    async (): Promise<ConnectivityStatus> => controller.checkNow(),
+    [controller],
+  );
+  const reportNetworkFailure = React.useCallback(
+    () => controller.reportNetworkFailure(),
+    [controller],
+  );
+  const value = React.useMemo<ConnectivityContextValue>(() => ({
+    ...snapshot,
+    lastCheckedAt: snapshot.lastAttempt,
+    checkNow,
+    forceCheck: checkNow,
+    reportNetworkFailure,
+  }), [checkNow, reportNetworkFailure, snapshot]);
+
   return <ConnectivityContext.Provider value={value}>{children}</ConnectivityContext.Provider>;
 };

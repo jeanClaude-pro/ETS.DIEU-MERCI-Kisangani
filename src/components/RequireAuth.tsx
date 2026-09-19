@@ -1,16 +1,13 @@
 import React, { useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { isOfflineSessionExpired } from "../services/authorizationService";
 import { toast } from "react-toastify";
 
 export const RequireAuth: React.FC<React.PropsWithChildren> = ({
   children,
 }) => {
-  const { token, loading, offlineSession } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
-  const hasOfflineSession = Boolean(offlineSession) && !isOfflineSessionExpired(offlineSession!);
-  const isAuthenticated = Boolean(token) || hasOfflineSession;
 
   // If not logged in, show toast once
   useEffect(() => {

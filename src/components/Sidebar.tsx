@@ -12,7 +12,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useSidebar } from "../context/SidebarContext";
 import { isNavigationItemActive, permittedNavigationSections } from "./navigationConfig";
@@ -42,7 +42,8 @@ export default function Sidebar() {
   const { isCollapsed, setIsCollapsed, isMobile, isMobileOpen, setIsMobileOpen } = useSidebar();
   const [currentTime, setCurrentTime] = useState(new Date());
   const location = useLocation();
-  const { token, user, clearAuth } = useAuth();
+  const { activeUser: user, isAuthenticated, clearAuth } = useAuth();
+  const navigate = useNavigate();
   const { pending, attention } = useOfflineQueueCounts();
 
   const sidebarRef = useRef<HTMLElement>(null);
@@ -50,7 +51,7 @@ export default function Sidebar() {
   const touchStartY = useRef(0);
   const touchEndX = useRef(0);
 
-  const isAuthed = Boolean(token && user);
+  const isAuthed = isAuthenticated && Boolean(user);
   const isNonAdmin = user?.role !== "admin";
   const isRestricted = isNonAdmin && hasRestrictedAccess(user?.role);
   const showTimeWarning = isRestricted;
@@ -69,12 +70,12 @@ export default function Sidebar() {
       if (isRestricted) {
         const logoutTimer = setTimeout(() => {
           clearAuth();
-          window.location.href = "/login?message=auto_logout";
+          navigate("/login?message=auto_logout", { replace: true });
         }, 10000);
         return () => clearTimeout(logoutTimer);
       }
     }
-  }, [clearAuth, isAuthed, isNonAdmin, isRestricted, currentTime]);
+  }, [clearAuth, isAuthed, isNonAdmin, isRestricted, currentTime, navigate]);
 
   // Close mobile sidebar when route changes
   useEffect(() => {
@@ -128,7 +129,7 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     clearAuth();
-    window.location.href = "/login";
+    navigate("/login", { replace: true });
   };
 
   const formatTime = (date: Date): string =>

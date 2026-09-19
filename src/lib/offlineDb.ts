@@ -22,7 +22,10 @@ export type SyncState =
 export interface OfflineProduct {
   productId: string;
   name: string;
-  category: string;
+  /** Retained for compatibility with the stock module; POS never depends on it. */
+  category?: string;
+  sku?: string;
+  price?: number;
   region: "Butembo" | "China";
   regionCode: "Bbbb" | "Cnnn";
   stock: number;
@@ -30,6 +33,8 @@ export interface OfflineProduct {
   unit: string;
   unitCost: number;
   status: "active" | "inactive";
+  serverUpdatedAt?: string;
+  synchronizedAt?: string;
 }
 
 export interface OfflineExchangeRate {

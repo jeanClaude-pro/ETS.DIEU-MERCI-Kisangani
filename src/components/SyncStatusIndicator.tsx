@@ -4,11 +4,13 @@ import { AlertTriangle, CloudCheck, CloudOff, KeyRound, LoaderCircle, RefreshCw,
 import { useConnectivity } from "../context/ConnectivityContext";
 import { useOfflineQueueCounts } from "../hooks/useOfflineQueue";
 import { getSyncProgress, subscribeSyncProgress } from "../services/offlineSyncService";
+import { useOfflineReadiness } from "../hooks/useOfflineReadiness";
 
 export default function SyncStatusIndicator() {
   const connectivity = useConnectivity();
   const { counts, pending, attention } = useOfflineQueueCounts();
   const progress = useSyncExternalStore(subscribeSyncProgress, getSyncProgress, getSyncProgress);
+  const offlineReadiness = useOfflineReadiness();
 
   let label = "En ligne · Synchronisé";
   let icon = <CloudCheck className="h-3.5 w-3.5" />;
@@ -29,9 +31,11 @@ export default function SyncStatusIndicator() {
     icon = <RefreshCw className="h-3.5 w-3.5 motion-safe:animate-spin" />;
     tone = "border-blue-200 bg-blue-50 text-blue-700";
   } else if (connectivity.status === "degraded") {
-    label = "Service temporairement indisponible";
-    icon = <ServerOff className="h-3.5 w-3.5" />;
-    tone = "border-orange-200 bg-orange-50 text-orange-800";
+    label = offlineReadiness.ready
+      ? pending > 0 ? `Hors ligne · ${pending} vente${pending > 1 ? "s" : ""} en attente` : "Hors ligne · Mode de vente actif"
+      : "Service temporairement indisponible";
+    icon = offlineReadiness.ready ? <CloudOff className="h-3.5 w-3.5" /> : <ServerOff className="h-3.5 w-3.5" />;
+    tone = offlineReadiness.ready ? "border-slate-300 bg-slate-100 text-slate-700" : "border-orange-200 bg-orange-50 text-orange-800";
   } else if (connectivity.status === "checking" || connectivity.status === "reconnecting") {
     label = connectivity.status === "checking" ? "Vérification de la connexion..." : "Reconnexion...";
     icon = <LoaderCircle className="h-3.5 w-3.5 motion-safe:animate-spin" />;

@@ -4,6 +4,7 @@ import type { AuthState, OfflineSession, User } from "../types/auth";
 import { AuthContext } from "./auth-context";
 import { fetchMe, HttpError, NetworkError } from "../services/authService";
 import { isOfflineSessionExpired } from "../services/authorizationService";
+import { authenticationStatus, userFromOfflineSession } from "../services/authStateMachine";
 
 const OFFLINE_SESSION_STORAGE_KEY = "offlineSession";
 
@@ -31,6 +32,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
     token: null,
     user: null,
     loading: true,
+    authRequired: false,
     verified: false,
     offlineSession: null,
   });
@@ -45,12 +47,18 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
     const offlineSession = readStoredOfflineSession();
 
     if (!token) {
-      setState({ token: null, user: null, loading: false, verified: false, offlineSession });
+      setState({ token: null, user: null, loading: false, authRequired: false, verified: false, offlineSession });
       return;
     }
 
-    const user: User | null = userRaw ? JSON.parse(userRaw) : null;
-    setState({ token, user, loading: false, verified: false, offlineSession });
+    let user: User | null = null;
+    try { user = userRaw ? JSON.parse(userRaw) as User : null; } catch { localStorage.removeItem("user"); }
+    if (!user) {
+      localStorage.removeItem("token");
+      setState({ token: null, user: null, loading: false, authRequired: false, verified: false, offlineSession });
+      return;
+    }
+    setState({ token, user, loading: false, authRequired: false, verified: false, offlineSession });
 
     // The cached user is only a fast first paint. Refresh role/status/module
     // permissions from the server so a change an admin made elsewhere (or an
@@ -73,7 +81,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
         }
         localStorage.removeItem("token");
         localStorage.removeItem("user");
-        setState((s) => ({ token: null, user: null, loading: false, verified: false, offlineSession: s.offlineSession }));
+        setState((s) => ({ token: null, user: null, loading: false, authRequired: true, verified: false, offlineSession: s.offlineSession }));
       });
     void revalidate();
     const handleBackendOnline = () => { void revalidate(); };
@@ -92,7 +100,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
       // A real online login supersedes any device-local PIN session — never
       // run both at once, so downstream code has one unambiguous identity.
       if (token) sessionStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);
-      setState((s) => ({ ...s, token, user, verified: true, offlineSession: token ? null : s.offlineSession }));
+      setState((s) => ({ ...s, token, user, loading: false, authRequired: false, verified: true, offlineSession: token ? null : s.offlineSession }));
     },
     []
   );
@@ -100,12 +108,15 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
   const clearAuth = React.useCallback(() => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    setState((s) => ({ token: null, user: null, loading: false, verified: false, offlineSession: s.offlineSession }));
+    sessionStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);
+    setState({ token: null, user: null, loading: false, authRequired: false, verified: false, offlineSession: null });
   }, []);
 
   const setOfflineSession = React.useCallback((session: OfflineSession) => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     sessionStorage.setItem(OFFLINE_SESSION_STORAGE_KEY, JSON.stringify(session));
-    setState((s) => ({ ...s, offlineSession: session }));
+    setState({ token: null, user: null, loading: false, authRequired: false, verified: false, offlineSession: session });
   }, []);
 
   const clearOfflineSession = React.useCallback(() => {
@@ -113,7 +124,32 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
     setState((s) => ({ ...s, offlineSession: null }));
   }, []);
 
-  const value = { ...state, setAuth, clearAuth, setOfflineSession, clearOfflineSession };
+  React.useEffect(() => {
+    const requireAuthentication = () => {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      sessionStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);
+      setState({ token: null, user: null, loading: false, authRequired: true, verified: false, offlineSession: null });
+    };
+    window.addEventListener("auth-required", requireAuthentication);
+    return () => window.removeEventListener("auth-required", requireAuthentication);
+  }, []);
+
+  const activeOfflineSession = state.offlineSession && !isOfflineSessionExpired(state.offlineSession)
+    ? state.offlineSession
+    : null;
+  const activeUser = state.token && state.user ? state.user : userFromOfflineSession(activeOfflineSession);
+  const status = authenticationStatus(state, activeOfflineSession);
+  const value = {
+    ...state,
+    status,
+    activeUser,
+    isAuthenticated: status === "ONLINE_AUTHENTICATED" || status === "OFFLINE_AUTHENTICATED",
+    setAuth,
+    clearAuth,
+    setOfflineSession,
+    clearOfflineSession,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

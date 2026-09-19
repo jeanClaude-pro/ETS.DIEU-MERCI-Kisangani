@@ -32,12 +32,20 @@ export interface AuthState {
   token: string | null;
   user: User | null;
   loading: boolean;
+  authRequired: boolean;
   // True once this session's role/status/permissions have been confirmed
   // against the server (not just read from localStorage). False while
   // running on a cached session because the device is offline (Part K).
   verified: boolean;
   offlineSession: OfflineSession | null;
 }
+
+export type AuthenticationStatus =
+  | "INITIALIZING"
+  | "ONLINE_AUTHENTICATED"
+  | "OFFLINE_AUTHENTICATED"
+  | "UNAUTHENTICATED"
+  | "AUTH_REQUIRED";
 
 export interface LoginPayload {
   email: string;

@@ -7,7 +7,7 @@ import {
   offlineDb,
   type OfflineSale,
 } from "../lib/offlineDb.ts";
-import { snapshotProducts } from "./offlineProductSnapshot.ts";
+import { refreshFromServer } from "./offlineProductSnapshot.ts";
 
 const BACKOFF_SCHEDULE_MS = [5_000, 15_000, 30_000, 60_000];
 
@@ -103,7 +103,6 @@ export async function syncOfflineSale(sale: OfflineSale): Promise<SyncOutcome> {
       syncedAt: new Date().toISOString(),
       lastError: null,
     });
-    await reconcileProductsAfterSync([...new Set(sale.payload.items.map((item) => item.productId))]);
     return "synced";
   }
 
@@ -118,20 +117,6 @@ export async function syncOfflineSale(sale: OfflineSale): Promise<SyncOutcome> {
   await incrementAttempts(sale.clientSaleId);
   await markSyncState(sale.clientSaleId, "FAILED_RETRYABLE", { lastError: reason });
   return "retry-later";
-}
-
-async function reconcileProductsAfterSync(productIds: string[]): Promise<void> {
-  if (productIds.length === 0) return;
-  try {
-    const response = await fetch(`${serverUrl}/products/offline-snapshot`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
-    });
-    if (!response.ok) return;
-    const data = await response.json();
-    if (Array.isArray(data?.products) && data.products.length) await snapshotProducts(data.products);
-  } catch {
-    // A later successful snapshot will reconcile local projected stock.
-  }
 }
 
 let activeSync: Promise<{ processed: number; paused: boolean; synced: number; attention: number }> | null = null;
@@ -156,6 +141,13 @@ export function runOfflineSyncPass(): Promise<{ processed: number; paused: boole
         if (outcome === "conflict") attention += 1;
         publishProgress({ completed: processed, synced, attention, pausedForAuth: outcome === "paused" });
         if (outcome === "paused") { paused = true; break; }
+      }
+      if (synced > 0 && !paused) {
+        const token = localStorage.getItem("token") || "";
+        try { await refreshFromServer(token); } catch {
+          // Queue durability is independent of snapshot refresh. NewSale also
+          // retries refresh whenever authenticated connectivity is online.
+        }
       }
       await cleanupSyncedHistory();
       return { processed, paused, synced, attention };
