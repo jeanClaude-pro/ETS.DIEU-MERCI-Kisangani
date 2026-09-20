@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { Calculator, DollarSign, RefreshCw } from "lucide-react";
 import { REGION_CODE_MAP } from "../utils/constants";
+import { useConnectivity } from "../context/ConnectivityContext";
 
 interface SortieForm {
   reason: string;
@@ -32,6 +33,7 @@ async function readJsonSafe(res: Response) {
 }
 
 export default function Sortie() {
+  const connectivity = useConnectivity();
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +151,10 @@ export default function Sortie() {
   async function handleSortie(e: React.FormEvent) {
     e.preventDefault();
     if (!isFormValid) return;
+    if (connectivity.status !== "online") {
+      setError("Connexion requise pour cette opération d'approbation.");
+      return;
+    }
 
     setSubmitting(true);
     setMessage(null);

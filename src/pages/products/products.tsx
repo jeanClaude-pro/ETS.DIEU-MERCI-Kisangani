@@ -7,6 +7,8 @@ import { toast } from "react-toastify";
 import type { Product, Region } from "../../types";
 import { getProductStatus, units, serverUrl, REGIONS, REGION_CODE_MAP, formatProductLabel } from "../../utils/constants";
 import CategoriesDropdown from "../../components/CategoriesDropdown";
+import { useConnectivity } from "../../context/ConnectivityContext";
+import { refreshFromServer, subscribeLocal } from "../../services/offlineProductSnapshot";
 
 interface User {
   _id: string;
@@ -16,6 +18,7 @@ interface User {
 }
 
 export default function Products() {
+  const connectivity = useConnectivity();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -60,16 +63,8 @@ export default function Products() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${serverUrl}/products`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setProducts(data);
-      } else {
-        console.error("Failed to fetch products:", await response.text());
+      if (connectivity.status === "online") {
+        await refreshFromServer(localStorage.getItem("token") || "");
       }
     } catch (error) {
       console.error("Error fetching products:", error);
@@ -79,6 +74,10 @@ export default function Products() {
   };
 
   const createProduct = async (productData: Partial<Product>) => {
+    if (connectivity.status !== "online") {
+      toast.info("Connexion requise pour ajouter un article.");
+      return;
+    }
     try {
       const response = await fetch(`${serverUrl}/products`, {
         method: "POST",
@@ -104,6 +103,10 @@ export default function Products() {
   };
 
   const updateProduct = async (id: string, productData: Partial<Product>) => {
+    if (connectivity.status !== "online") {
+      toast.info("Connexion requise pour modifier un article.");
+      return;
+    }
     try {
       const response = await fetch(`${serverUrl}/products/${id}`, {
         method: "PUT",
@@ -131,6 +134,10 @@ export default function Products() {
   };
 
   const deleteProduct = async (id: string) => {
+    if (connectivity.status !== "online") {
+      toast.info("Connexion requise pour supprimer un article.");
+      return;
+    }
     if (!confirm("Are you sure you want to delete this product?")) return;
     try {
       const response = await fetch(`${serverUrl}/products/${id}`, {
@@ -153,8 +160,31 @@ export default function Products() {
   };
 
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    const unsubscribe = subscribeLocal((snapshot) => {
+      setProducts(snapshot.products.map((product) => ({
+        _id: product.productId,
+        name: product.name,
+        description: "",
+        price: product.price || 0,
+        category: product.category || "",
+        brand: "",
+        stock: product.stock,
+        minStock: product.minStock,
+        unit: product.unit,
+        weight: 0,
+        unitCost: product.unitCost,
+        status: product.status,
+        region: product.region,
+        regionCode: product.regionCode,
+        createdAt: "",
+        updatedAt: product.serverUpdatedAt || "",
+      })));
+      setLoading(false);
+    }, () => setLoading(false));
+    void fetchProducts();
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectivity.status]);
 
   const resetForm = () => {
     setFormData({

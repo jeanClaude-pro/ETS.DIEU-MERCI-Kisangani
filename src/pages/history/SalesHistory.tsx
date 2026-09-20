@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -28,6 +29,15 @@ import {
   normalizeSaleReceipt,
   printSaleReceiptAndStub,
 } from "../../services/printService";
+import { useConnectivity } from "../../context/ConnectivityContext";
+import {
+  cacheServerSales,
+  getMergedBusinessSales,
+  refreshBusinessSalesSnapshot,
+  subscribeMergedBusinessSales,
+  type BusinessSale,
+} from "../../services/localBusinessReadModel";
+import { localReportRange } from "../../services/localReportService";
 
 interface SaleItem {
   productId: string;
@@ -84,6 +94,11 @@ interface Sale {
   editedAt?: string;
   editHistory?: EditHistoryEntry[];
   type?: string;
+  clientSaleId?: string;
+  receiptNumber?: string;
+  barcodeToken?: string;
+  localSyncState?: string;
+  isLocalOnly?: boolean;
 }
 
 interface Product {
@@ -162,6 +177,7 @@ const getCurrentMonth = (): string => {
 const getCurrentYear = (): number => toKisanganiDate().getUTCFullYear();
 
 export default function SalesHistory() {
+  const connectivity = useConnectivity();
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -233,6 +249,7 @@ export default function SalesHistory() {
     return () => {
       window.removeEventListener("salesUpdated", handleSalesUpdate);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetch a server-filtered page; search is debounced to avoid one request per keystroke.
@@ -240,7 +257,16 @@ export default function SalesHistory() {
     const timer = window.setTimeout(fetchSales, 300);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryParams, currentPage, searchTerm, showEditedSales]);
+  }, [queryParams, currentPage, searchTerm, showEditedSales, connectivity.status]);
+
+  useEffect(() => {
+    const range = currentLocalRange();
+    const subscription = subscribeMergedBusinessSales((rows) => {
+      if (connectivity.status !== "online") applyLocalSales(rows);
+    }, undefined, range);
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectivity.status, queryParams, currentPage, searchTerm, showEditedSales, timeframeType]);
 
   // Fetch current user from API or localStorage
   const fetchCurrentUser = async () => {
@@ -325,10 +351,51 @@ export default function SalesHistory() {
     return params.toString();
   };
 
+  const currentLocalRange = () => {
+    switch (timeframeType) {
+      case "custom": return localReportRange({ from: queryParams.from, to: queryParams.to });
+      case "day": return localReportRange({ date: queryParams.date });
+      case "month": return localReportRange({ year: queryParams.year, month: queryParams.month });
+      case "year": return localReportRange({ year: queryParams.year });
+      default: return localReportRange();
+    }
+  };
+
+  const applyLocalSales = (knownSales: BusinessSale[]) => {
+    const range = currentLocalRange();
+    const term = searchTerm.trim().toLocaleLowerCase("fr");
+    let rows = knownSales.filter((sale) => {
+      const time = new Date(sale.createdAt).getTime();
+      if (time < range.start.getTime() || time > range.end.getTime()) return false;
+      if (queryParams.type && sale.type !== queryParams.type) return false;
+      if (queryParams.status && sale.status !== queryParams.status) return false;
+      if (queryParams.customerPhone && sale.customer.phone !== queryParams.customerPhone) return false;
+      if (showEditedSales && !sale.editedBy && !Array.isArray(sale.editHistory)) return false;
+      return !term || [sale.saleId, sale.receiptNumber, sale.customer.name, sale.customer.phone, sale.salesPerson]
+        .some((value) => String(value || "").toLocaleLowerCase("fr").includes(term));
+    });
+    rows = projectSalesToRegion(rows, queryParams.region as RegionCodeFilter);
+    const totalRecords = rows.length;
+    const revenue = rows.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+    const pageRows = rows.slice((currentPage - 1) * 50, currentPage * 50) as unknown as Sale[];
+    setSales(filterValidSales(pageRows));
+    setSummaryStats({ totalRecords, revenue, expenses: 0, net: revenue, salesCount: totalRecords, expensesCount: 0 });
+    setPagination({ totalRecords, totalPages: Math.max(1, Math.ceil(totalRecords / 50)), currentPage, limit: 50 });
+    setTimeframeMetadata({ description: range.description, start: range.start.toISOString(), end: range.end.toISOString(), query: { from: queryParams.from || null, to: queryParams.to || null, date: queryParams.date || null, year: queryParams.year || null, month: queryParams.month || null } });
+    updateEditedSales(pageRows);
+  };
+
+  const loadLocalSales = async () => applyLocalSales(await getMergedBusinessSales(currentLocalRange()));
+
   const fetchSales = async () => {
     try {
       setLoading(true);
       setError(null);
+      await loadLocalSales();
+      if (connectivity.status !== "online") return;
+
+      const token = localStorage.getItem("token") || "";
+      await refreshBusinessSalesSnapshot(token).catch(() => undefined);
       
       const queryString = buildQueryString();
       const url = `${import.meta.env.VITE_API_URL}/sales${queryString ? `?${queryString}` : ''}`;
@@ -348,6 +415,7 @@ export default function SalesHistory() {
           
           // Filter out expenses and invalid sales
           const validSales = filterValidSales(fetchedSales);
+          await cacheServerSales(validSales as unknown as BusinessSale[]);
           
           // Update sales state
           setSales(validSales);
@@ -371,7 +439,8 @@ export default function SalesHistory() {
       }
     } catch (error) {
       console.error("Error loading sales:", error);
-      setError("Failed to load sales. Please check your connection.");
+      // A valid local read model is an expected offline mode, not an error.
+      await loadLocalSales();
     } finally {
       setLoading(false);
     }
@@ -805,7 +874,7 @@ export default function SalesHistory() {
 
   const printSavedSale = (sale: Sale) => {
     const receipt = normalizeSaleReceipt(getCompleteSaleForReceipt(sale), { type: "sale" });
-    void printSaleReceiptAndStub(receipt)
+    void printSaleReceiptAndStub(receipt, { directPrintMode: sale.localSyncState ? "none" : "remote" })
       .then((destination) => {
         setMessage(
           destination === "usb"
@@ -830,6 +899,10 @@ export default function SalesHistory() {
   };
 
   const openEditModal = async (sale: Sale) => {
+    if (sale.localSyncState && sale.localSyncState !== "SYNCED") {
+      setError("Connexion requise pour corriger une vente locale non synchronisée.");
+      return;
+    }
     // Regional rows are read-only projections; editing must always load the
     // complete original receipt so hidden items from the other region survive.
     const fullSale = sales.find((candidate) => candidate._id === sale._id) || sale;
@@ -1629,6 +1702,19 @@ export default function SalesHistory() {
                         >
                           {sale.status}
                         </span>
+                        {sale.localSyncState && (
+                          <div className={`mt-1 text-[11px] font-semibold ${
+                            sale.localSyncState === "CONFLICT" || sale.localSyncState === "FAILED_PERMANENT"
+                              ? "text-amber-700"
+                              : sale.localSyncState === "SYNCED" ? "text-emerald-700" : "text-blue-700"
+                          }`}>
+                            {sale.localSyncState === "SYNCED"
+                              ? "Synchronisée"
+                              : sale.localSyncState === "CONFLICT" || sale.localSyncState === "FAILED_PERMANENT"
+                                ? "À vérifier"
+                                : "En attente de synchronisation"}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(sale.createdAt)}
@@ -1671,15 +1757,17 @@ export default function SalesHistory() {
                                 onClick={() => openEditModal(sale)}
                                 disabled={
                                   sale.status === "voided" ||
-                                  sale.status === "corrected"
+                                  sale.status === "corrected" ||
+                                  Boolean(sale.localSyncState && sale.localSyncState !== "SYNCED")
                                 }
                                 className={`p-1 rounded ${
                                   sale.status === "voided" ||
-                                  sale.status === "corrected"
+                                  sale.status === "corrected" ||
+                                  Boolean(sale.localSyncState && sale.localSyncState !== "SYNCED")
                                     ? "text-gray-400 cursor-not-allowed"
                                     : "text-yellow-600 hover:text-yellow-900"
                                 }`}
-                                title="Edit Sale"
+                                title={sale.localSyncState && sale.localSyncState !== "SYNCED" ? "Connexion requise" : "Edit Sale"}
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
@@ -1692,13 +1780,13 @@ export default function SalesHistory() {
                               </button>
                               <button
                                 onClick={() => handleVoidSale(sale)}
-                                disabled={sale.status === "voided"}
+                                disabled={sale.status === "voided" || Boolean(sale.localSyncState && sale.localSyncState !== "SYNCED")}
                                 className={`p-1 rounded ${
-                                  sale.status === "voided"
+                                  sale.status === "voided" || (sale.localSyncState && sale.localSyncState !== "SYNCED")
                                     ? "text-gray-400 cursor-not-allowed"
                                     : "text-red-600 hover:text-red-900"
                                 }`}
-                                title="Void Sale"
+                                title={sale.localSyncState && sale.localSyncState !== "SYNCED" ? "Connexion requise" : "Void Sale"}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>

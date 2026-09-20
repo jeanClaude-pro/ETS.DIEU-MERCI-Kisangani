@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import RegionFilterPills from "../../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../../types";
+import { useConnectivity } from "../../context/ConnectivityContext";
+import { offlineDb } from "../../lib/offlineDb";
+import { buildLocalAnalytics, localReportRange } from "../../services/localReportService";
+import { cacheReport, getCachedReport, getMergedBusinessSales, refreshBusinessSalesSnapshot, subscribeMergedBusinessSales } from "../../services/localBusinessReadModel";
 
 interface DashboardStats {
   totalRevenue: number;
@@ -31,18 +35,61 @@ const serverUrl = import.meta.env.VITE_API_URL;
 type RegionFilter = RegionCodeFilter;
 
 export default function Dashboard() {
+  const connectivity = useConnectivity();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [usingLocalData, setUsingLocalData] = useState(false);
   const [loading, setLoading] = useState(true);
   const [regionFilter, setRegionFilter] = useState<RegionFilter>("");
 
   useEffect(() => {
     fetchDashboardStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [regionFilter]);
+  }, [regionFilter, connectivity.status]);
+
+  useEffect(() => {
+    const range = localReportRange();
+    const subscription = subscribeMergedBusinessSales(() => {
+      if (connectivity.status !== "online") void loadLocalDashboard();
+    }, undefined, range);
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectivity.status, regionFilter]);
+
+  const loadLocalDashboard = async () => {
+    const dashboardKey = `dashboard:${regionFilter || "all"}`;
+    const range = localReportRange();
+    const [sales, products, cachedDashboard] = await Promise.all([
+      getMergedBusinessSales(range),
+      offlineDb.products.toArray(),
+      getCachedReport(dashboardKey),
+    ]);
+    const cachedStats = cachedDashboard?.payload?.data as Partial<DashboardStats> | undefined;
+    const report = buildLocalAnalytics(sales, localReportRange(), regionFilter).data;
+    const scopedProducts = regionFilter ? products.filter((product) => product.regionCode === regionFilter) : products;
+    setStats({
+      totalRevenue: report.totalRevenue,
+      totalSales: report.totalSales,
+      totalProducts: scopedProducts.length,
+      totalCustomers: Number(cachedStats?.totalCustomers ?? report.totalCustomers),
+      recentSales: sales.filter((sale) => {
+        const time = new Date(sale.createdAt).getTime();
+        return time >= range.start.getTime() && time <= range.end.getTime() &&
+          (!regionFilter || sale.items.some((item) => item.regionCode === regionFilter));
+      }).slice(0, 5),
+      lowStockProducts: scopedProducts.filter((product) => product.stock < 100).sort((a, b) => a.stock - b.stock).slice(0, 5),
+      revenueGrowth: report.recentTrends.revenueGrowth,
+      salesGrowth: report.recentTrends.salesGrowth,
+      customerGrowth: report.recentTrends.customerGrowth,
+    });
+    setUsingLocalData(true);
+  };
 
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
+      await loadLocalDashboard();
+      if (connectivity.status !== "online") return;
+      await refreshBusinessSalesSnapshot(localStorage.getItem("token") || "").catch(() => undefined);
       const params = new URLSearchParams();
       if (regionFilter) params.set("region", regionFilter);
       const response = await fetch(`${serverUrl}/reports/dashboard?${params}`, {
@@ -53,10 +100,12 @@ export default function Dashboard() {
       });
       if (!response.ok) throw new Error(`Failed to fetch dashboard report: ${response.status}`);
       const payload = await response.json();
+      await cacheReport(`dashboard:${regionFilter || "all"}`, payload, localReportRange().start.toISOString(), localReportRange().end.toISOString());
       setStats(payload.data);
+      setUsingLocalData(false);
     } catch (error) {
       console.error("Error fetching dashboard report:", error);
-      setStats(null);
+      await loadLocalDashboard();
     } finally {
       setLoading(false);
     }
@@ -120,6 +169,7 @@ export default function Dashboard() {
           <p className="text-gray-600">
             Aperçu de la performance de votre entreprise
           </p>
+          {usingLocalData && <p className="mt-1 text-xs font-semibold text-blue-700">Hors ligne · Données locales incluant les ventes en attente</p>}
         </div>
         <RegionFilterPills value={regionFilter} onChange={setRegionFilter} />
       </div>

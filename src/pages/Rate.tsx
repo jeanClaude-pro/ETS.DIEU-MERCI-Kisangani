@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   DollarSign, 
   RefreshCw, 
   History, 
@@ -11,6 +11,8 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
+import { useConnectivity } from '../context/ConnectivityContext';
+import { offlineDb } from '../lib/offlineDb';
 
 interface TauxChange {
   _id: string;
@@ -43,6 +45,7 @@ interface HistoriqueTaux {
 const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function TauxChange() {
+  const connectivity = useConnectivity();
   const [tauxActuel, setTauxActuel] = useState<TauxChange | null>(null);
   const [historiqueTaux, setHistoriqueTaux] = useState<HistoriqueTaux[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +65,19 @@ export default function TauxChange() {
     try {
       setLoading(true);
       setError(null);
+      const cached = await offlineDb.exchangeRateCache.get("current");
+      if (cached) {
+        setTauxActuel({
+          _id: cached.rateId || "cached",
+          rate: cached.rate,
+          effectiveFrom: cached.effectiveFrom || cached.cachedAt,
+          createdBy: { _id: "", username: "Cache local", email: "" },
+          isActive: true,
+          createdAt: cached.cachedAt,
+          updatedAt: cached.cachedAt,
+        });
+      }
+      if (connectivity.status !== "online") return;
 
       // Charger le taux actuel
       const reponseActuel = await fetch(`${API_BASE}/exchange-rates/current`, {
@@ -108,9 +124,7 @@ export default function TauxChange() {
 
     } catch (error) {
       console.error('Erreur lors du chargement des taux:', error);
-      setError('Échec du chargement des taux de change');
-      setTauxActuel(null);
-      setHistoriqueTaux([]);
+      if (!await offlineDb.exchangeRateCache.get("current")) setError('Échec du chargement des taux de change');
     } finally {
       setLoading(false);
     }
@@ -118,10 +132,15 @@ export default function TauxChange() {
 
   useEffect(() => {
     chargerTaux();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectivity.status]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (connectivity.status !== "online") {
+      setError('Connexion requise pour modifier le taux de change');
+      return;
+    }
     
     if (!form.rate || parseFloat(form.rate) <= 0) {
       setError('Veuillez entrer un taux de change valide');
@@ -156,9 +175,9 @@ export default function TauxChange() {
       } else {
         setError(data.error || `Échec de la mise à jour: ${response.status}`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la mise à jour du taux:', error);
-      setError(error?.message || 'Échec de la mise à jour du taux de change');
+      setError(error instanceof Error ? error.message : 'Échec de la mise à jour du taux de change');
     } finally {
       setSubmitting(false);
     }
@@ -173,7 +192,7 @@ export default function TauxChange() {
         hour: '2-digit',
         minute: '2-digit'
       });
-    } catch (error) {
+    } catch {
       return 'Date invalide';
     }
   };

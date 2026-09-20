@@ -23,6 +23,16 @@ import {
 import jsPDF from "jspdf";
 import RegionFilterPills from "../../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../../types";
+import { useConnectivity } from "../../context/ConnectivityContext";
+import { buildLocalAnalytics, isRangeCovered, localReportRange } from "../../services/localReportService";
+import {
+  cacheReport,
+  getCachedReport,
+  getSalesCoverage,
+  getMergedBusinessSales,
+  refreshBusinessSalesSnapshot,
+  subscribeMergedBusinessSales,
+} from "../../services/localBusinessReadModel";
 
 
 interface AnalyticsData {
@@ -165,7 +175,10 @@ type RegionFilter = RegionCodeFilter;
 
 
 export default function Analytics() {
+  const connectivity = useConnectivity();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [usingLocalData, setUsingLocalData] = useState(false);
+  const [localNotice, setLocalNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<"day" | "week" | "month" | "year">(
     "day"
@@ -189,25 +202,69 @@ export default function Analytics() {
   useEffect(() => {
     fetchAnalytics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeframe, selectedYear, selectedDate, regionFilter]);
+  }, [timeframe, selectedYear, selectedDate, regionFilter, connectivity.status]);
+
+  useEffect(() => {
+    const params = reportParams();
+    const range = localReportRange(Object.fromEntries(params.entries()));
+    const subscription = subscribeMergedBusinessSales(() => {
+      if (connectivity.status !== "online") void loadLocalAnalytics();
+    }, undefined, range);
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectivity.status, timeframe, selectedYear, selectedDate, regionFilter]);
+
+  const reportParams = () => {
+    const params = new URLSearchParams(getTimeframeParams(
+      shouldSeeOnlyTodayData() ? "day" : timeframe,
+      selectedYear,
+      shouldSeeOnlyTodayData() ? getTodayDate() : selectedDate,
+    ));
+    if (regionFilter) params.set("region", regionFilter);
+    return params;
+  };
+
+  const loadLocalAnalytics = async () => {
+    const params = reportParams();
+    const query = Object.fromEntries(params.entries());
+    const range = localReportRange(query);
+    const [sales, cached, coverage] = await Promise.all([
+      getMergedBusinessSales(range),
+      getCachedReport(`analytics:${params.toString()}`),
+      getSalesCoverage(),
+    ]);
+    const cachedData = cached?.payload?.data as Partial<AnalyticsData> | undefined;
+    const local = buildLocalAnalytics(sales, range, regionFilter, {
+      totalEntries: cachedData?.totalEntries,
+      totalValidatedExpenses: cachedData?.totalValidatedExpenses,
+    });
+    setAnalytics(local.data);
+    setReservationsStats({ count: local.reservations.count, value: local.reservations.value });
+    setTimeframeData({ description: range.description, start: range.start.toISOString(), end: range.end.toISOString() });
+    setAvailableYears([...new Set(sales.map((sale) => Number(new Date(new Date(sale.createdAt).getTime() + 7_200_000).toISOString().slice(0, 4))))].sort((a, b) => b - a));
+    setUsingLocalData(true);
+    const covered = isRangeCovered(range, coverage);
+    setLocalNotice(covered
+      ? `Rapport local · base serveur mise à jour à ${new Date(coverage.updatedAt || cached?.cachedAt || Date.now()).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
+      : "Rapport local · période partiellement mise en cache; toutes les ventes locales connues sont incluses");
+  };
 
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams(
-        getTimeframeParams(
-          shouldSeeOnlyTodayData() ? "day" : timeframe,
-          selectedYear,
-          shouldSeeOnlyTodayData() ? getTodayDate() : selectedDate,
-        ),
-      );
-      if (regionFilter) params.set("region", regionFilter);
+      await loadLocalAnalytics();
+      if (connectivity.status !== "online") return;
+      const params = reportParams();
+      await refreshBusinessSalesSnapshot(localStorage.getItem("token") || "");
       const response = await fetch(`${serverUrl}/reports/analytics?${params}`, {
         headers: getHeaders(),
       });
       if (!response.ok) throw new Error(`Failed to fetch analytics report: ${response.status}`);
       const payload = await response.json();
+      await cacheReport(`analytics:${params.toString()}`, payload, payload.timeframe?.start || "", payload.timeframe?.end || "");
       setAnalytics(payload.data);
+      setUsingLocalData(false);
+      setLocalNotice("");
       setReservationsStats({
         count: Number(payload.reservations?.count || 0),
         value: Number(payload.reservations?.value || 0),
@@ -217,7 +274,7 @@ export default function Analytics() {
       setAvailableYears(years);
     } catch (error) {
       console.error("Error fetching analytics report:", error);
-      setAnalytics(null);
+      await loadLocalAnalytics();
     } finally {
       setLoading(false);
     }
@@ -599,6 +656,7 @@ export default function Analytics() {
               <p className="text-sm sm:text-base text-gray-600 mt-2">
                 Analyse approfondie de la performance de votre entreprise
               </p>
+              {usingLocalData && <p className="mt-1 text-xs font-semibold text-blue-700">{localNotice}</p>}
             </div>
             <div className="flex items-center gap-3">
               {shouldSeeOnlyTodayData() && (

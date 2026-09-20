@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { DollarSign, RefreshCw, FileText, User, Calculator } from "lucide-react";
 import { REGION_CODE_MAP } from "../utils/constants";
+import { useConnectivity } from "../context/ConnectivityContext";
 import {
   printHtmlDocumentsSequentially,
   buildCashEntryReceiptHtml,
@@ -58,6 +59,7 @@ async function readJsonSafe(res: Response) {
 }
 
 export default function Entry() {
+  const connectivity = useConnectivity();
   const [submitting, setSubmitting] = useState(false);
   const [receiptData, setReceiptData] = useState<CashEntryReceiptData | null>(null);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
@@ -217,6 +219,10 @@ export default function Entry() {
   async function handleEntry(e: React.FormEvent) {
     e.preventDefault();
     if (!isFormValid) return;
+    if (connectivity.status !== "online") {
+      setError("Connexion requise pour cette opération.");
+      return;
+    }
 
     setSubmitting(true);
     setMessage(null);

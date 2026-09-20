@@ -11,6 +11,7 @@ import {
   calculateThermalPageHeightMm,
   normalizeSaleReceipt,
   printSaleReceiptAndStub,
+  reconstructOfflineSaleReceipt,
   runPrintSequence,
   validateSaleReceipt,
 } from "./printService.ts";
@@ -275,6 +276,72 @@ test("USB unavailability falls back in receipt then stub order", async () => {
   });
   assert.equal(destination, "browser");
   assert.deepEqual(documents, ["receipt", "stub"]);
+});
+
+test("known offline printing skips the remote USB endpoint and prints receipt then stub locally", async () => {
+  let usbCalls = 0;
+  const documents: string[] = [];
+  const destination = await printSaleReceiptAndStub(normalizeSaleReceipt(savedSale), {
+    directPrintMode: "none",
+    printUsb: async () => {
+      usbCalls += 1;
+      throw new Error("remote endpoint must not be called");
+    },
+    printBrowser: async (_receipt, requested) => { documents.push(...requested); },
+  });
+  assert.equal(destination, "browser");
+  assert.equal(usbCalls, 0);
+  assert.deepEqual(documents, ["receipt", "stub"]);
+});
+
+test("offline reprint preserves the IndexedDB receipt identity and snapshot", () => {
+  const stored = normalizeSaleReceipt({
+    ...savedSale,
+    _id: "offline-client-id",
+    receiptNumber: "ABCD-EFGH-JKMN",
+    barcodeToken: "ABCDEFGHJKMN",
+  });
+  const receipt = reconstructOfflineSaleReceipt({
+    clientSaleId: "offline-client-id",
+    receiptNumber: "ABCD-EFGH-JKMN",
+    barcodeToken: "ABCDEFGHJKMN",
+    occurredAt: "2026-09-09T08:30:00.000Z",
+    payload: {
+      customer: savedSale.customer,
+      items: savedSale.items.map((item, index) => ({
+        productId: `product-${index}`,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        region: (index === 0 ? "Butembo" : "China") as "Butembo" | "China",
+        regionCode: (index === 0 ? "Bbbb" : "Cnnn") as "Bbbb" | "Cnnn",
+      })),
+      subtotal: savedSale.subtotal,
+      total: savedSale.total,
+      paymentMethod: savedSale.paymentMethod,
+      salesPerson: savedSale.salesPerson,
+      exchangeRateSnapshot: { rateId: "rate-1", rate: 2800, effectiveFrom: null },
+      clientSaleId: "offline-client-id",
+      receiptNumber: "ABCD-EFGH-JKMN",
+      barcodeToken: "ABCDEFGHJKMN",
+      clientOccurredAt: "2026-09-09T08:30:00.000Z",
+      origin: "offline",
+    },
+    receiptSnapshot: stored,
+    syncState: "PENDING",
+    attempts: 0,
+    lastError: null,
+    lastAttemptAt: null,
+    syncedSaleId: null,
+    syncedAt: null,
+    createdAt: "2026-09-09T08:30:00.000Z",
+  });
+  assert.equal(receipt.savedSaleId, "offline-client-id");
+  assert.equal(receipt.reference, "ABCD-EFGH-JKMN");
+  assert.equal(receipt.barcodeToken, "ABCDEFGHJKMN");
+  assert.deepEqual(receipt.items, stored.items);
+  assert.equal(receipt.total, stored.total);
+  assert.equal(receipt.date, stored.date);
 });
 
 test("partial USB success falls back only for the missing stub", async () => {

@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import type { OfflineSale } from "../lib/offlineDb.ts";
 import { isValidBarcodeToken } from "../utils/barcodeId.ts";
 import { renderBarcodeDataUrl } from "../utils/barcode.ts";
 
@@ -119,6 +120,8 @@ interface UsbPrintResult {
 }
 
 interface PrintRuntime {
+  /** Skip the remote Express/escpos-usb endpoint when it is known offline. */
+  directPrintMode?: "remote" | "none";
   printUsb?: (receipt: SaleReceiptData) => Promise<UsbPrintResult>;
   printBrowser?: (
     receipt: SaleReceiptData,
@@ -217,6 +220,40 @@ export function normalizeSaleReceipt(
   };
 }
 
+/** Rebuilds a printable receipt solely from the durable IndexedDB row. */
+export function reconstructOfflineSaleReceipt(sale: OfflineSale): SaleReceiptData {
+  if (sale.receiptSnapshot && typeof sale.receiptSnapshot === "object") {
+    const snapshot = {
+      ...(sale.receiptSnapshot as SaleReceiptData),
+      savedSaleId: sale.clientSaleId,
+      reference: sale.receiptNumber,
+      barcodeToken: sale.barcodeToken,
+    };
+    try {
+      validateSaleReceipt(snapshot);
+      return snapshot;
+    } catch {
+      // Older/corrupt snapshots can still be reconstructed from the immutable payload.
+    }
+  }
+
+  return normalizeSaleReceipt({
+    _id: sale.clientSaleId,
+    receiptNumber: sale.receiptNumber,
+    barcodeToken: sale.barcodeToken,
+    createdAt: sale.occurredAt,
+    customer: sale.payload.customer,
+    items: sale.payload.items,
+    subtotal: sale.payload.subtotal,
+    total: sale.payload.total,
+    paymentMethod: sale.payload.paymentMethod,
+    salesPerson: sale.payload.salesPerson,
+    status: "completed",
+    type: "sale",
+    exchangeRateSnapshot: sale.payload.exchangeRateSnapshot ?? undefined,
+  }, { type: "sale", exchangeRate: sale.payload.exchangeRateSnapshot?.rate });
+}
+
 const escapeHtml = (value: string): string =>
   value.replace(/[&<>"']/g, (character) => ({
     "&": "&amp;",
@@ -257,9 +294,12 @@ const itemFc = (amount: number, receipt: SaleReceiptData): string =>
 export const wait = (milliseconds: number): Promise<void> =>
   new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
 
-export async function printCommittedSaleAfterDelay(receipt: SaleReceiptData): Promise<"usb" | "browser"> {
+export async function printCommittedSaleAfterDelay(
+  receipt: SaleReceiptData,
+  runtime: PrintRuntime = {},
+): Promise<"usb" | "browser"> {
   if (POST_SAVE_PRINT_DELAY_MS > 0) await wait(POST_SAVE_PRINT_DELAY_MS);
-  return printSaleReceiptAndStub(receipt);
+  return printSaleReceiptAndStub(receipt, runtime);
 }
 
 const thermalStyles = `
@@ -801,6 +841,10 @@ export async function printSaleReceiptAndStub(
   const operation = (async (): Promise<"usb" | "browser"> => {
     const printUsb = runtime.printUsb ?? printSaleReceiptOnUsb;
     const printBrowser = runtime.printBrowser ?? printSaleReceiptInBrowser;
+    if (runtime.directPrintMode === "none") {
+      await printBrowser(receipt, ["receipt", "stub"]);
+      return "browser";
+    }
     const usbResult = await printUsb(receipt);
     const printed = new Set(usbResult.printedDocuments);
     const missing = (["receipt", "stub"] as const).filter((document) => !printed.has(document));

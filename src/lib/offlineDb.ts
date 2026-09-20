@@ -89,6 +89,8 @@ export interface OfflineSalePayload {
     price: number;
     region: "Butembo" | "China";
     regionCode: "Bbbb" | "Cnnn";
+    unit?: string;
+    unitCost?: number;
   }>;
   subtotal: number;
   total: number;
@@ -129,8 +131,37 @@ export interface StockMovement {
 }
 
 export interface SyncMetaRow {
-  key: "deviceId" | "lastSnapshotAt" | "walkInCustomer" | "lastCleanupAt";
+  key: "deviceId" | "lastSnapshotAt" | "walkInCustomer" | "lastCleanupAt" |
+    "salesCoverageStart" | "salesCoverageEnd" | "salesSnapshotAt";
   value: string;
+}
+
+/** Server-confirmed sale retained as the durable base of the local read model. */
+export interface CachedServerSale {
+  cacheKey: string;
+  serverId: string;
+  clientSaleId: string | null;
+  createdAt: string;
+  type: string;
+  status: string;
+  cachedAt: string;
+  sale: Record<string, unknown>;
+}
+
+export interface CachedReport {
+  key: string;
+  cachedAt: string;
+  start: string;
+  end: string;
+  payload: Record<string, unknown>;
+}
+
+export interface CachedCustomer {
+  id: string;
+  phone: string;
+  name: string;
+  cachedAt: string;
+  customer: Record<string, unknown>;
 }
 
 class OfflineDatabase extends Dexie {
@@ -142,6 +173,9 @@ class OfflineDatabase extends Dexie {
   categories!: Table<OfflineCategory, string>;
   offlineUsers!: Table<OfflineUserAuthorization, string>;
   offlineAuthState!: Table<OfflineAuthAttemptState, string>;
+  cachedSales!: Table<CachedServerSale, string>;
+  cachedReports!: Table<CachedReport, string>;
+  cachedCustomers!: Table<CachedCustomer, string>;
 
   constructor() {
     super("cdp-pos-offline");
@@ -157,6 +191,13 @@ class OfflineDatabase extends Dexie {
       categories: "id, name",
       offlineUsers: "userId, deviceId",
       offlineAuthState: "userId",
+    });
+    // Durable ERP read model. Existing offline queues and stock projections
+    // remain untouched; these stores add a server base snapshot only.
+    this.version(3).stores({
+      cachedSales: "cacheKey, serverId, clientSaleId, createdAt, type, status",
+      cachedReports: "key, cachedAt, start, end",
+      cachedCustomers: "id, phone, name, cachedAt",
     });
   }
 }

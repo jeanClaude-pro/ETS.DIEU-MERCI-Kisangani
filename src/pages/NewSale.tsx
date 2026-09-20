@@ -12,6 +12,7 @@ import { generateBarcodeToken, formatReceiptNumber, generateClientSaleId } from 
 import { offlineDb, commitOfflineSale, type OfflineSale } from "../lib/offlineDb";
 import { refreshFromServer, subscribeLocal } from "../services/offlineProductSnapshot";
 import { useOfflineReadiness } from "../hooks/useOfflineReadiness";
+import { cacheServerSales, type BusinessSale } from "../services/localBusinessReadModel";
 
 interface Product {
   _id: string;
@@ -491,6 +492,7 @@ export default function NewSale() {
     const canonicalItems: Array<{
       productId: string; name: string; quantity: number; price: number;
       region: "Butembo" | "China"; regionCode: "Bbbb" | "Cnnn";
+      unit?: string; unitCost?: number;
     }> = [];
     for (const item of cart) {
       const cached = await offlineDb.products.get(item.productId);
@@ -505,6 +507,8 @@ export default function NewSale() {
         price: item.unitPrice,
         region: cached.region,
         regionCode: cached.regionCode,
+        unit: cached.unit,
+        unitCost: cached.unitCost,
       });
     }
 
@@ -533,7 +537,7 @@ export default function NewSale() {
       barcodeToken,
       createdAt: occurredAt,
       customer,
-      items: canonicalItems.map((item) => ({ name: item.name, quantity: item.quantity, price: item.price, regionCode: item.regionCode })),
+      items: canonicalItems.map((item) => ({ name: item.name, unit: item.unit, quantity: item.quantity, price: item.price, regionCode: item.regionCode })),
       subtotal: cartTotal,
       total: cartTotal,
       paymentMethod,
@@ -584,7 +588,10 @@ export default function NewSale() {
       ? "Vente conservée en sécurité. Confirmation du serveur en attente; elle sera vérifiée automatiquement sans créer de doublon."
       : "Vente enregistrée hors ligne. Reçu enregistré et ajouté à la file de synchronisation.");
     try {
-      await printCommittedSaleAfterDelay(receipt);
+      // The ESC/POS implementation is the remote Express endpoint. The
+      // connectivity check already proved it unreachable, so print this
+      // committed IndexedDB snapshot locally without probing Render.
+      await printCommittedSaleAfterDelay(receipt, { directPrintMode: "none" });
     } catch (printError: unknown) {
       setError(printError instanceof Error
         ? printError.message
@@ -701,6 +708,9 @@ export default function NewSale() {
         type: "sale",
         exchangeRate: exchangeRate?.rate,
       });
+      // A just-committed online transaction is also part of the next offline
+      // read base; do not wait for SalesHistory to be opened before caching it.
+      await cacheServerSales([data as BusinessSale]).catch(() => undefined);
 
       resetFormAndCart();
 

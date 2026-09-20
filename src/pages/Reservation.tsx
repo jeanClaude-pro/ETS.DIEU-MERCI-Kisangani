@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { useConnectivity } from "../context/ConnectivityContext";
+import { cacheServerSales, type BusinessSale } from "../services/localBusinessReadModel";
 import { DollarSign, RefreshCw, Calculator, Search } from "lucide-react";
 import {
   normalizeSaleReceipt,
@@ -54,6 +56,7 @@ async function readJsonSafe(res: Response) {
 }
 
 export default function Reservation() {
+  const connectivity = useConnectivity();
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -477,6 +480,10 @@ export default function Reservation() {
   async function handleReservation(e: React.FormEvent) {
     e.preventDefault();
     if (!isFormValid) return;
+    if (connectivity.status !== "online") {
+      setError("Connexion requise pour créer une réservation en toute sécurité.");
+      return;
+    }
 
     setSubmitting(true);
     setMessage(null);
@@ -547,6 +554,7 @@ export default function Reservation() {
         type: "reservation",
         exchangeRate: exchangeRate?.rate,
       });
+      await cacheServerSales([data as BusinessSale]).catch(() => undefined);
 
       // Reset form and cart
       setForm({

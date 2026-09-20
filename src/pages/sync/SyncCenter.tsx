@@ -1,12 +1,13 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { liveQuery } from "dexie";
 import { toast } from "react-toastify";
-import { AlertTriangle, ChevronDown, ChevronUp, CloudCheck, CloudOff, Clock3, KeyRound, RefreshCw, ShieldQuestion } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, CloudCheck, CloudOff, Clock3, KeyRound, Printer, RefreshCw, ShieldQuestion } from "lucide-react";
 import { useConnectivity } from "../../context/ConnectivityContext";
 import { useOfflineQueueCounts } from "../../hooks/useOfflineQueue";
 import { getLastSnapshotAt, offlineDb, type OfflineSale, type SyncState } from "../../lib/offlineDb";
 import { getSyncProgress, runOfflineSyncPass, subscribeSyncProgress } from "../../services/offlineSyncService";
 import { runIntegrityAudit, type IntegrityFinding } from "../../services/offlineIntegrityAudit";
+import { printSaleReceiptAndStub, reconstructOfflineSaleReceipt } from "../../services/printService";
 
 const STATE_LABELS: Record<SyncState, string> = {
   PENDING: "En attente",
@@ -42,6 +43,7 @@ export default function SyncCenter() {
   const [showAudit, setShowAudit] = useState(false);
   const [auditFindings, setAuditFindings] = useState<IntegrityFinding[] | null>(null);
   const [auditRunning, setAuditRunning] = useState(false);
+  const [printingSaleId, setPrintingSaleId] = useState<string | null>(null);
 
   useEffect(() => {
     const subscription = liveQuery(async () => {
@@ -70,6 +72,26 @@ export default function SyncCenter() {
       setAuditFindings(await runIntegrityAudit());
     } finally {
       setAuditRunning(false);
+    }
+  }
+
+  async function reprintLocalSale(sale: OfflineSale) {
+    setPrintingSaleId(sale.clientSaleId);
+    try {
+      const receipt = reconstructOfflineSaleReceipt(sale);
+      await printSaleReceiptAndStub(receipt, {
+        // This row is authoritative before synchronization. Reprint it from
+        // IndexedDB even if connectivity happens to return meanwhile; never
+        // require a MongoDB lookup for a pending local transaction.
+        directPrintMode: "none",
+      });
+      toast.success("Reçu et souche envoyés à l'impression.");
+    } catch (error) {
+      toast.error(error instanceof Error
+        ? error.message
+        : "La vente reste enregistrée, mais l'impression n'a pas pu démarrer.");
+    } finally {
+      setPrintingSaleId(null);
     }
   }
 
@@ -136,7 +158,21 @@ export default function SyncCenter() {
                     </div>
                     {sale.lastError && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">{sale.lastError}</p>}
                   </button>
-                  {isOpen && <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 sm:px-5"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Détail des articles</h3><ul className="divide-y divide-slate-200">{sale.payload.items.map((item, index) => <li key={`${item.productId}-${index}`} className="flex items-center justify-between gap-3 py-2 text-sm"><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{item.name}</p><p className="text-xs text-slate-500">{item.regionCode} · {item.quantity} × {money(item.price)}</p></div><strong className="shrink-0 text-slate-900">{money(item.quantity * item.price)}</strong></li>)}</ul></div>}
+                  {isOpen && <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 sm:px-5">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Détail des articles</h3>
+                      <button
+                        type="button"
+                        onClick={() => void reprintLocalSale(sale)}
+                        disabled={printingSaleId !== null}
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        {printingSaleId === sale.clientSaleId ? "Impression..." : "Réimprimer"}
+                      </button>
+                    </div>
+                    <ul className="divide-y divide-slate-200">{sale.payload.items.map((item, index) => <li key={`${item.productId}-${index}`} className="flex items-center justify-between gap-3 py-2 text-sm"><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{item.name}</p><p className="text-xs text-slate-500">{item.regionCode} · {item.quantity} × {money(item.price)}</p></div><strong className="shrink-0 text-slate-900">{money(item.quantity * item.price)}</strong></li>)}</ul>
+                  </div>}
                 </article>
               );
             })}

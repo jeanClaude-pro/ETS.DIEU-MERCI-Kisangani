@@ -11,6 +11,7 @@ import {
 } from "../services/connectivityService";
 import { serverUrl } from "../utils/constants";
 import { useAuth } from "../hooks/useAuth";
+import { refreshBusinessSalesSnapshot } from "../services/localBusinessReadModel";
 
 export type ConnectivityStatus = ConnectivityPhase;
 
@@ -93,6 +94,9 @@ export const ConnectivityProvider: React.FC<React.PropsWithChildren> = ({ childr
       toast.info("Connexion rétablie. Synchronisation des ventes en attente...");
     }
     window.dispatchEvent(new CustomEvent("backend-online"));
+    // Keep today's complete transaction base warm even when the cashier does
+    // not explicitly open SalesHistory before the next outage.
+    void refreshBusinessSalesSnapshot(token).catch(() => undefined);
 
     void (async () => {
       const counts = await countOfflineSalesByState();

@@ -8,6 +8,7 @@ import {
   type OfflineSale,
 } from "../lib/offlineDb.ts";
 import { refreshFromServer } from "./offlineProductSnapshot.ts";
+import { refreshBusinessSalesSnapshot } from "./localBusinessReadModel.ts";
 
 const BACKOFF_SCHEDULE_MS = [5_000, 15_000, 30_000, 60_000];
 
@@ -144,7 +145,12 @@ export function runOfflineSyncPass(): Promise<{ processed: number; paused: boole
       }
       if (synced > 0 && !paused) {
         const token = localStorage.getItem("token") || "";
-        try { await refreshFromServer(token); } catch {
+        try {
+          await Promise.all([
+            refreshFromServer(token),
+            refreshBusinessSalesSnapshot(token),
+          ]);
+        } catch {
           // Queue durability is independent of snapshot refresh. NewSale also
           // retries refresh whenever authenticated connectivity is online.
         }

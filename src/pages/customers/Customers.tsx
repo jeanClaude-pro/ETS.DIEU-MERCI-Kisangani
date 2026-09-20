@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { useState, useEffect } from "react";
+import { liveQuery } from "dexie";
 import {
   Users,
   Search,
@@ -15,6 +16,8 @@ import {
   RefreshCw,
   AlertCircle,
 } from "lucide-react";
+import { useConnectivity } from "../../context/ConnectivityContext";
+import { cacheCustomers, getLocalCustomers } from "../../services/localCustomerReadModel";
 
 interface Customer {
   _id: string;
@@ -32,6 +35,7 @@ interface Customer {
 const serverUrl = import.meta.env.VITE_API_URL;
 
 export default function Customers() {
+  const connectivity = useConnectivity();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -45,6 +49,7 @@ export default function Customers() {
   });
   const [refreshing, setRefreshing] = useState(false);
   const [recalculating, setRecalculating] = useState<string | null>(null);
+  const [usingLocalData, setUsingLocalData] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: 1, limit: 50 });
@@ -55,11 +60,35 @@ export default function Customers() {
     const timer = window.setTimeout(fetchCustomers, 300);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchTerm]);
+  }, [currentPage, searchTerm, connectivity.status]);
+
+  useEffect(() => {
+    const subscription = liveQuery(getLocalCustomers).subscribe({
+      next: (rows) => { if (connectivity.status !== "online") applyLocalCustomers(rows); },
+    });
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectivity.status, currentPage, searchTerm]);
+
+  const applyLocalCustomers = (rows: Customer[]) => {
+    const term = searchTerm.trim().toLocaleLowerCase("fr");
+    const filtered = term
+      ? rows.filter((customer) => [customer.name, customer.phone, customer.email].some((value) => value.toLocaleLowerCase("fr").includes(term)))
+      : rows;
+    setCustomers(filtered.slice((currentPage - 1) * 50, currentPage * 50));
+    setPagination({ total: filtered.length, totalPages: Math.max(1, Math.ceil(filtered.length / 50)), currentPage, limit: 50 });
+    setPortfolioTotal(filtered.reduce((sum, customer) => sum + Number(customer.totalSpent || 0), 0));
+    setActiveCustomerCount(filtered.filter((customer) => customer.totalPurchases > 0).length);
+    setUsingLocalData(true);
+  };
+
+  const loadLocalCustomers = async () => applyLocalCustomers(await getLocalCustomers());
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
+      await loadLocalCustomers();
+      if (connectivity.status !== "online") return;
       const params = new URLSearchParams({ page: String(currentPage), limit: "50" });
       if (searchTerm.trim()) params.set("search", searchTerm.trim());
       const response = await fetch(`${serverUrl}/customers?${params}`, {
@@ -69,7 +98,9 @@ export default function Customers() {
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      setCustomers(Array.isArray(data.customers) ? data.customers : []);
+      const serverCustomers = Array.isArray(data.customers) ? data.customers : [];
+      await cacheCustomers(serverCustomers);
+      setCustomers(serverCustomers);
       setPagination({
         total: Number(data.total || 0),
         totalPages: Number(data.totalPages || 1),
@@ -78,9 +109,10 @@ export default function Customers() {
       });
       setPortfolioTotal(Number(data.summary?.totalSpent || 0));
       setActiveCustomerCount(Number(data.summary?.activeCustomers || 0));
+      setUsingLocalData(false);
     } catch (error) {
       console.error("Error fetching customers:", error);
-      setCustomers([]);
+      await loadLocalCustomers();
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -131,6 +163,10 @@ export default function Customers() {
 
   const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (connectivity.status !== "online") {
+      alert("Connexion requise pour cette opération");
+      return;
+    }
     try {
       const response = await fetch(`${serverUrl}/customers`, {
         method: "POST",
@@ -154,6 +190,10 @@ export default function Customers() {
   };
 
   const handleDeleteCustomer = async (customerId: string) => {
+    if (connectivity.status !== "online") {
+      alert("Connexion requise pour cette opération");
+      return;
+    }
     if (confirm("Êtes-vous sûr de vouloir supprimer ce client?")) {
       try {
         const response = await fetch(`${serverUrl}/customers/${customerId}`, {
@@ -176,6 +216,10 @@ export default function Customers() {
   };
 
   const recalculateCustomerStats = async (customerId: string) => {
+    if (connectivity.status !== "online") {
+      alert("Connexion requise pour cette opération");
+      return;
+    }
     try {
       setRecalculating(customerId);
 
@@ -220,6 +264,7 @@ export default function Customers() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
           <p className="text-gray-600">Gérez vos relations clients</p>
+          {usingLocalData && <p className="mt-1 text-xs font-semibold text-blue-700">Hors ligne · Clients mis en cache et ventes locales incluses</p>}
         </div>
         <div className="flex gap-3">
           <button
