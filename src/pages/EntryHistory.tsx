@@ -16,9 +16,10 @@ import {
   ChevronLeft,
   ChevronRight,
   History,
-  Filter,
   Shield,
+  X,
 } from "lucide-react";
+import { Alert, EmptyState, LoadingState, MetricCard, PageHeader } from "../components/ui";
 import jsPDF from "jspdf";
 import RegionFilterPills from "../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../types";
@@ -418,8 +419,8 @@ export default function EntryHistory() {
     const changes = latestEdit.changes;
 
     return (
-      <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <h4 className="font-medium text-yellow-800 mb-2 flex items-center gap-2">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-900">
           <History className="w-4 h-4" />
           Dernière modification
         </h4>
@@ -449,13 +450,13 @@ export default function EntryHistory() {
                     {field.replace(/([A-Z])/g, ' $1').toLowerCase()}:
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-red-50 p-2 rounded">
-                      <div className="text-red-600 font-medium">Avant:</div>
-                      <div className="truncate">{JSON.stringify(changeData.from)}</div>
+                    <div className="min-w-0 rounded-md bg-red-50 p-2">
+                      <div className="font-semibold text-red-700">Avant</div>
+                      <div className="truncate" title={JSON.stringify(changeData.from)}>{JSON.stringify(changeData.from)}</div>
                     </div>
-                    <div className="bg-green-50 p-2 rounded">
-                      <div className="text-green-600 font-medium">Après:</div>
-                      <div className="truncate">{JSON.stringify(changeData.to)}</div>
+                    <div className="min-w-0 rounded-md bg-emerald-50 p-2">
+                      <div className="font-semibold text-emerald-700">Après</div>
+                      <div className="truncate" title={JSON.stringify(changeData.to)}>{JSON.stringify(changeData.to)}</div>
                     </div>
                   </div>
                 </div>
@@ -656,7 +657,7 @@ export default function EntryHistory() {
 
   const openEditModal = async (entry: Entry) => {
     if (entry.status === "deleted") {
-      setError("Cannot edit a deleted entry");
+      setError("Impossible de modifier une entrée supprimée");
       return;
     }
 
@@ -730,7 +731,7 @@ export default function EntryHistory() {
 
 
       if (response.ok) {
-        setMessage("✅ Entrée mise à jour avec succès");
+        setMessage("Entrée mise à jour avec succès");
         await fetchEntries();
         closeEditModal();
       } else {
@@ -770,7 +771,7 @@ export default function EntryHistory() {
       );
 
       if (response.ok) {
-        setMessage("✅ Entrée supprimée avec succès");
+        setMessage("Entrée supprimée avec succès");
         await fetchEntries();
         setShowModal(false);
       } else {
@@ -785,214 +786,146 @@ export default function EntryHistory() {
     }
   };
 
+  // Display-only payment labels; stored values are untouched.
+  const entryPaymentLabel: Record<string, string> = { cash: "Espèces", card: "Carte", transfer: "Transfert", other: "Autre", mpesa: "Mobile money", bank: "Banque" };
+
   // Summary statistics display component - ONLY VISIBLE TO ADMINS
   const SummaryStats = () => {
     if (!summary || !isAdmin) return null;
 
     return (
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
-            <Shield className="w-5 h-5" />
-            Statistiques des Entrées (Vue Admin)
-          </h3>
+      <section aria-labelledby="entry-summary-title" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="entry-summary-title" className="ui-kicker flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5" />
+            Statistiques des entrées (vue administrateur)
+          </h2>
           {currentUser && (
-            <span className="text-sm text-blue-700 bg-blue-100 px-3 py-1 rounded-full">
-              Connecté en tant que: {currentUser.name || currentUser.username} ({currentUser.role})
+            <span className="ui-badge ui-badge-neutral max-w-full truncate">
+              Connecté : {currentUser.name || currentUser.username} ({currentUser.role})
             </span>
           )}
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Entrées</p>
-                <p className="text-2xl font-bold text-blue-600">{summary.totalRecords}</p>
-              </div>
-              <FileText className="w-8 h-8 text-blue-500" />
-            </div>
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Montant Total</p>
-                <p className="text-2xl font-bold text-green-600">{formatCurrency(summary.totalAmount)}</p>
-              </div>
-              <DollarSign className="w-8 h-8 text-green-500" />
-            </div>
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Entrées Actives</p>
-                <p className="text-2xl font-bold text-green-600">{summary.active?.count || 0}</p>
-                <p className="text-sm text-gray-500">{formatCurrency(summary.active?.amount || 0)}</p>
-              </div>
-              <FileText className="w-8 h-8 text-green-500" />
-            </div>
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Méthodes de Paiement</p>
-                <p className="text-xl font-semibold text-purple-600">
-                  {Object.keys(summary.paymentMethods || {}).length}
-                </p>
-              </div>
-              <DollarSign className="w-8 h-8 text-purple-500" />
-            </div>
-          </div>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard label="Total des entrées" value={summary.totalRecords} icon={FileText} />
+          <MetricCard label="Montant total" value={formatCurrency(summary.totalAmount)} icon={DollarSign} tone="success" />
+          <MetricCard label="Entrées actives" value={summary.active?.count || 0} hint={formatCurrency(summary.active?.amount || 0)} icon={FileText} />
+          <MetricCard label="Méthodes de paiement" value={Object.keys(summary.paymentMethods || {}).length} icon={DollarSign} />
         </div>
 
-        {/* Detailed stats row */}
-        {summary.paymentMethods && Object.keys(summary.paymentMethods).length > 0 && (
-          <div className="mt-4 pt-4 border-t border-blue-200">
-            <h4 className="font-medium text-blue-800 mb-3">Détails par méthode de paiement:</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {Object.entries(summary.paymentMethods).map(([method, data]: [string, any]) => (
-                <div key={method} className="bg-white p-3 rounded-lg border border-gray-200">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-gray-700 capitalize">{method}:</span>
-                    <span className="font-semibold text-green-600">{data.count}</span>
-                  </div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    Total: {formatCurrency(data.amount)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {(summary.paymentMethods && Object.keys(summary.paymentMethods).length > 0) || (summary.sources && Object.keys(summary.sources).length > 0) ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {/* Detailed stats row */}
+            {summary.paymentMethods && Object.keys(summary.paymentMethods).length > 0 && (
+              <div className="ui-card p-4">
+                <h3 className="ui-kicker mb-3">Par méthode de paiement</h3>
+                <ul className="divide-y divide-slate-100 text-sm">
+                  {Object.entries(summary.paymentMethods).map(([method, data]: [string, any]) => (
+                    <li key={method} className="flex items-center justify-between gap-3 py-2">
+                      <span className="text-slate-700">{entryPaymentLabel[method] || method}</span>
+                      <span className="text-right tabular-nums">
+                        <span className="font-semibold text-slate-900">{formatCurrency(data.amount)}</span>
+                        <span className="ml-2 text-xs text-slate-500">{data.count} entrée(s)</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-        {/* Sources summary */}
-        {summary.sources && Object.keys(summary.sources).length > 0 && (
-          <div className="mt-4 pt-4 border-t border-blue-200">
-            <h4 className="font-medium text-blue-800 mb-3">Sources principales:</h4>
-            <div className="space-y-2">
-              {Object.entries(summary.sources)
-                .sort(([, a], [, b]) => (b as any).amount - (a as any).amount)
-                .slice(0, 3)
-                .map(([source, data]: [string, any]) => (
-                  <div key={source} className="flex justify-between items-center bg-white p-2 rounded border">
-                    <span className="text-gray-700">{source}</span>
-                    <div className="text-right">
-                      <div className="font-semibold text-gray-900">{data.count} entrées</div>
-                      <div className="text-sm text-green-600">{formatCurrency(data.amount)}</div>
-                    </div>
-                  </div>
-                ))}
-            </div>
+            {/* Sources summary */}
+            {summary.sources && Object.keys(summary.sources).length > 0 && (
+              <div className="ui-card p-4">
+                <h3 className="ui-kicker mb-3">Sources principales</h3>
+                <ul className="divide-y divide-slate-100 text-sm">
+                  {Object.entries(summary.sources)
+                    .sort(([, a], [, b]) => (b as any).amount - (a as any).amount)
+                    .slice(0, 3)
+                    .map(([source, data]: [string, any]) => (
+                      <li key={source} className="flex items-center justify-between gap-3 py-2">
+                        <span className="min-w-0 truncate text-slate-700">{source}</span>
+                        <span className="shrink-0 text-right tabular-nums">
+                          <span className="font-semibold text-emerald-700">{formatCurrency(data.amount)}</span>
+                          <span className="ml-2 text-xs text-slate-500">{data.count} entrées</span>
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        ) : null}
+      </section>
     );
   };
 
   return (
-    <div className="space-y-6 p-6 flex-1 overflow-auto">
-      <div className="flex items-center justify-between flex-wrap gap-4 overflow-auto">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Historique des Entrées d'Argent
-          </h1>
-          <p className="text-gray-600">
-            Voir toutes les entrées d'argent enregistrées
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          {/* Region Filter */}
-          <RegionFilterPills value={regionFilter} onChange={(value) => { setRegionFilter(value); setCurrentPage(1); }} />
-
-          {/* Edited Entries Filter Button */}
-          <button
-            onClick={() => { setShowEditedEntries(!showEditedEntries); setCurrentPage(1); }}
-            className={`px-4 py-2 rounded-lg border transition-all duration-200 flex items-center gap-2 ${
-              showEditedEntries
-                ? "bg-blue-500 text-white border-blue-500 shadow-sm"
-                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-            }`}
-          >
-            <Filter className="w-4 h-4" />
-            {showEditedEntries ? "Toutes les entrées" : "Entrées modifiées"}
-            {showEditedEntries && (
-              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                {editedEntries.length}
-              </span>
-            )}
+    <div className="ui-page ui-page-wide">
+      <PageHeader
+        eyebrow="Caisse"
+        title="Historique des entrées d'argent"
+        description="Consultez, imprimez et corrigez les entrées de caisse enregistrées."
+        actions={
+          <button type="button" onClick={fetchEntries} disabled={loading} className="ui-btn ui-btn-secondary">
+            <RefreshCw className={loading ? "animate-spin" : ""} />
+            Actualiser
           </button>
+        }
+      />
 
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+      {/* Toolbar */}
+      <section className="ui-card" aria-label="Recherche et filtres">
+        <div className="flex flex-col gap-3 p-4 sm:p-5 xl:flex-row xl:items-center">
+          <div className="relative min-w-0 flex-1">
+            <label htmlFor="entry-search" className="sr-only">Rechercher une entrée</label>
+            <Search className="ui-field-icon" aria-hidden="true" />
             <input
-              type="text"
-              placeholder="Rechercher des entrées..."
-              className="pl-10 w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              id="entry-search"
+              type="search"
+              placeholder="Rechercher une entrée…"
+              className="ui-input ui-input-icon"
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
-        </div>
-      </div>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            {/* Region Filter */}
+            <RegionFilterPills value={regionFilter} onChange={(value) => { setRegionFilter(value); setCurrentPage(1); }} />
 
-      {/* Timeframe Filter Section */}
-      <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-            {showEditedEntries ? "Entrées modifiées" : "Toutes les entrées"} - {getTimeframeLabel()}
-          </h3>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Date Picker for Day View */}
-            {timeframe === "day" && (
-              <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-300 px-3 py-2 shadow-sm w-full sm:w-auto">
-                <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                <label htmlFor="date-picker" className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">
-                  Date:
-                </label>
-                <input
-                  id="date-picker"
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="ml-2 px-2 py-1 border-none bg-transparent text-xs sm:text-sm focus:outline-none focus:ring-0 text-gray-900 font-medium w-full"
-                />
-              </div>
-            )}
-            
-            {timeframe === "year" && (
-              <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-300 px-3 py-2 shadow-sm w-full sm:w-auto">
-                <button
-                  onClick={() => navigateYear('prev')}
-                  disabled={getAvailableYears().indexOf(selectedYear) === getAvailableYears().length - 1}
-                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
-                </button>
-                <span className="text-xs sm:text-sm font-medium text-gray-900 px-2 min-w-[60px] sm:min-w-[80px] text-center">{selectedYear}</span>
-                <button
-                  onClick={() => navigateYear('next')}
-                  disabled={getAvailableYears().indexOf(selectedYear) === 0}
-                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
-                </button>
-              </div>
-            )}
-            
-            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-full sm:w-auto">
+            {/* Edited Entries Filter Button */}
+            <button
+              type="button"
+              onClick={() => { setShowEditedEntries(!showEditedEntries); setCurrentPage(1); }}
+              aria-pressed={showEditedEntries}
+              className={`ui-btn ${showEditedEntries ? "ui-btn-primary" : "ui-btn-secondary"}`}
+            >
+              <History />
+              {showEditedEntries ? "Toutes les entrées" : "Entrées modifiées"}
+              {showEditedEntries && (
+                <span className="rounded-full bg-white/20 px-1.5 text-xs tabular-nums">{editedEntries.length}</span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+          <p className="flex min-w-0 items-center gap-2 text-sm text-slate-600">
+            <Calendar className="h-4 w-4 shrink-0 text-slate-400" />
+            <span className="truncate">
+              <span className="font-medium text-slate-900">{showEditedEntries ? "Entrées modifiées" : "Toutes les entrées"}</span>
+              {" · "}<span className="capitalize">{getTimeframeLabel()}</span>
+            </span>
+          </p>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="ui-segmented w-full sm:w-auto" role="group" aria-label="Période">
               {(["day", "week", "month", "year"] as const).map((period) => (
                 <button
+                  type="button"
                   key={period}
                   onClick={() => handleTimeframeChange(period)}
-                  className={`px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 flex-1 sm:flex-none ${
-                    timeframe === period
-                      ? "bg-blue-500 text-white shadow-sm"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                  }`}
+                  aria-pressed={timeframe === period}
+                  className="ui-segment"
                 >
                   {period === "day" && "Jour"}
                   {period === "week" && "Semaine"}
@@ -1001,226 +934,185 @@ export default function EntryHistory() {
                 </button>
               ))}
             </div>
-            
-            {/* Refresh Button */}
-            <button
-              onClick={fetchEntries}
-              disabled={loading}
-              className="px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
+
+            {/* Date Picker for Day View */}
+            {timeframe === "day" && (
+              <div className="relative sm:w-44">
+                <label htmlFor="date-picker" className="sr-only">Date</label>
+                <input
+                  id="date-picker"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="ui-input"
+                />
+              </div>
+            )}
+
+            {timeframe === "year" && (
+              <div className="flex min-h-11 items-center justify-between rounded-lg border border-slate-300 bg-white shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => navigateYear('prev')}
+                  disabled={getAvailableYears().indexOf(selectedYear) === getAvailableYears().length - 1}
+                  className="ui-icon-btn"
+                  aria-label="Année précédente"
+                >
+                  <ChevronLeft />
+                </button>
+                <span className="min-w-16 px-2 text-center text-sm font-semibold tabular-nums text-slate-900">{selectedYear}</span>
+                <button
+                  type="button"
+                  onClick={() => navigateYear('next')}
+                  disabled={getAvailableYears().indexOf(selectedYear) === 0}
+                  className="ui-icon-btn"
+                  aria-label="Année suivante"
+                >
+                  <ChevronRight />
+                </button>
+              </div>
+            )}
           </div>
         </div>
-        
-        {/* Show summary statistics - Admin only */}
-        <SummaryStats />
-      </div>
+      </section>
 
-      {message && (
-        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg border border-green-200">
-          {message}
-          <button
-            onClick={() => setMessage(null)}
-            className="float-right text-green-700 hover:text-green-900"
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {/* Show summary statistics - Admin only */}
+      <SummaryStats />
 
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg border border-red-200">
-          {error}
-          <button
-            onClick={() => setError(null)}
-            className="float-right text-red-700 hover:text-red-900"
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {message && <Alert tone="success" onDismiss={() => setMessage(null)}>{message}</Alert>}
+      {error && <Alert tone="danger" onDismiss={() => setError(null)}>{error}</Alert>}
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            {showEditedEntries ? "Entrées modifiées" : "Entrées d'argent"} ({pagination.totalRecords})
+      <section className="ui-card overflow-hidden" aria-labelledby="entries-table-title">
+        <div className="ui-card-header">
+          <h2 id="entries-table-title" className="ui-section-title flex items-center gap-2">
+            <FileText className="h-4 w-4 text-blue-700" />
+            {showEditedEntries ? "Entrées modifiées" : "Entrées d'argent"}
+            <span className="ui-badge ui-badge-neutral tabular-nums">{pagination.totalRecords}</span>
           </h2>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="ui-table-wrap">
           {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-500 mt-2">Chargement des entrées...</p>
-            </div>
+            <LoadingState label="Chargement des entrées…" />
           ) : filteredEntries.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>
-                {showEditedEntries 
-                  ? "Aucune entrée modifiée trouvée" 
-                  : "Aucune entrée trouvée"
-                }
-              </p>
-              <p className="text-sm">pour la période sélectionnée</p>
-            </div>
+            <EmptyState
+              icon={FileText}
+              title={showEditedEntries ? "Aucune entrée modifiée trouvée" : "Aucune entrée trouvée"}
+              description="Aucune entrée ne correspond à la période et aux filtres sélectionnés."
+            />
           ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="ui-table min-w-full">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ID Entrée
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Expéditeur
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Source
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Catégorie
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Montant
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Paiement
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Région
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Statut
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  {showEditedEntries && (
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Dernière modification
-                    </th>
-                  )}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th scope="col">Entrée</th>
+                  <th scope="col">Expéditeur</th>
+                  <th scope="col">Source · Catégorie</th>
+                  <th scope="col" className="text-right">Montant</th>
+                  <th scope="col">Paiement</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Date</th>
+                  {showEditedEntries && <th scope="col">Dernière modification</th>}
+                  <th scope="col" className="ui-sticky-end text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody>
                 {filteredEntries.map((entry) => (
-                  <tr key={entry._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {entry.entryId}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {entry.receivedFrom.name}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {entry.receivedFrom.phone}
+                  <tr key={entry._id}>
+                    <td className="whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-slate-900">{entry.entryId}</span>
+                        {entry.regionCode && <span className="ui-tag">{entry.regionCode}</span>}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {entry.source}
+                    <td className="min-w-[10rem]">
+                      <div className="flex flex-col">
+                        <span className="text-slate-900">{entry.receivedFrom.name}</span>
+                        <span className="text-xs tabular-nums text-slate-500">{entry.receivedFrom.phone}</span>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {entry.category}
+                    <td className="min-w-[9rem]">
+                      <div className="flex flex-col">
+                        <span className="text-slate-900">{entry.source}</span>
+                        <span className="text-xs text-slate-500">{entry.category}</span>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {formatCurrency(entry.amount)}
+                    <td className="ui-num whitespace-nowrap font-semibold text-emerald-700">{formatCurrency(entry.amount)}</td>
+                    <td>
+                      <span className="ui-badge ui-badge-neutral">{entryPaymentLabel[entry.paymentMethod] || entry.paymentMethod}</span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {entry.regionCode ? (
-                        <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                          {entry.regionCode}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {entry.paymentMethod}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                          entry.status === "active"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
+                    <td>
+                      <span className={`ui-badge ${entry.status === "active" ? "ui-badge-success" : "ui-badge-danger"}`}>
                         {entry.status === "active" ? "Actif" : "Supprimé"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(entry.createdAt)}
-                    </td>
+                    <td className="whitespace-nowrap text-slate-500">{formatDate(entry.createdAt)}</td>
                     {showEditedEntries && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="whitespace-nowrap text-slate-500">
                         {entry.editedAt ? formatDate(entry.editedAt) : "N/A"}
                       </td>
                     )}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
+                    <td className="ui-sticky-end">
+                      <div className="ui-row-actions">
                         {showEditedEntries ? (
                           <button
+                            type="button"
                             onClick={() => viewEditedEntryDetails(entry)}
-                            className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                            className="ui-icon-btn ui-icon-btn-primary"
                             title="Voir les détails des modifications"
+                            aria-label={`Voir les modifications de ${entry.entryId}`}
                           >
-                            <History className="w-4 h-4" />
+                            <History />
                           </button>
                         ) : (
                           <button
+                            type="button"
                             onClick={() => viewEntryDetails(entry)}
-                            className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                            className="ui-icon-btn ui-icon-btn-primary"
                             title="Voir les détails"
+                            aria-label={`Voir l'entrée ${entry.entryId}`}
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye />
                           </button>
                         )}
                         {!showEditedEntries && (
                           <>
                             <button
+                              type="button"
                               onClick={() => openEditModal(entry)}
                               disabled={entry.status === "deleted"}
-                              className={`p-1 rounded ${
-                                entry.status === "deleted"
-                                  ? "text-gray-400 cursor-not-allowed"
-                                  : "text-yellow-600 hover:text-yellow-900"
-                              }`}
+                              className="ui-icon-btn ui-icon-btn-warning"
                               title="Modifier l'entrée"
+                              aria-label={`Modifier l'entrée ${entry.entryId}`}
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit />
                             </button>
                             <button
+                              type="button"
                               onClick={() => generateEntryPDF(entry)}
-                              className="text-green-600 hover:text-green-900 p-1 rounded"
+                              className="ui-icon-btn ui-icon-btn-success"
                               title="Télécharger PDF"
+                              aria-label={`Télécharger le PDF de ${entry.entryId}`}
                             >
-                              <Download className="w-4 h-4" />
+                              <Download />
                             </button>
                             <button
+                              type="button"
                               onClick={() => printEntryReceipt(entry)}
-                              className="text-purple-600 hover:text-purple-900 p-1 rounded"
+                              className="ui-icon-btn"
                               title="Imprimer le reçu"
+                              aria-label={`Imprimer le reçu de ${entry.entryId}`}
                             >
-                              <Printer className="w-4 h-4" />
+                              <Printer />
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleDeleteEntry(entry)}
                               disabled={entry.status === "deleted"}
-                              className={`p-1 rounded ${
-                                entry.status === "deleted"
-                                  ? "text-gray-400 cursor-not-allowed"
-                                  : "text-red-600 hover:text-red-900"
-                              }`}
+                              className="ui-icon-btn ui-icon-btn-danger"
                               title="Supprimer l'entrée"
+                              aria-label={`Supprimer l'entrée ${entry.entryId}`}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 />
                             </button>
                           </>
                         )}
@@ -1233,204 +1125,127 @@ export default function EntryHistory() {
           )}
         </div>
         {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t px-4 py-3">
-            <span className="text-sm text-gray-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
+          <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <span className="text-sm tabular-nums text-slate-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
             <div className="flex gap-2">
-              <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="px-3 py-1.5 border rounded disabled:opacity-50">Précédent</button>
-              <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="px-3 py-1.5 border rounded disabled:opacity-50">Suivant</button>
+              <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none">Précédent</button>
+              <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none">Suivant</button>
             </div>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Entry Details Modal */}
       {showModal && selectedEntry && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Détails de l'Entrée
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="entry-details-title">
+          <div className="ui-dialog max-w-2xl">
+            <div className="ui-dialog-header">
+              <div className="min-w-0">
+                <h3 id="entry-details-title" className="ui-dialog-title">Détails de l'entrée</h3>
+                <p className="mt-0.5 truncate text-sm text-slate-500">{selectedEntry.entryId}</p>
+              </div>
+              <button type="button" onClick={() => setShowModal(false)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {/* Entry Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ID Entrée
-                  </label>
-                  <p className="text-sm text-gray-900">{selectedEntry.entryId}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {formatDate(selectedEntry.createdAt)}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Méthode de Paiement
-                  </label>
-                  <p className="text-sm text-gray-900 capitalize">
-                    {selectedEntry.paymentMethod}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Statut
-                  </label>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                      selectedEntry.status === "active"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {selectedEntry.status === "active" ? "Actif" : "Supprimé"}
-                  </span>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Enregistré par
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {selectedEntry.createdBy?.username || "Non spécifié"}
-                  </p>
-                </div>
-                {selectedEntry.editedBy && (
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Dernière modification
-                    </label>
-                    <p className="text-sm text-gray-900">
-                      Par: {selectedEntry.editedBy} à{" "}
-                      {selectedEntry.editedAt
-                        ? formatDate(selectedEntry.editedAt)
-                        : "N/A"}
-                    </p>
-                  </div>
+            <div className="ui-dialog-body space-y-5">
+              <div className="ui-muted-panel">
+                <p className="text-xs font-medium text-slate-500">Montant</p>
+                <p className="text-2xl font-semibold tabular-nums text-emerald-700">{formatCurrency(selectedEntry.amount)}</p>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div><dt className="text-xs text-slate-500">Source</dt><dd className="text-slate-900">{selectedEntry.source}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Catégorie</dt><dd className="text-slate-900">{selectedEntry.category}</dd></div>
+                </dl>
+                {selectedEntry.description && (
+                  <p className="mt-3 border-t border-slate-200 pt-3 text-sm text-slate-700">{selectedEntry.description}</p>
                 )}
               </div>
 
+              {/* Entry Info */}
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <div>
+                  <dt className="text-xs font-medium text-slate-500">Date</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{formatDate(selectedEntry.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-slate-500">Statut</dt>
+                  <dd className="mt-1">
+                    <span className={`ui-badge ${selectedEntry.status === "active" ? "ui-badge-success" : "ui-badge-danger"}`}>
+                      {selectedEntry.status === "active" ? "Actif" : "Supprimé"}
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-slate-500">Méthode de paiement</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{entryPaymentLabel[selectedEntry.paymentMethod] || selectedEntry.paymentMethod}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-slate-500">Enregistré par</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{selectedEntry.createdBy?.username || "Non spécifié"}</dd>
+                </div>
+                {selectedEntry.editedBy && (
+                  <div className="col-span-2">
+                    <dt className="text-xs font-medium text-slate-500">Dernière modification</dt>
+                    <dd className="mt-0.5 text-sm text-slate-900">
+                      Par {selectedEntry.editedBy} le{" "}
+                      {selectedEntry.editedAt
+                        ? formatDate(selectedEntry.editedAt)
+                        : "N/A"}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+
               {/* Received From Info */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Information sur l'Expéditeur
-                </h4>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nom
-                      </label>
-                      <p className="text-sm text-gray-900">
-                        {selectedEntry.receivedFrom.name}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Téléphone
-                      </label>
-                      <p className="text-sm text-gray-900">
-                        {selectedEntry.receivedFrom.phone}
-                      </p>
-                    </div>
-                    {selectedEntry.receivedFrom.email && (
-                      <div className="col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Email
-                        </label>
-                        <p className="text-sm text-gray-900">
-                          {selectedEntry.receivedFrom.email}
-                        </p>
-                      </div>
-                    )}
+                <h4 className="ui-kicker mb-2 flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Expéditeur</h4>
+                <dl className="ui-muted-panel grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium text-slate-500">Nom</dt>
+                    <dd className="mt-0.5 break-words text-sm text-slate-900">{selectedEntry.receivedFrom.name}</dd>
                   </div>
-                </div>
-              </div>
-
-              {/* Entry Details */}
-              <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <DollarSign className="w-4 h-4" />
-                  Détails de l'Entrée
-                </h4>
-                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Source:</span>
-                    <span className="text-gray-900">{selectedEntry.source}</span>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-500">Téléphone</dt>
+                    <dd className="mt-0.5 text-sm tabular-nums text-slate-900">{selectedEntry.receivedFrom.phone}</dd>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Catégorie:</span>
-                    <span className="text-gray-900">{selectedEntry.category}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Montant:</span>
-                    <span className="text-gray-900 font-semibold">
-                      {formatCurrency(selectedEntry.amount)}
-                    </span>
-                  </div>
-                  {selectedEntry.description && (
-                    <div>
-                      <span className="font-medium text-gray-700">Description:</span>
-                      <p className="text-gray-900 mt-1">{selectedEntry.description}</p>
+                  {selectedEntry.receivedFrom.email && (
+                    <div className="col-span-2 min-w-0">
+                      <dt className="text-xs font-medium text-slate-500">Email</dt>
+                      <dd className="mt-0.5 break-words text-sm text-slate-900">{selectedEntry.receivedFrom.email}</dd>
                     </div>
                   )}
-                </div>
+                </dl>
               </div>
 
               {/* Show edit history if available */}
               {selectedEntry.editHistory && selectedEntry.editHistory.length > 0 && (
                 renderChangeComparison(selectedEntry)
               )}
+            </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => generateEntryPDF(selectedEntry)}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Télécharger PDF
-                </button>
-                <button
-                  onClick={() => printEntryReceipt(selectedEntry)}
-                  className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Printer className="w-4 h-4" />
-                  Imprimer Reçu
-                </button>
-                <button
-                  onClick={() => openEditModal(selectedEntry)}
-                  disabled={selectedEntry.status === "deleted"}
-                  className={`px-4 py-2 border rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                    selectedEntry.status === "deleted"
-                      ? "border-gray-300 text-gray-400 cursor-not-allowed"
-                      : "border-yellow-300 text-yellow-600 hover:bg-yellow-50"
-                  }`}
-                >
-                  <Edit className="w-4 h-4" />
-                  Modifier l'Entrée
-                </button>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
+            {/* Actions */}
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="ui-btn ui-btn-ghost">
+                Fermer
+              </button>
+              <button
+                type="button"
+                onClick={() => openEditModal(selectedEntry)}
+                disabled={selectedEntry.status === "deleted"}
+                className="ui-btn ui-btn-secondary"
+              >
+                <Edit />
+                Modifier
+              </button>
+              <button type="button" onClick={() => generateEntryPDF(selectedEntry)} className="ui-btn ui-btn-secondary">
+                <Download />
+                Télécharger PDF
+              </button>
+              <button type="button" onClick={() => printEntryReceipt(selectedEntry)} className="ui-btn ui-btn-primary">
+                <Printer />
+                Imprimer le reçu
+              </button>
             </div>
           </div>
         </div>
@@ -1438,114 +1253,86 @@ export default function EntryHistory() {
 
       {/* Edited Entry Details Modal */}
       {showEditedDetailsModal && selectedEditedEntry && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Détails des modifications - {selectedEditedEntry.entryId}
-              </h3>
-              <button
-                onClick={() => setShowEditedDetailsModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="edited-entry-title">
+          <div className="ui-dialog max-w-3xl">
+            <div className="ui-dialog-header">
+              <div className="min-w-0">
+                <h3 id="edited-entry-title" className="ui-dialog-title">Détails des modifications</h3>
+                <p className="mt-0.5 truncate text-sm text-slate-500">{selectedEditedEntry.entryId}</p>
+              </div>
+              <button type="button" onClick={() => setShowEditedDetailsModal(false)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="ui-dialog-body space-y-5">
               {/* Current Entry Info */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3 bg-blue-50 p-3 rounded-lg">
-                  État actuel de l'entrée
-                </h4>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Expéditeur
-                    </label>
-                    <p className="text-sm text-gray-900">
+                <h4 className="ui-kicker mb-2">État actuel de l'entrée</h4>
+                <dl className="ui-muted-panel grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium text-slate-500">Expéditeur</dt>
+                    <dd className="mt-0.5 break-words text-sm text-slate-900">
                       {selectedEditedEntry.receivedFrom.name} ({selectedEditedEntry.receivedFrom.phone})
-                    </p>
+                    </dd>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Montant actuel
-                    </label>
-                    <p className="text-sm font-medium text-gray-900">
-                      {formatCurrency(selectedEditedEntry.amount)}
-                    </p>
+                    <dt className="text-xs font-medium text-slate-500">Montant actuel</dt>
+                    <dd className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(selectedEditedEntry.amount)}</dd>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Source
-                    </label>
-                    <p className="text-sm text-gray-900">
-                      {selectedEditedEntry.source}
-                    </p>
+                    <dt className="text-xs font-medium text-slate-500">Source</dt>
+                    <dd className="mt-0.5 text-sm text-slate-900">{selectedEditedEntry.source}</dd>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Catégorie
-                    </label>
-                    <p className="text-sm text-gray-900">
-                      {selectedEditedEntry.category}
-                    </p>
+                    <dt className="text-xs font-medium text-slate-500">Catégorie</dt>
+                    <dd className="mt-0.5 text-sm text-slate-900">{selectedEditedEntry.category}</dd>
                   </div>
-                </div>
+                </dl>
               </div>
 
               {/* Edit History */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Historique des modifications
-                </h4>
-                <div className="space-y-4">
+                <h4 className="ui-kicker mb-2">Historique des modifications</h4>
+                <div className="space-y-3">
                   {selectedEditedEntry.editHistory && selectedEditedEntry.editHistory.length > 0 ? (
                     selectedEditedEntry.editHistory.map((edit, index) => (
-                      <div key={edit._id || index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <div className="flex justify-between items-start mb-3">
+                      <div key={edit._id || index} className="rounded-lg border border-slate-200 p-4">
+                        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div>
-                            <h5 className="font-medium text-gray-900">
+                            <h5 className="text-sm font-semibold text-slate-900">
                               Modification #{selectedEditedEntry.editHistory!.length - index}
                             </h5>
-                            <p className="text-sm text-gray-600">
-                              {formatDate(edit.editedAt)}
-                            </p>
+                            <p className="text-xs text-slate-500">{formatDate(edit.editedAt)}</p>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium text-gray-900">
-                              Par: {edit.editedBy}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Raison: {edit.reason}
-                            </p>
+                          <div className="text-sm sm:text-right">
+                            <p className="font-medium text-slate-900">Par : {edit.editedBy}</p>
+                            <p className="text-slate-600">Raison : {edit.reason}</p>
                           </div>
                         </div>
 
                         {edit.changes && Object.keys(edit.changes).length > 0 && (
                           <div className="space-y-3">
-                            <h6 className="font-medium text-gray-700 text-sm">Changements détaillés:</h6>
+                            <h6 className="text-xs font-semibold text-slate-600">Changements détaillés</h6>
                             {Object.entries(edit.changes).map(([field, changeData]: [string, any]) => (
-                              <div key={field} className="border-l-4 border-blue-500 pl-3">
-                                <div className="font-medium text-gray-700 text-sm capitalize mb-2">
-                                  {field.replace(/([A-Z])/g, ' $1').toLowerCase()}:
+                              <div key={field} className="border-l-2 border-blue-500 pl-3">
+                                <div className="mb-2 text-sm font-medium capitalize text-slate-700">
+                                  {field.replace(/([A-Z])/g, ' $1').toLowerCase()}
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                  <div className="bg-red-50 p-3 rounded border border-red-200">
-                                    <div className="text-red-700 font-medium mb-1">Avant:</div>
-                                    <div className="text-red-600 break-words">
-                                      {typeof changeData.from === 'object' 
+                                <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+                                  <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                                    <div className="mb-1 text-xs font-semibold text-red-700">Avant</div>
+                                    <div className="whitespace-pre-wrap break-words text-red-800">
+                                      {typeof changeData.from === 'object'
                                         ? JSON.stringify(changeData.from, null, 2)
                                         : String(changeData.from || 'N/A')
                                       }
                                     </div>
                                   </div>
-                                  <div className="bg-green-50 p-3 rounded border border-green-200">
-                                    <div className="text-green-700 font-medium mb-1">Après:</div>
-                                    <div className="text-green-600 break-words">
-                                      {typeof changeData.to === 'object' 
+                                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                                    <div className="mb-1 text-xs font-semibold text-emerald-700">Après</div>
+                                    <div className="whitespace-pre-wrap break-words text-emerald-800">
+                                      {typeof changeData.to === 'object'
                                         ? JSON.stringify(changeData.to, null, 2)
                                         : String(changeData.to || 'N/A')
                                       }
@@ -1559,23 +1346,17 @@ export default function EntryHistory() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                      <p>Aucun détail de modification disponible</p>
-                    </div>
+                    <EmptyState icon={History} title="Aucun détail de modification disponible" />
                   )}
                 </div>
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => setShowEditedDetailsModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
+            {/* Actions */}
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setShowEditedDetailsModal(false)} className="ui-btn ui-btn-secondary">
+                Fermer
+              </button>
             </div>
           </div>
         </div>
@@ -1583,40 +1364,29 @@ export default function EntryHistory() {
 
       {/* Edit Entry Modal */}
       {showEditModal && editingEntry && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Modifier l'Entrée - {editingEntry.entryId}
-              </h3>
-              <button
-                onClick={closeEditModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-entry-title">
+          <div className="ui-dialog max-w-3xl">
+            <div className="ui-dialog-header">
+              <div className="min-w-0">
+                <h3 id="edit-entry-title" className="ui-dialog-title">Modifier l'entrée</h3>
+                <p className="mt-0.5 truncate text-sm text-slate-500">{editingEntry.entryId}</p>
+              </div>
+              <button type="button" onClick={closeEditModal} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {error && (
-                <div className="p-3 bg-red-100 text-red-700 rounded-lg">
-                  {error}
-                </div>
-              )}
+            <div className="ui-dialog-body space-y-5">
+              {error && <Alert tone="danger">{error}</Alert>}
 
               {/* Entry Information */}
-              <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Informations de l'Entrée
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <fieldset>
+                <legend className="ui-kicker mb-3">Entrée</legend>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Montant (USD) *
-                    </label>
+                    <label htmlFor="edit-entry-amount" className="ui-label">Montant (USD) <span className="ui-required">*</span></label>
                     <input
+                      id="edit-entry-amount"
                       type="number"
                       step="0.01"
                       value={editForm.amount}
@@ -1626,15 +1396,35 @@ export default function EntryHistory() {
                           amount: parseFloat(e.target.value) || 0,
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input tabular-nums"
+                      inputMode="decimal"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Source *
-                    </label>
+                    <label htmlFor="edit-entry-payment" className="ui-label">Méthode de paiement <span className="ui-required">*</span></label>
                     <select
+                      id="edit-entry-payment"
+                      value={editForm.paymentMethod}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          paymentMethod: e.target.value as "cash" | "card" | "transfer" | "other",
+                        }))
+                      }
+                      className="ui-input"
+                      required
+                    >
+                      <option value="cash">Espèces</option>
+                      <option value="card">Carte</option>
+                      <option value="transfer">Transfert</option>
+                      <option value="other">Autre</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="edit-entry-source" className="ui-label">Source <span className="ui-required">*</span></label>
+                    <select
+                      id="edit-entry-source"
                       value={editForm.source}
                       onChange={(e) =>
                         setEditForm((prev) => ({
@@ -1642,7 +1432,7 @@ export default function EntryHistory() {
                           source: e.target.value,
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
                       required
                     >
                       <option value="">Sélectionner la source</option>
@@ -1654,10 +1444,9 @@ export default function EntryHistory() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Catégorie *
-                    </label>
+                    <label htmlFor="edit-entry-category" className="ui-label">Catégorie <span className="ui-required">*</span></label>
                     <select
+                      id="edit-entry-category"
                       value={editForm.category}
                       onChange={(e) =>
                         setEditForm((prev) => ({
@@ -1665,7 +1454,7 @@ export default function EntryHistory() {
                           category: e.target.value,
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
                       required
                     >
                       <option value="">Sélectionner la catégorie</option>
@@ -1676,59 +1465,32 @@ export default function EntryHistory() {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Méthode de Paiement *
-                    </label>
-                    <select
-                      value={editForm.paymentMethod}
+                  <div className="md:col-span-2">
+                    <label htmlFor="edit-entry-description" className="ui-label">Description</label>
+                    <textarea
+                      id="edit-entry-description"
+                      value={editForm.description}
                       onChange={(e) =>
                         setEditForm((prev) => ({
                           ...prev,
-                          paymentMethod: e.target.value as "cash" | "card" | "transfer" | "other",
+                          description: e.target.value,
                         }))
                       }
-                      className="w-full p-2 border rounded"
-                      required
-                    >
-                      <option value="cash">Espèces</option>
-                      <option value="card">Carte</option>
-                      <option value="transfer">Transfert</option>
-                      <option value="other">Autre</option>
-                    </select>
+                      placeholder="Description de l'entrée d'argent…"
+                      className="ui-input min-h-20"
+                    />
                   </div>
                 </div>
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={editForm.description}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
-                  }
-                  placeholder="Description de l'entrée d'argent..."
-                  className="w-full p-2 border rounded h-20"
-                />
-              </div>
+              </fieldset>
 
               {/* Received From Information */}
-              <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Information sur l'Expéditeur
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <fieldset>
+                <legend className="ui-kicker mb-3">Expéditeur</legend>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nom *
-                    </label>
+                    <label htmlFor="edit-entry-name" className="ui-label">Nom <span className="ui-required">*</span></label>
                     <input
+                      id="edit-entry-name"
                       type="text"
                       value={editForm.receivedFrom.name}
                       onChange={(e) =>
@@ -1737,15 +1499,14 @@ export default function EntryHistory() {
                           receivedFrom: { ...prev.receivedFrom, name: e.target.value },
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Téléphone *
-                    </label>
+                    <label htmlFor="edit-entry-phone" className="ui-label">Téléphone <span className="ui-required">*</span></label>
                     <input
+                      id="edit-entry-phone"
                       type="tel"
                       value={editForm.receivedFrom.phone}
                       onChange={(e) =>
@@ -1754,15 +1515,15 @@ export default function EntryHistory() {
                           receivedFrom: { ...prev.receivedFrom, phone: e.target.value },
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
+                      inputMode="tel"
                       required
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
+                    <label htmlFor="edit-entry-email" className="ui-label">Email</label>
                     <input
+                      id="edit-entry-email"
                       type="email"
                       value={editForm.receivedFrom.email}
                       onChange={(e) =>
@@ -1771,52 +1532,50 @@ export default function EntryHistory() {
                           receivedFrom: { ...prev.receivedFrom, email: e.target.value },
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
+                      inputMode="email"
                     />
                   </div>
                 </div>
-              </div>
+              </fieldset>
 
               {/* Edit Reason */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Raison de modification
-                </h4>
+                <label htmlFor="edit-entry-reason" className="ui-label">Raison de la modification <span className="ui-required">*</span></label>
                 <textarea
+                  id="edit-entry-reason"
                   value={editForm.reason}
                   onChange={(e) =>
                     setEditForm((prev) => ({ ...prev, reason: e.target.value }))
                   }
-                  placeholder="Veuillez indiquer une raison pour la modification de cette entrée..."
-                  className="w-full p-2 border rounded h-20"
+                  placeholder="Veuillez indiquer une raison pour la modification de cette entrée…"
+                  className="ui-input min-h-20"
                   required
                 />
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={handleEditEntry}
-                  disabled={loading}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" /> Mise à jour...
-                    </>
-                  ) : (
-                    <>
-                      <Edit className="w-4 h-4" /> Mettre à jour l'Entrée
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={closeEditModal}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Annuler
-                </button>
-              </div>
+            {/* Actions */}
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={closeEditModal} className="ui-btn ui-btn-ghost">
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleEditEntry}
+                disabled={loading}
+                className="ui-btn ui-btn-primary"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="animate-spin" /> Mise à jour…
+                  </>
+                ) : (
+                  <>
+                    <Edit /> Mettre à jour l'entrée
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

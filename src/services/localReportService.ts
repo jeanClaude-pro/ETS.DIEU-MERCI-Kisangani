@@ -16,6 +16,18 @@ export interface LocalAnalyticsData {
   totalCustomers: number;
   totalProducts: number;
   totalValidatedExpenses: number;
+  totalValidatedExpenseCount: number;
+  validatedExpenses: Array<{
+    _id: string;
+    expenseId: string;
+    reason: string;
+    amount: number;
+    recipientName?: string;
+    paymentMethod?: string;
+    regionCode?: string;
+    validatedAt?: string;
+    createdAt: string;
+  }>;
   totalEntries: number;
   netRevenue: number;
   averageSale: number;
@@ -121,7 +133,12 @@ export function buildLocalAnalytics(
   allSales: readonly BusinessSale[],
   range: LocalReportRange,
   region: RegionCodeFilter = "",
-  extras: { totalEntries?: number; totalValidatedExpenses?: number } = {},
+  extras: {
+    totalEntries?: number;
+    totalValidatedExpenses?: number;
+    totalValidatedExpenseCount?: number;
+    validatedExpenses?: LocalAnalyticsData["validatedExpenses"];
+  } = {},
 ): { data: LocalAnalyticsData; reservations: { count: number; value: number; pendingCount: number; pendingValue: number } } {
   const sales = reportable(allSales, range, region);
   const duration = range.end.getTime() - range.start.getTime() + 1;
@@ -178,6 +195,8 @@ export function buildLocalAnalytics(
       totalCustomers: currentTotals.customers,
       totalProducts: products.size,
       totalValidatedExpenses,
+      totalValidatedExpenseCount: Number(extras.totalValidatedExpenseCount || extras.validatedExpenses?.length || 0),
+      validatedExpenses: extras.validatedExpenses || [],
       totalEntries,
       netRevenue: roundCurrency(currentTotals.revenue + totalEntries - totalValidatedExpenses),
       averageSale: currentTotals.count ? roundCurrency(currentTotals.revenue / currentTotals.count) : 0,

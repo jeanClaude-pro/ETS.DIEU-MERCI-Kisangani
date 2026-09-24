@@ -51,15 +51,15 @@ function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="flex min-h-screen bg-slate-50">
       {showWorkspaceNavigation && <AdaptiveNavigation />}
 
       {/* Main content shifts smoothly as sidebar expands/collapses */}
       <main
-        className="app-main flex-1 overflow-auto min-h-screen min-w-0"
+        className="app-main min-h-screen min-w-0 flex-1 overflow-x-clip"
         style={{
           marginLeft: showWorkspaceNavigation ? sidebarWidth : 0,
-          transition: "margin-left 0.3s ease-in-out",
+          transition: "margin-left 0.25s ease-in-out",
         }}
       >
         <ResponsiveTableEnhancer />
@@ -272,7 +272,7 @@ export default function App() {
       <ConnectivityProvider>
         <SidebarProvider>
           <Router>
-            <ToastContainer position="top-right" autoClose={3000} newestOnTop />
+            <ToastContainer position="top-right" autoClose={3000} newestOnTop closeButton hideProgressBar />
             <PwaUpdatePrompt />
             <AppLayout />
           </Router>

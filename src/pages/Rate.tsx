@@ -9,8 +9,9 @@ import {
   Calendar,
   User,
   CheckCircle,
-  AlertCircle
+  Info,
 } from 'lucide-react';
+import { Alert, EmptyState, LoadingState, PageHeader } from '../components/ui';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { offlineDb } from '../lib/offlineDb';
 
@@ -204,296 +205,232 @@ export default function TauxChange() {
     }).format(montant);
   };
 
+  // Display-only: the inverse rate is tiny (≈ 0,00035), so show significant digits.
+  const formaterInverse = (montant: number) =>
+    new Intl.NumberFormat('fr-FR', { maximumSignificantDigits: 4 }).format(montant);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Chargement des taux de change...</p>
-        </div>
+      <div className="ui-page">
+        <LoadingState label="Chargement des taux de change…" className="ui-card" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* En-tête */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-                <DollarSign className="w-8 h-8 text-green-600" />
-                Gestion des Taux de Change
-              </h1>
-              <p className="text-gray-600 mt-2">
-                Gérez les taux de change FC vers USD pour votre système de vente
-              </p>
-            </div>
-            <button
-              onClick={chargerTaux}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Actualiser
-            </button>
-          </div>
-        </div>
+    <div className="ui-page">
+      <PageHeader
+        eyebrow="Finance"
+        title="Taux de change"
+        description="Définissez le taux USD → FC utilisé par les ventes, réservations et mouvements de caisse."
+        actions={
+          <button type="button" onClick={chargerTaux} className="ui-btn ui-btn-secondary">
+            <RefreshCw />
+            Actualiser
+          </button>
+        }
+      />
 
-        {/* Messages */}
-        {message && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-            <p className="text-green-800">{message}</p>
-            <button
-              onClick={() => setMessage(null)}
-              className="ml-auto text-green-600 hover:text-green-800"
-            >
-              ×
-            </button>
-          </div>
-        )}
+      {/* Messages */}
+      {message && <Alert tone="success" onDismiss={() => setMessage(null)}>{message}</Alert>}
+      {error && <Alert tone="danger" onDismiss={() => setError(null)}>{error}</Alert>}
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-            <p className="text-red-800">{error}</p>
-            <button
-              onClick={() => setError(null)}
-              className="ml-auto text-red-600 hover:text-red-800"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Colonne de gauche - Taux actuel et formulaire */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Carte du taux actuel */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-blue-600" />
-                  Taux de Change Actuel
-                </h2>
-                {tauxActuel?.isActive && (
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    Actif
-                  </span>
-                )}
-              </div>
-
-              {tauxActuel ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <p className="text-sm text-blue-600 font-medium">Taux FC → USD</p>
-                      <p className="text-2xl font-bold text-blue-800">
-                        1 USD = {formaterMontant(tauxActuel.rate)} FC
-                      </p>
-                    </div>
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <p className="text-sm text-green-600 font-medium">Taux USD → FC</p>
-                      <p className="text-2xl font-bold text-green-800">
-                        1 FC = {formaterMontant(1 / tauxActuel.rate)} USD
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span>Effectif depuis: {formaterDate(tauxActuel.effectiveFrom)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-400" />
-                      <span>Défini par: {tauxActuel.createdBy?.username || 'Inconnu'}</span>
-                    </div>
-                  </div>
-
-                  {tauxActuel.notes && (
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-sm font-medium text-gray-700 mb-1">Notes:</p>
-                      <p className="text-sm text-gray-600">{tauxActuel.notes}</p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <DollarSign className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Aucun taux de change actif</p>
-                  <p className="text-sm">Veuillez définir un taux de change</p>
-                </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        {/* Colonne de gauche - Taux actuel et formulaire */}
+        <div className="min-w-0 space-y-5 lg:col-span-2">
+          {/* Carte du taux actuel */}
+          <section className="ui-card" aria-labelledby="current-rate-title">
+            <div className="ui-card-header">
+              <h2 id="current-rate-title" className="ui-section-title flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-blue-700" />
+                Taux actuel
+              </h2>
+              {tauxActuel?.isActive && (
+                <span className="ui-badge ui-badge-success"><CheckCircle className="h-3 w-3" aria-hidden="true" />Actif</span>
               )}
             </div>
 
-            {/* Formulaire de mise à jour */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Edit className="w-5 h-5 text-orange-600" />
-                Mettre à Jour le Taux de Change
+            {tauxActuel ? (
+              <div className="ui-card-body space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+                    <p className="text-xs font-medium text-blue-700">USD → FC</p>
+                    <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums text-slate-950">
+                      1 USD = {formaterMontant(tauxActuel.rate)} FC
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-medium text-slate-500">FC → USD</p>
+                    <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums text-slate-950">
+                      1 FC = {formaterInverse(1 / tauxActuel.rate)} USD
+                    </p>
+                  </div>
+                </div>
+
+                <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <Calendar className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <dt>Effectif depuis :</dt>
+                    <dd className="font-medium text-slate-900">{formaterDate(tauxActuel.effectiveFrom)}</dd>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <User className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                    <dt>Défini par :</dt>
+                    <dd className="font-medium text-slate-900">{tauxActuel.createdBy?.username || 'Inconnu'}</dd>
+                  </div>
+                </dl>
+
+                {tauxActuel.notes && (
+                  <div className="ui-muted-panel text-sm">
+                    <p className="text-xs font-medium text-slate-500">Notes</p>
+                    <p className="mt-0.5 text-slate-700">{tauxActuel.notes}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <EmptyState icon={DollarSign} title="Aucun taux de change actif" description="Veuillez définir un taux de change ci-dessous." />
+            )}
+          </section>
+
+          {/* Formulaire de mise à jour */}
+          <form onSubmit={handleSubmit} className="ui-card" aria-labelledby="update-rate-title">
+            <div className="ui-card-header">
+              <h2 id="update-rate-title" className="ui-section-title flex items-center gap-2">
+                <Edit className="h-4 w-4 text-blue-700" />
+                Mettre à jour le taux
               </h2>
+            </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nouveau Taux (1 USD = X FC) *
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      value={form.rate}
-                      onChange={(e) => setForm({ ...form, rate: e.target.value })}
-                      placeholder="Ex: 2500 pour 1 USD = 2500 FC"
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Entrez combien de Francs Congolais valent 1 USD
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date d'Effet
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={form.effectiveFrom}
-                      onChange={(e) => setForm({ ...form, effectiveFrom: e.target.value })}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Laisser vide pour utiliser la date actuelle
-                    </p>
-                  </div>
+            <div className="ui-card-body space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label htmlFor="rate-value" className="ui-label">Nouveau taux (1 USD = X FC) <span className="ui-required">*</span></label>
+                  <input
+                    id="rate-value"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={form.rate}
+                    onChange={(e) => setForm({ ...form, rate: e.target.value })}
+                    placeholder="Ex. : 2500"
+                    className="ui-input tabular-nums"
+                    inputMode="decimal"
+                    required
+                  />
+                  <p className="ui-help">Nombre de francs congolais pour 1 USD.</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes (Optionnel)
-                  </label>
-                  <textarea
-                    value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    placeholder="Raison du changement, source du taux, etc."
-                    rows={3}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  <label htmlFor="rate-effective" className="ui-label">Date d'effet</label>
+                  <input
+                    id="rate-effective"
+                    type="datetime-local"
+                    value={form.effectiveFrom}
+                    onChange={(e) => setForm({ ...form, effectiveFrom: e.target.value })}
+                    className="ui-input"
                   />
+                  <p className="ui-help">Laisser vide pour utiliser la date actuelle.</p>
                 </div>
+              </div>
 
-                <button
-                  type="submit"
-                  disabled={submitting || !form.rate}
-                  className={`w-full md:w-auto px-6 py-3 rounded-lg font-medium flex items-center justify-center gap-2 ${
-                    submitting || !form.rate
-                      ? 'bg-gray-400 cursor-not-allowed text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  } transition-colors`}
-                >
-                  {submitting ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      Mise à jour...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      Mettre à Jour le Taux
-                    </>
-                  )}
-                </button>
-              </form>
+              <div>
+                <label htmlFor="rate-notes" className="ui-label">Notes <span className="font-normal text-slate-500">(optionnel)</span></label>
+                <textarea
+                  id="rate-notes"
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  placeholder="Raison du changement, source du taux, etc."
+                  rows={3}
+                  className="ui-input"
+                />
+              </div>
+
+              <Alert tone="warning">Vérifiez la valeur avant de valider : le taux actif est utilisé pour toutes les nouvelles opérations.</Alert>
             </div>
+
+            <div className="ui-card-footer">
+              <button
+                type="submit"
+                disabled={submitting || !form.rate}
+                className="ui-btn ui-btn-primary w-full sm:w-auto"
+              >
+                {submitting ? (
+                  <>
+                    <RefreshCw className="animate-spin" />
+                    Mise à jour…
+                  </>
+                ) : (
+                  <>
+                    <Save />
+                    Mettre à jour le taux
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Colonne de droite - Historique */}
+        <section className="ui-card min-w-0 self-start" aria-labelledby="rate-history-title">
+          <div className="ui-card-header">
+            <h2 id="rate-history-title" className="ui-section-title flex items-center gap-2">
+              <History className="h-4 w-4 text-blue-700" />
+              Historique
+            </h2>
+            <span className="ui-badge ui-badge-neutral tabular-nums">{historiqueTaux.length} entrées</span>
           </div>
 
-          {/* Colonne de droite - Historique */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                <History className="w-5 h-5 text-purple-600" />
-                Historique des Taux
-              </h2>
-              <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-                {historiqueTaux.length} entrées
-              </span>
-            </div>
-
-            {historiqueTaux.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {historiqueTaux.map((taux) => (
-                  <div
-                    key={taux._id}
-                    className={`p-3 rounded-lg border ${
-                      taux.isActive
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-gray-50 border-gray-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-900">
-                          1 USD = {formaterMontant(taux.rate)} FC
-                        </span>
-                        {taux.isActive && (
-                          <CheckCircle className="w-3 h-3 text-green-600" />
-                        )}
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {formaterDate(taux.effectiveFrom)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-600">
-                      <span>Par: {taux.createdBy?.username || 'Inconnu'}</span>
-                      <span>{formaterDate(taux.createdAt)}</span>
-                    </div>
-                    {taux.notes && (
-                      <p className="text-xs text-gray-500 mt-1 truncate">
-                        {taux.notes}
-                      </p>
-                    )}
+          {historiqueTaux.length > 0 ? (
+            <ul className="max-h-[32rem] divide-y divide-slate-100 overflow-y-auto">
+              {historiqueTaux.map((taux) => (
+                <li key={taux._id} className={`px-4 py-3 sm:px-5 ${taux.isActive ? "bg-emerald-50/50" : ""}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-sm font-semibold tabular-nums text-slate-900">
+                      1 USD = {formaterMontant(taux.rate)} FC
+                      {taux.isActive && <span className="ui-badge ui-badge-success">Actif</span>}
+                    </span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Aucun historique disponible</p>
-                <p className="text-sm">Les changements de taux apparaîtront ici</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Section d'information */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-3">
-            💡 Comment utiliser les taux de change
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-800">
-            <div>
-              <p className="font-medium mb-2">Pour les ventes en FC:</p>
-              <ul className="space-y-1 list-disc list-inside">
-                <li>Les prix saisis en FC seront convertis en USD</li>
-                <li>Le système utilise toujours le taux actif</li>
-                <li>Bien faire attention avant de definir un nouveau taux</li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-medium mb-2">Bonnes pratiques:</p>
-              <ul className="space-y-1 list-disc list-inside">
-                <li>Mettez à jour le taux régulièrement</li>
-                <li>Notez la source du taux (banque, marché, etc.)</li>
-                <li>Un seul taux peut être actif à la fois</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+                  <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-xs text-slate-500">
+                    <span>Effet : {formaterDate(taux.effectiveFrom)}</span>
+                    <span>Par {taux.createdBy?.username || 'Inconnu'}</span>
+                  </div>
+                  {taux.notes && (
+                    <p className="mt-1 truncate text-xs text-slate-500" title={taux.notes}>{taux.notes}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState icon={History} title="Aucun historique disponible" description="Les changements de taux apparaîtront ici." />
+          )}
+        </section>
       </div>
+
+      {/* Section d'information */}
+      <section className="ui-card p-4 sm:p-5" aria-labelledby="rate-help-title">
+        <h3 id="rate-help-title" className="ui-section-title mb-3 flex items-center gap-2">
+          <Info className="h-4 w-4 text-blue-700" />
+          Comment utiliser les taux de change
+        </h3>
+        <div className="grid grid-cols-1 gap-4 text-sm text-slate-600 md:grid-cols-2">
+          <div>
+            <p className="mb-1.5 font-medium text-slate-900">Pour les ventes en FC</p>
+            <ul className="list-inside list-disc space-y-1">
+              <li>Les prix saisis en FC sont convertis en USD</li>
+              <li>Le système utilise toujours le taux actif</li>
+              <li>Bien vérifier avant de définir un nouveau taux</li>
+            </ul>
+          </div>
+          <div>
+            <p className="mb-1.5 font-medium text-slate-900">Bonnes pratiques</p>
+            <ul className="list-inside list-disc space-y-1">
+              <li>Mettez à jour le taux régulièrement</li>
+              <li>Notez la source du taux (banque, marché, etc.)</li>
+              <li>Un seul taux peut être actif à la fois</li>
+            </ul>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

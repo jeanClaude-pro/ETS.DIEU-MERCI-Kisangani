@@ -15,8 +15,11 @@ import {
   Edit,
   Trash2,
   Plus,
-  Minus
+  Minus,
+  Clock,
+  X,
 } from "lucide-react";
+import { Alert, EmptyState, LoadingState, MetricCard, PageHeader } from "../components/ui";
 import {
   normalizeSaleReceipt,
   printCommittedSaleAfterDelay,
@@ -547,7 +550,7 @@ export default function ReservationManagement() {
 
 
       if (response.ok) {
-        setMessage("✅ Réservation mise à jour avec succès");
+        setMessage("Réservation mise à jour avec succès");
 
         // Refresh the reservations list immediately
         await fetchReservations();
@@ -599,7 +602,7 @@ export default function ReservationManagement() {
       );
 
       if (response.ok) {
-        setMessage("✅ Réservation supprimée avec succès");
+        setMessage("Réservation supprimée avec succès");
         await fetchReservations();
         setShowModal(false);
       } else {
@@ -626,8 +629,8 @@ export default function ReservationManagement() {
       .then((destination) => {
         setMessage(
           destination === "usb"
-            ? "✅ Réservation et souche envoyées à l'imprimante thermique."
-            : "✅ Réservation et souche imprimées successivement dans le navigateur.",
+            ? "Réservation et souche envoyées à l'imprimante thermique."
+            : "Réservation et souche imprimées successivement dans le navigateur.",
         );
       })
       .catch((printError: unknown) => {
@@ -654,7 +657,7 @@ export default function ReservationManagement() {
       if (response.ok) {
         const updatedReservation = await response.json() as Reservation;
         
-        setMessage("✅ Réservation marquée comme complétée avec succès");
+        setMessage("Réservation marquée comme complétée avec succès");
         
         // Update local state immediately
         setReservations(prev => prev.map(r =>
@@ -699,7 +702,7 @@ export default function ReservationManagement() {
       if (response.ok) {
         await response.json();
         
-        setMessage("✅ Réservation remise en attente avec succès");
+        setMessage("Réservation remise en attente avec succès");
         
         // Update local state immediately
         setReservations(prev => prev.map(r => 
@@ -726,295 +729,219 @@ export default function ReservationManagement() {
     }
   };
 
+  const reservationPaymentLabel: Record<string, string> = { cash: "Cash", card: "Carte", transfer: "Virement", other: "Autre" };
+
   return (
-    <div className="space-y-6 p-6 flex-1 overflow-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Gestion des Réservations
-          </h1>
-          <p className="text-gray-600">
-            Gérez et suivez l'état des réservations des clients
-          </p>
-        </div>
-        <div className="flex gap-3 items-center">
-          <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
-            <div className="text-sm text-blue-600 font-medium">
-              En attente: <span className="font-bold">{reservationSummary.pending}</span>
-            </div>
-          </div>
-          <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
-            <div className="text-sm text-green-600 font-medium">
-              Complétées: <span className="font-bold">{reservationSummary.completed}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="ui-page ui-page-wide">
+      <PageHeader
+        eyebrow="Commandes"
+        title="Gestion des réservations"
+        description="Suivez l'état des réservations clients, imprimez les reçus et marquez les retraits."
+        actions={
+          <button type="button" onClick={fetchReservations} disabled={loading} className="ui-btn ui-btn-secondary">
+            <RefreshCw className={loading ? "animate-spin" : ""} />
+            {loading ? "Chargement…" : "Actualiser"}
+          </button>
+        }
+      />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow border">
-          <div className="text-2xl font-bold text-blue-600">{reservationSummary.totalReservations}</div>
-          <div className="text-sm text-gray-600">Total Réservations</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border">
-          <div className="text-2xl font-bold text-orange-600">{reservationSummary.pending}</div>
-          <div className="text-sm text-gray-600">En Attente</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border">
-          <div className="text-2xl font-bold text-green-600">{reservationSummary.completed}</div>
-          <div className="text-sm text-gray-600">Complétées</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border">
-          <div className="text-2xl font-bold text-purple-600">
-            {reservationSummary.itemCount}
-          </div>
-          <div className="text-sm text-gray-600">Articles Réservés</div>
-        </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard label="Total des réservations" value={reservationSummary.totalReservations} icon={Calendar} />
+        <MetricCard label="En attente" value={reservationSummary.pending} icon={Clock} tone="warning" />
+        <MetricCard label="Complétées" value={reservationSummary.completed} icon={CheckCircle} tone="success" />
+        <MetricCard label="Articles réservés" value={reservationSummary.itemCount} icon={Package} />
       </div>
 
       {/* Messages */}
-      {message && (
-        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg border border-green-200">
-          {message}
-          <button
-            onClick={() => setMessage(null)}
-            className="float-right text-green-700 hover:text-green-900"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg border border-red-200">
-          {error}
-          <button
-            onClick={() => setError(null)}
-            className="float-right text-red-700 hover:text-red-900"
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {message && <Alert tone="success" onDismiss={() => setMessage(null)}>{message}</Alert>}
+      {error && <Alert tone="danger" onDismiss={() => setError(null)}>{error}</Alert>}
 
       {/* Filters and Search */}
-      <div className="bg-white p-4 rounded-lg shadow">
-        <div className="flex flex-wrap gap-4 items-center">
-          <div className="relative flex-1 min-w-[300px]">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+      <section className="ui-card p-4 sm:p-5" aria-label="Recherche et filtres">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_13rem_12rem]">
+          <div className="relative min-w-0">
+            <label htmlFor="reservation-search" className="sr-only">Rechercher une réservation</label>
+            <Search className="ui-field-icon" aria-hidden="true" />
             <input
-              type="text"
-              placeholder="Rechercher par ID, client, téléphone..."
-              className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              id="reservation-search"
+              type="search"
+              placeholder="Rechercher par ID, client, téléphone…"
+              className="ui-input ui-input-icon"
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
-          
-          <select
-            value={filterStatus}
-            onChange={(e) => { setFilterStatus(e.target.value as any); setCurrentPage(1); }}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">Toutes les réservations</option>
-            <option value="pending">En attente seulement</option>
-            <option value="completed">Complétées seulement</option>
-          </select>
 
-          <select
-            value={filterRegion}
-            onChange={(e) => { setFilterRegion(e.target.value as '' | 'Bbbb' | 'Cnnn'); setCurrentPage(1); }}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">Toutes régions</option>
-            <option value="Bbbb">Butembo (Bbbb)</option>
-            <option value="Cnnn">China (Cnnn)</option>
-          </select>
-
-          <div className="flex gap-2">
-            <button
-              onClick={fetchReservations}
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
+          <div>
+            <label htmlFor="reservation-status-filter" className="sr-only">Statut</label>
+            <select
+              id="reservation-status-filter"
+              value={filterStatus}
+              onChange={(e) => { setFilterStatus(e.target.value as any); setCurrentPage(1); }}
+              className="ui-input"
             >
-              <RefreshCw className="w-4 h-4" />
-              {loading ? "Chargement..." : "Actualiser"}
-            </button>
+              <option value="all">Toutes les réservations</option>
+              <option value="pending">En attente seulement</option>
+              <option value="completed">Complétées seulement</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="reservation-region-filter" className="sr-only">Région</label>
+            <select
+              id="reservation-region-filter"
+              value={filterRegion}
+              onChange={(e) => { setFilterRegion(e.target.value as '' | 'Bbbb' | 'Cnnn'); setCurrentPage(1); }}
+              className="ui-input"
+            >
+              <option value="">Toutes régions</option>
+              <option value="Bbbb">Butembo (Bbbb)</option>
+              <option value="Cnnn">China (Cnnn)</option>
+            </select>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Reservations Table */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
-            Liste des Réservations ({pagination.totalRecords})
+      <section className="ui-card overflow-hidden" aria-labelledby="reservations-table-title">
+        <div className="ui-card-header">
+          <h2 id="reservations-table-title" className="ui-section-title flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-blue-700" />
+            Liste des réservations
+            <span className="ui-badge ui-badge-neutral tabular-nums">{pagination.totalRecords}</span>
           </h2>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="ui-table-wrap">
           {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-500 mt-2">Chargement des réservations...</p>
-            </div>
+            <LoadingState label="Chargement des réservations…" />
           ) : filteredReservations.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>Aucune réservation trouvée</p>
-              <p className="text-sm">
-                Aucune réservation ne correspond à vos critères de recherche
-              </p>
-            </div>
+            <EmptyState icon={Calendar} title="Aucune réservation trouvée" description="Aucune réservation ne correspond à vos critères de recherche." />
           ) : (
             <>
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="ui-table min-w-full">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ID Réservation
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Client
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date Réservation
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Articles
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Région
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Montant
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Statut
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th scope="col">Réservation</th>
+                  <th scope="col">Client</th>
+                  <th scope="col">Date de réservation</th>
+                  <th scope="col" className="text-center">Articles</th>
+                  <th scope="col">Région</th>
+                  <th scope="col" className="text-right">Montant</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col" className="ui-sticky-end text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody>
                 {filteredReservations.map((reservation) => (
-                  <tr key={reservation._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <tr key={reservation._id}>
+                    <td className="whitespace-nowrap font-medium text-slate-900">
                       {reservation.saleId}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 font-medium">
-                        {reservation.customer.name}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {reservation.customer.phone}
+                    <td className="min-w-[10rem]">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-900">{reservation.customer.name}</span>
+                        <span className="text-xs tabular-nums text-slate-500">{reservation.customer.phone}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div>
-                        {displayReservationDate(reservation)}
-                      </div>
-                      <div className="text-gray-500 text-xs">
-                        {displayReservationTime(reservation)}
+                    <td className="whitespace-nowrap">
+                      <div className="flex flex-col">
+                        <span className="text-slate-700">{displayReservationDate(reservation)}</span>
+                        <span className="text-xs text-slate-500">{displayReservationTime(reservation)}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {reservation.items.length} article(s)
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="text-center tabular-nums">{reservation.items.length}</td>
+                    <td>
                       {(() => {
                         const codes = reservationRegionBadges.get(reservation._id) || [];
-                        if (codes.length === 0) return <span className="text-xs text-gray-400">—</span>;
+                        if (codes.length === 0) return <span className="text-xs text-slate-400">—</span>;
                         if (codes.length > 1) return (
-                          <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">Mixte</span>
+                          <span className="ui-badge ui-badge-info">Mixte</span>
                         );
                         return (
-                          <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">{codes[0]}</span>
+                          <span className="ui-tag">{codes[0]}</span>
                         );
                       })()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {formatCurrency(reservation.total)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          reservation.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-orange-100 text-orange-800'
-                        }`}
-                      >
-                        {reservation.status === 'completed' ? 'Complétée' : 'En Attente'}
+                    <td className="ui-num whitespace-nowrap font-semibold text-slate-900">{formatCurrency(reservation.total)}</td>
+                    <td>
+                      <span className={`ui-badge ${reservation.status === 'completed' ? "ui-badge-success" : "ui-badge-warning"}`}>
+                        {reservation.status === 'completed' ? 'Complétée' : 'En attente'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
+                    <td className="ui-sticky-end">
+                      <div className="ui-row-actions">
                         <button
+                          type="button"
                           onClick={() => viewReservationDetails(reservation)}
-                          className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                          className="ui-icon-btn ui-icon-btn-primary"
                           title="Voir les détails"
+                          aria-label={`Voir la réservation ${reservation.saleId}`}
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye />
                         </button>
-                        
+
                         <button
+                          type="button"
                           onClick={() => printReservationReceipt(reservation)}
-                          className="text-purple-600 hover:text-purple-900 p-1 rounded"
+                          className="ui-icon-btn"
                           title="Imprimer le reçu et la souche"
+                          aria-label={`Imprimer la réservation ${reservation.saleId}`}
                         >
-                          <Printer className="w-4 h-4" />
+                          <Printer />
                         </button>
 
                         {/* Edit Button - Only for admin/manager */}
                         {canEditReservation && (
                           <button
+                            type="button"
                             onClick={() => openEditModal(reservation)}
                             disabled={reservation.status === 'cancelled'}
-                            className={`p-1 rounded ${
-                              reservation.status === 'cancelled'
-                                ? "text-gray-400 cursor-not-allowed"
-                                : "text-yellow-600 hover:text-yellow-900"
-                            }`}
+                            className="ui-icon-btn ui-icon-btn-warning"
                             title="Modifier la réservation"
+                            aria-label={`Modifier la réservation ${reservation.saleId}`}
                           >
-                            <Edit className="w-4 h-4" />
+                            <Edit />
                           </button>
                         )}
-                        
+
                         {/* Delete Button - Only for admin */}
                         {canDeleteReservation && (
                           <button
+                            type="button"
                             onClick={() => handleDeleteReservation(reservation)}
-                            className="text-red-600 hover:text-red-900 p-1 rounded"
+                            className="ui-icon-btn ui-icon-btn-danger"
                             title="Supprimer la réservation"
+                            aria-label={`Supprimer la réservation ${reservation.saleId}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 />
                           </button>
                         )}
-                        
+
                         {canEditReservation && (
                           <>
                             {reservation.status !== 'completed' ? (
                               <button
+                                type="button"
                                 onClick={() => openCompletionDialog(reservation)}
                                 disabled={loading}
-                                className="text-green-600 hover:text-green-900 p-1 rounded disabled:opacity-50"
+                                className="ui-icon-btn ui-icon-btn-success text-emerald-700"
                                 title="Marquer comme complétée"
+                                aria-label={`Marquer ${reservation.saleId} comme complétée`}
                               >
-                                <CheckCircle className="w-4 h-4" />
+                                <CheckCircle />
                               </button>
                             ) : (
                               <button
+                                type="button"
                                 onClick={() => markAsPending(reservation)}
                                 disabled={loading}
-                                className="text-orange-600 hover:text-orange-900 p-1 rounded disabled:opacity-50"
+                                className="ui-icon-btn ui-icon-btn-warning"
                                 title="Remettre en attente"
+                                aria-label={`Remettre ${reservation.saleId} en attente`}
                               >
-                                <XCircle className="w-4 h-4" />
+                                <XCircle />
                               </button>
                             )}
                           </>
@@ -1026,51 +953,50 @@ export default function ReservationManagement() {
               </tbody>
             </table>
             {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between border-t px-4 py-3">
-                <span className="text-sm text-gray-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
+              <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <span className="text-sm tabular-nums text-slate-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
                 <div className="flex gap-2">
-                  <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="px-3 py-1.5 border rounded disabled:opacity-50">Précédent</button>
-                  <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="px-3 py-1.5 border rounded disabled:opacity-50">Suivant</button>
+                  <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none">Précédent</button>
+                  <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none">Suivant</button>
                 </div>
               </div>
             )}
             </>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Completion Confirmation Dialog */}
       {showCompletionDialog && reservationToComplete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Confirmer la complétion
-              </h3>
+        <div className="ui-dialog-overlay" role="alertdialog" aria-modal="true" aria-labelledby="complete-reservation-title">
+          <div className="ui-dialog max-w-md">
+            <div className="ui-dialog-header">
+              <h3 id="complete-reservation-title" className="ui-dialog-title">Confirmer le retrait</h3>
+              <button type="button" onClick={closeCompletionDialog} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
+              </button>
             </div>
-            
-            <div className="p-6">
-              <p className="text-gray-700 mb-4">
-                Êtes-vous sûr de vouloir marquer la réservation <strong>{reservationToComplete.saleId}</strong> comme complétée ?
+
+            <div className="ui-dialog-body">
+              <p className="text-sm text-slate-700">
+                Êtes-vous sûr de vouloir marquer la réservation <strong className="font-semibold text-slate-950">{reservationToComplete.saleId}</strong> comme complétée ?
                 Un reçu de retrait sera imprimé.
               </p>
-              
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={closeCompletionDialog}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={() => markAsCompleted(reservationToComplete)}
-                  disabled={loading}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  {loading ? "Traitement..." : "Confirmer et Imprimer"}
-                </button>
-              </div>
+            </div>
+
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={closeCompletionDialog} className="ui-btn ui-btn-ghost">
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => markAsCompleted(reservationToComplete)}
+                disabled={loading}
+                className="ui-btn ui-btn-success"
+              >
+                <CheckCircle />
+                {loading ? "Traitement…" : "Confirmer et imprimer"}
+              </button>
             </div>
           </div>
         </div>
@@ -1078,255 +1004,161 @@ export default function ReservationManagement() {
 
       {/* Reservation Details Modal */}
       {showModal && selectedReservation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Détails de la Réservation - {selectedReservation.saleId}
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="reservation-details-title">
+          <div className="ui-dialog max-w-2xl">
+            <div className="ui-dialog-header">
+              <div className="min-w-0">
+                <h3 id="reservation-details-title" className="ui-dialog-title">Détails de la réservation</h3>
+                <p className="mt-0.5 truncate text-sm text-slate-500">{selectedReservation.saleId}</p>
+              </div>
+              <button type="button" onClick={() => setShowModal(false)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="ui-dialog-body space-y-5">
               {/* Reservation Info */}
-              <div className="grid grid-cols-2 gap-4">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ID Réservation
-                  </label>
-                  <p className="text-sm text-gray-900">{selectedReservation.saleId}</p>
+                  <dt className="text-xs font-medium text-slate-500">Statut</dt>
+                  <dd className="mt-1">
+                    <span className={`ui-badge ${selectedReservation.status === 'completed' ? "ui-badge-success" : "ui-badge-warning"}`}>
+                      {selectedReservation.status === 'completed' ? 'Complétée' : 'En attente'}
+                    </span>
+                  </dd>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date de Création
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {formatDateTime(selectedReservation.createdAt)}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date de Réservation
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {selectedReservation.reservationDate 
+                  <dt className="text-xs font-medium text-slate-500">Date de réservation</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">
+                    {selectedReservation.reservationDate
                       ? `${formatDate(selectedReservation.reservationDate)} à ${selectedReservation.reservationTime || displayReservationTime(selectedReservation)}`
                       : 'Non spécifiée'
                     }
-                  </p>
+                  </dd>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Méthode de Paiement
-                  </label>
-                  <p className="text-sm text-gray-900 capitalize">
-                    {selectedReservation.paymentMethod}
-                  </p>
+                  <dt className="text-xs font-medium text-slate-500">Date de création</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{formatDateTime(selectedReservation.createdAt)}</dd>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Statut
-                  </label>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      selectedReservation.status === 'completed'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-orange-100 text-orange-800'
-                    }`}
-                  >
-                    {selectedReservation.status === 'completed' ? 'Complétée' : 'En Attente'}
-                  </span>
+                  <dt className="text-xs font-medium text-slate-500">Méthode de paiement</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{reservationPaymentLabel[selectedReservation.paymentMethod] || selectedReservation.paymentMethod}</dd>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Vendeur
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {selectedReservation.salesPerson || "Non spécifié"}
-                  </p>
+                  <dt className="text-xs font-medium text-slate-500">Vendeur</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{selectedReservation.salesPerson || "Non spécifié"}</dd>
                 </div>
                 {selectedReservation.completedAt && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Complétée le
-                      </label>
-                      <p className="text-sm text-gray-900">
-                        {formatDateTime(selectedReservation.completedAt)}
-                      </p>
+                      <dt className="text-xs font-medium text-slate-500">Complétée le</dt>
+                      <dd className="mt-0.5 text-sm text-slate-900">{formatDateTime(selectedReservation.completedAt)}</dd>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Complétée par
-                      </label>
-                      <p className="text-sm text-gray-900">
-                        {selectedReservation.completedBy || "Inconnu"}
-                      </p>
+                      <dt className="text-xs font-medium text-slate-500">Complétée par</dt>
+                      <dd className="mt-0.5 text-sm text-slate-900">{selectedReservation.completedBy || "Inconnu"}</dd>
                     </div>
                   </>
                 )}
-              </div>
+              </dl>
 
               {/* Customer Info */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Informations du Client
-                </h4>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <User className="w-4 h-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-700">Nom</p>
-                        <p className="text-sm text-gray-900">{selectedReservation.customer.name}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Phone className="w-4 h-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-700">Téléphone</p>
-                        <p className="text-sm text-gray-900">{selectedReservation.customer.phone}</p>
-                      </div>
-                    </div>
-                    {selectedReservation.customer.email && (
-                      <div className="flex items-center gap-3">
-                        <Mail className="w-4 h-4 text-gray-500" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-700">Email</p>
-                          <p className="text-sm text-gray-900">{selectedReservation.customer.email}</p>
-                        </div>
-                      </div>
-                    )}
+                <h4 className="ui-kicker mb-2 flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Client</h4>
+                <dl className="ui-muted-panel grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium text-slate-500">Nom</dt>
+                    <dd className="mt-0.5 break-words text-sm text-slate-900">{selectedReservation.customer.name}</dd>
                   </div>
-                </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-500">Téléphone</dt>
+                    <dd className="mt-0.5 flex items-center gap-1.5 text-sm tabular-nums text-slate-900"><Phone className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />{selectedReservation.customer.phone}</dd>
+                  </div>
+                  {selectedReservation.customer.email && (
+                    <div className="min-w-0 sm:col-span-2">
+                      <dt className="text-xs font-medium text-slate-500">Email</dt>
+                      <dd className="mt-0.5 flex items-center gap-1.5 break-all text-sm text-slate-900"><Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />{selectedReservation.customer.email}</dd>
+                    </div>
+                  )}
+                </dl>
               </div>
 
               {/* Items */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <Package className="w-4 h-4" />
-                  Articles Réservés ({selectedReservation.items.length})
-                </h4>
-                <div className="space-y-3">
+                <h4 className="ui-kicker mb-2 flex items-center gap-1.5"><Package className="h-3.5 w-3.5" />Articles réservés ({selectedReservation.items.length})</h4>
+                <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                   {selectedReservation.items.map((item, index) => (
-                    <div key={index} className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h5 className="font-medium text-gray-900">
-                            {item.name}
-                            {item.regionCode && (
-                              <span className="ml-2 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
-                                {item.regionCode}
-                              </span>
-                            )}
-                          </h5>
-                          <p className="text-sm text-gray-600">
-                            Quantité: {item.quantity} × {formatCurrency(item.price)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium text-gray-900">
-                            {formatCurrency(item.total)}
-                          </p>
-                        </div>
+                    <li key={index} className="flex items-start justify-between gap-3 px-3.5 py-3">
+                      <div className="min-w-0">
+                        <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-slate-900">
+                          <span className="break-words">{item.name}</span>
+                          {item.regionCode && <span className="ui-tag">{item.regionCode}</span>}
+                        </p>
+                        <p className="mt-0.5 text-xs tabular-nums text-slate-500">
+                          Quantité : {item.quantity} × {formatCurrency(item.price)}
+                        </p>
                       </div>
-                    </div>
+                      <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(item.total)}</p>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
 
               {/* Notes */}
               {selectedReservation.notes && (
                 <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-3">
-                    Notes
-                  </h4>
-                  <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-                    <p className="text-sm text-gray-700">{selectedReservation.notes}</p>
-                  </div>
+                  <h4 className="ui-kicker mb-2">Notes</h4>
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-slate-700">{selectedReservation.notes}</p>
                 </div>
               )}
 
               {/* Totals */}
-              <div className="border-t border-gray-200 pt-4">
-                <div className="flex justify-between items-center text-lg font-semibold">
-                  <span className="text-gray-900">Montant Total:</span>
-                  <span className="text-gray-900">
-                    {formatCurrency(selectedReservation.total)}
-                  </span>
-                </div>
+              <div className="flex items-center justify-between border-t border-slate-200 pt-4 text-base font-semibold text-slate-950">
+                <span>Montant total</span>
+                <span className="text-lg tabular-nums">{formatCurrency(selectedReservation.total)}</span>
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => printReservationReceipt(selectedReservation)}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Printer className="w-4 h-4" />
-                  Imprimer Reçu + Souche
+            {/* Actions */}
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="ui-btn ui-btn-ghost">
+                Fermer
+              </button>
+              {canDeleteReservation && (
+                <button type="button" onClick={() => handleDeleteReservation(selectedReservation)} className="ui-btn ui-btn-danger-outline">
+                  <Trash2 />
+                  Supprimer
                 </button>
-                
-                {canEditReservation && (
-                  <>
-                    <button
-                      onClick={() => openEditModal(selectedReservation)}
-                      disabled={selectedReservation.status === 'cancelled'}
-                      className={`px-4 py-2 border rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                        selectedReservation.status === 'cancelled'
-                          ? "border-gray-300 text-gray-400 cursor-not-allowed"
-                          : "border-yellow-300 text-yellow-600 hover:bg-yellow-50"
-                      }`}
-                    >
-                      <Edit className="w-4 h-4" />
-                      Modifier la Réservation
-                    </button>
-
-                    {selectedReservation.status !== 'completed' ? (
-                      <button
-                        onClick={() => openCompletionDialog(selectedReservation)}
-                        className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Marquer comme Complétée
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => markAsPending(selectedReservation)}
-                        className="flex-1 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Remettre en Attente
-                      </button>
-                    )}
-                  </>
-                )}
-
-                {canDeleteReservation && (
+              )}
+              {canEditReservation && (
+                <>
                   <button
-                    onClick={() => handleDeleteReservation(selectedReservation)}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                    type="button"
+                    onClick={() => openEditModal(selectedReservation)}
+                    disabled={selectedReservation.status === 'cancelled'}
+                    className="ui-btn ui-btn-secondary"
                   >
-                    <Trash2 className="w-4 h-4" />
-                    Supprimer
+                    <Edit />
+                    Modifier
                   </button>
-                )}
 
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
+                  {selectedReservation.status !== 'completed' ? (
+                    <button type="button" onClick={() => openCompletionDialog(selectedReservation)} className="ui-btn ui-btn-secondary">
+                      <CheckCircle />
+                      Marquer comme complétée
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => markAsPending(selectedReservation)} className="ui-btn ui-btn-secondary">
+                      <XCircle />
+                      Remettre en attente
+                    </button>
+                  )}
+                </>
+              )}
+              <button type="button" onClick={() => printReservationReceipt(selectedReservation)} className="ui-btn ui-btn-primary">
+                <Printer />
+                Imprimer reçu + souche
+              </button>
             </div>
           </div>
         </div>
@@ -1334,40 +1166,29 @@ export default function ReservationManagement() {
 
       {/* Edit Reservation Modal */}
       {showEditModal && editingReservation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Modifier la Réservation - {editingReservation.saleId}
-              </h3>
-              <button
-                onClick={closeEditModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-reservation-title">
+          <div className="ui-dialog max-w-4xl">
+            <div className="ui-dialog-header">
+              <div className="min-w-0">
+                <h3 id="edit-reservation-title" className="ui-dialog-title">Modifier la réservation</h3>
+                <p className="mt-0.5 truncate text-sm text-slate-500">{editingReservation.saleId}</p>
+              </div>
+              <button type="button" onClick={closeEditModal} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {error && (
-                <div className="p-3 bg-red-100 text-red-700 rounded-lg">
-                  {error}
-                </div>
-              )}
+            <div className="ui-dialog-body space-y-6">
+              {error && <Alert tone="danger">{error}</Alert>}
 
               {/* Customer Information */}
-              <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Informations du Client
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <fieldset>
+                <legend className="ui-kicker mb-3">Client</legend>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nom
-                    </label>
+                    <label htmlFor="edit-res-name" className="ui-label">Nom</label>
                     <input
+                      id="edit-res-name"
                       type="text"
                       value={editForm.customer.name}
                       onChange={(e) =>
@@ -1376,15 +1197,14 @@ export default function ReservationManagement() {
                           customer: { ...prev.customer, name: e.target.value },
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Téléphone
-                    </label>
+                    <label htmlFor="edit-res-phone" className="ui-label">Téléphone</label>
                     <input
+                      id="edit-res-phone"
                       type="tel"
                       value={editForm.customer.phone}
                       onChange={(e) =>
@@ -1393,15 +1213,15 @@ export default function ReservationManagement() {
                           customer: { ...prev.customer, phone: e.target.value },
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
+                      inputMode="tel"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
+                    <label htmlFor="edit-res-email" className="ui-label">Email</label>
                     <input
+                      id="edit-res-email"
                       type="email"
                       value={editForm.customer.email}
                       onChange={(e) =>
@@ -1410,138 +1230,125 @@ export default function ReservationManagement() {
                           customer: { ...prev.customer, email: e.target.value },
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
+                      inputMode="email"
                     />
                   </div>
                 </div>
-              </div>
+              </fieldset>
 
               {/* Reservation Details */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date de Réservation
-                  </label>
-                  <input
-                    type="date"
-                    value={editForm.reservationDate}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        reservationDate: e.target.value,
-                      }))
-                    }
-                    className="w-full p-2 border rounded"
-                  />
+              <fieldset>
+                <legend className="ui-kicker mb-3">Réservation</legend>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label htmlFor="edit-res-date" className="ui-label">Date de réservation</label>
+                    <input
+                      id="edit-res-date"
+                      type="date"
+                      value={editForm.reservationDate}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          reservationDate: e.target.value,
+                        }))
+                      }
+                      className="ui-input"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="edit-res-time" className="ui-label">Heure de réservation</label>
+                    <input
+                      id="edit-res-time"
+                      type="time"
+                      value={editForm.reservationTime}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          reservationTime: e.target.value,
+                        }))
+                      }
+                      className="ui-input"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="edit-res-payment" className="ui-label">Méthode de paiement</label>
+                    <select
+                      id="edit-res-payment"
+                      value={editForm.paymentMethod}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          paymentMethod: e.target.value,
+                        }))
+                      }
+                      className="ui-input"
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="card">Carte</option>
+                      <option value="transfer">Virement</option>
+                      <option value="other">Autre</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label htmlFor="edit-res-notes" className="ui-label">Notes</label>
+                    <textarea
+                      id="edit-res-notes"
+                      value={editForm.notes}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({ ...prev, notes: e.target.value }))
+                      }
+                      placeholder="Notes supplémentaires…"
+                      className="ui-input min-h-20"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Heure de Réservation
-                  </label>
-                  <input
-                    type="time"
-                    value={editForm.reservationTime}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        reservationTime: e.target.value,
-                      }))
-                    }
-                    className="w-full p-2 border rounded"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Méthode de Paiement
-                  </label>
-                  <select
-                    value={editForm.paymentMethod}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        paymentMethod: e.target.value,
-                      }))
-                    }
-                    className="w-full p-2 border rounded"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="card">Carte</option>
-                    <option value="transfer">Virement</option>
-                    <option value="other">Autre</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  value={editForm.notes}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({ ...prev, notes: e.target.value }))
-                  }
-                  placeholder="Notes supplémentaires..."
-                  className="w-full p-2 border rounded h-20"
-                />
-              </div>
+              </fieldset>
 
               {/* Items Section */}
               <div>
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-md font-medium text-gray-900">
-                    Articles
-                  </h4>
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <h4 className="ui-kicker">Articles</h4>
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={fetchProducts}
                       disabled={loadingProducts}
-                      className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 disabled:opacity-50 flex items-center gap-1"
+                      className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none"
                     >
-                      <RefreshCw
-                        className={`w-3 h-3 ${
-                          loadingProducts ? "animate-spin" : ""
-                        }`}
-                      />{" "}
-                      Actualiser Produits
+                      <RefreshCw className={loadingProducts ? "animate-spin" : ""} />
+                      Actualiser les produits
                     </button>
                     <button
+                      type="button"
                       onClick={addNewItem}
                       disabled={products.length === 0}
-                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      className="ui-btn ui-btn-primary ui-btn-sm flex-1 sm:flex-none"
                     >
-                      <Plus className="w-3 h-3" /> Ajouter un article
+                      <Plus /> Ajouter un article
                     </button>
                   </div>
                 </div>
 
                 {products.length === 0 && !loadingProducts && (
-                  <div className="p-3 bg-yellow-100 text-yellow-700 rounded-lg mb-4">
-                    <p className="text-sm">
-                      Aucun article disponible. Veuillez vérifier si des
-                      articles existent dans votre base de données.
-                    </p>
-                  </div>
+                  <Alert tone="warning" className="mb-4">
+                    Aucun article disponible. Veuillez vérifier si des articles existent dans votre base de données.
+                  </Alert>
                 )}
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {editForm.items.map((item, index) => (
-                    <div
-                      key={item._id}
-                      className="border rounded-lg p-4 bg-gray-50"
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                        <div className="md:col-span-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Article
-                          </label>
+                    <div key={item._id} className="ui-muted-panel">
+                      <div className="grid grid-cols-2 items-end gap-3 md:grid-cols-12">
+                        <div className="col-span-2 md:col-span-5">
+                          <label htmlFor={`edit-res-item-${index}`} className="ui-label">Article</label>
                           {loadingProducts ? (
-                            <div className="p-2 border rounded bg-gray-200 text-gray-600 text-sm">
-                              Chargement des produits...
+                            <div className="flex min-h-11 items-center rounded-lg border border-slate-200 bg-slate-100 px-3 text-sm text-slate-500">
+                              Chargement des produits…
                             </div>
                           ) : products.length === 0 ? (
                             <input
+                              id={`edit-res-item-${index}`}
                               type="text"
                               value={item.name}
                               onChange={(e) => {
@@ -1553,15 +1360,16 @@ export default function ReservationManagement() {
                                 }));
                               }}
                               placeholder="Nom du produit"
-                              className="w-full p-2 border rounded"
+                              className="ui-input"
                             />
                           ) : (
                             <select
+                              id={`edit-res-item-${index}`}
                               value={item.productId}
                               onChange={(e) =>
                                 updateItemProduct(index, e.target.value)
                               }
-                              className="w-full p-2 border rounded"
+                              className="ui-input"
                             >
                               {products.map((product) => (
                                 <option key={product._id} value={product._id}>
@@ -1576,10 +1384,9 @@ export default function ReservationManagement() {
                         </div>
 
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Prix
-                          </label>
+                          <label htmlFor={`edit-res-price-${index}`} className="ui-label">Prix</label>
                           <input
+                            id={`edit-res-price-${index}`}
                             type="number"
                             min="0"
                             step="0.01"
@@ -1590,26 +1397,27 @@ export default function ReservationManagement() {
                                 parseFloat(e.target.value) || 0
                               )
                             }
-                            className="w-full p-2 border rounded"
+                            className="ui-input tabular-nums"
+                            inputMode="decimal"
                           />
                         </div>
 
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Quantité
-                          </label>
-                          <div className="flex items-center border rounded">
+                          <label htmlFor={`edit-res-qty-${index}`} className="ui-label">Quantité</label>
+                          <div className="flex items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white">
                             <button
                               type="button"
                               onClick={() =>
                                 updateItemQuantity(index, item.quantity - 1)
                               }
-                              className="p-2 hover:bg-gray-200"
+                              className="grid w-10 shrink-0 place-items-center text-slate-600 hover:bg-slate-100"
                               disabled={item.quantity <= 1}
+                              aria-label="Diminuer la quantité"
                             >
-                              <Minus className="w-3 h-3" />
+                              <Minus className="h-3.5 w-3.5" />
                             </button>
                             <input
+                              id={`edit-res-qty-${index}`}
                               type="number"
                               min="1"
                               value={item.quantity}
@@ -1619,36 +1427,39 @@ export default function ReservationManagement() {
                                   parseInt(e.target.value) || 1
                                 )
                               }
-                              className="w-full p-2 text-center border-0"
+                              className="w-full min-w-0 border-0 text-center tabular-nums shadow-none focus:ring-0"
+                              inputMode="numeric"
                             />
                             <button
                               type="button"
                               onClick={() =>
                                 updateItemQuantity(index, item.quantity + 1)
                               }
-                              className="p-2 hover:bg-gray-200"
+                              className="grid w-10 shrink-0 place-items-center text-slate-600 hover:bg-slate-100"
+                              aria-label="Augmenter la quantité"
                             >
-                              <Plus className="w-3 h-3" />
+                              <Plus className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </div>
 
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Total
-                          </label>
-                          <div className="p-2 bg-white border rounded font-medium">
+                          <span className="ui-label">Total</span>
+                          <div className="flex min-h-11 items-center justify-end rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold tabular-nums text-slate-900">
                             {formatCurrency(item.total)}
                           </div>
                         </div>
 
-                        <div className="md:col-span-2">
+                        <div className="md:col-span-1">
                           <button
                             type="button"
                             onClick={() => removeItem(index)}
-                            className="w-full p-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center gap-1"
+                            className="ui-btn ui-btn-danger-outline w-full px-0"
+                            aria-label={`Supprimer ${item.name}`}
+                            title="Supprimer"
                           >
-                            <Trash2 className="w-3 h-3" /> Supprimer
+                            <Trash2 />
+                            <span className="md:sr-only">Supprimer</span>
                           </button>
                         </div>
                       </div>
@@ -1658,59 +1469,54 @@ export default function ReservationManagement() {
               </div>
 
               {/* Totals */}
-              <div className="border-t border-gray-200 pt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600">Sous-total:</span>
-                  <span className="text-sm text-gray-900">
-                    {formatCurrency(subtotal)}
-                  </span>
+              <div className="space-y-1.5 border-t border-slate-200 pt-4 text-sm tabular-nums">
+                <div className="flex justify-between text-slate-600">
+                  <span>Sous-total</span>
+                  <span className="text-slate-900">{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex justify-between items-center text-lg font-semibold">
-                  <span className="text-gray-900">Total:</span>
-                  <span className="text-gray-900">{formatCurrency(total)}</span>
+                <div className="flex items-center justify-between text-base font-semibold text-slate-950">
+                  <span>Total</span>
+                  <span className="text-lg">{formatCurrency(total)}</span>
                 </div>
               </div>
 
               {/* Edit Reason */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Raison de la modification
-                </h4>
+                <label htmlFor="edit-res-reason" className="ui-label">Raison de la modification <span className="ui-required">*</span></label>
                 <textarea
+                  id="edit-res-reason"
                   value={editForm.reason}
                   onChange={(e) =>
                     setEditForm((prev) => ({ ...prev, reason: e.target.value }))
                   }
-                  placeholder="Veuillez indiquer une raison pour la modification de cette réservation..."
-                  className="w-full p-2 border rounded h-20"
+                  placeholder="Veuillez indiquer une raison pour la modification de cette réservation…"
+                  className="ui-input min-h-20"
                   required
                 />
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={handleEditReservation}
-                  disabled={loading || editForm.items.length === 0}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" /> Mise à jour...
-                    </>
-                  ) : (
-                    <>
-                      <Edit className="w-4 h-4" /> Mettre à jour la réservation
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={closeEditModal}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Annuler
-                </button>
-              </div>
+            {/* Actions */}
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={closeEditModal} className="ui-btn ui-btn-ghost">
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleEditReservation}
+                disabled={loading || editForm.items.length === 0}
+                className="ui-btn ui-btn-primary"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="animate-spin" /> Mise à jour…
+                  </>
+                ) : (
+                  <>
+                    <Edit /> Mettre à jour la réservation
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

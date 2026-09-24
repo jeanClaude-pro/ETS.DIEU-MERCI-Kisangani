@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   BarChart3,
   TrendingUp,
@@ -19,9 +20,11 @@ import {
   FileText,
   RefreshCw,
   Download,
+  ArrowRight,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import RegionFilterPills from "../../components/RegionFilterPills";
+import { PageHeader } from "../../components/ui";
 import type { RegionCodeFilter } from "../../types";
 import { useConnectivity } from "../../context/ConnectivityContext";
 import { buildLocalAnalytics, isRangeCovered, localReportRange } from "../../services/localReportService";
@@ -41,6 +44,18 @@ interface AnalyticsData {
   totalCustomers: number;
   totalProducts: number;
   totalValidatedExpenses: number;
+  totalValidatedExpenseCount: number;
+  validatedExpenses: {
+    _id: string;
+    expenseId: string;
+    reason: string;
+    amount: number;
+    recipientName?: string;
+    paymentMethod?: string;
+    regionCode?: string;
+    validatedAt?: string;
+    createdAt: string;
+  }[];
   totalEntries: number;
   netRevenue: number;
   salesByDay: {
@@ -237,6 +252,8 @@ export default function Analytics() {
     const local = buildLocalAnalytics(sales, range, regionFilter, {
       totalEntries: cachedData?.totalEntries,
       totalValidatedExpenses: cachedData?.totalValidatedExpenses,
+      totalValidatedExpenseCount: cachedData?.totalValidatedExpenseCount,
+      validatedExpenses: cachedData?.validatedExpenses,
     });
     setAnalytics(local.data);
     setReservationsStats({ count: local.reservations.count, value: local.reservations.value });
@@ -458,6 +475,46 @@ export default function Analytics() {
     y += 6;
 
     // ── SALES TREND ──────────────────────────────────────────────────────────
+    // Keep the report view concise: each validated expense is identified by
+    // its amount and reason, while editing remains in expense history.
+    if (timeframe === "day" || timeframe === "week") {
+      drawSection(`DETAIL DES DEPENSES VALIDEES (${analytics.totalValidatedExpenseCount})`);
+      if (analytics.validatedExpenses.length > 0) {
+      doc.setFillColor(185, 28, 28);
+      doc.rect(margin, y - 5, contentWidth, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.text('Depense / raison', margin + 3, y);
+      doc.text('Montant', pageWidth - margin - 3, y, { align: 'right' });
+      y += 8;
+
+        analytics.validatedExpenses.forEach((expense, i) => {
+          checkPage(8);
+          const reason = expense.reason.length > 68 ? `${expense.reason.slice(0, 68)}...` : expense.reason;
+          if (i % 2 === 0) {
+            doc.setFillColor(254, 242, 242);
+            doc.rect(margin, y - 5, contentWidth, 7, 'F');
+          }
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(60, 60, 60);
+          doc.text(`Depense - ${reason}`, margin + 3, y);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(153, 27, 27);
+          doc.text(formatCurrency(expense.amount), pageWidth - margin - 3, y, { align: 'right' });
+          y += 7;
+        });
+      } else {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(8.5);
+        doc.setTextColor(140, 140, 140);
+        doc.text('Aucune depense validee pour cette periode.', margin + 3, y);
+        y += 8;
+      }
+
+      y += 6;
+    }
     const trendData = getChartDataForTimeframe();
     drawSection('TENDANCES DES VENTES');
 
@@ -575,22 +632,21 @@ export default function Analytics() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Analytiques
-            </h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-2">
-              Analyse approfondie de la performance de votre entreprise
-            </p>
+      <div aria-busy="true">
+        <div className="ui-page animate-pulse">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-3">
+              <div className="h-8 w-44 rounded-lg bg-slate-200" />
+              <div className="h-4 w-72 max-w-full rounded bg-slate-200" />
+            </div>
+            <div className="flex gap-2"><div className="h-11 w-28 rounded-lg bg-slate-200" /><div className="h-11 w-40 rounded-lg bg-slate-200" /></div>
           </div>
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-500 mt-2 text-sm sm:text-base">
-              Chargement des analytiques...
-            </p>
+          <div className="h-28 rounded-xl border border-slate-200 bg-white" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-32 rounded-xl border border-slate-200 bg-white" />)}
           </div>
+          <div className="h-72 rounded-xl border border-slate-200 bg-white" />
+          <div className="sr-only" role="status">Chargement des analytiques...</div>
         </div>
       </div>
     );
@@ -598,21 +654,15 @@ export default function Analytics() {
 
   if (!analytics) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Analytiques
-            </h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-2">
-              Analyse approfondie de la performance de votre entreprise
-            </p>
-          </div>
-          <div className="text-center py-12 text-gray-500">
-            <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-sm sm:text-base">
-              Aucune donnée disponible pour les analytiques
-            </p>
+      <div>
+        <div className="ui-page">
+          <PageHeader eyebrow="Rapports" title="Analytiques" description="Vue d'ensemble des performances et opérations." />
+          <div className="rounded-xl border border-slate-200 bg-white px-6 py-14 text-center shadow-sm">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-lg bg-slate-100 text-slate-500">
+              <BarChart3 className="h-5 w-5" />
+            </span>
+            <h2 className="mt-4 text-base font-semibold text-slate-900">Aucune donnée disponible</h2>
+            <p className="mt-1 text-sm text-slate-500">Les indicateurs apparaîtront ici dès que des opérations seront disponibles.</p>
           </div>
         </div>
       </div>
@@ -644,340 +694,409 @@ export default function Analytics() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div>
+      <div className="ui-page">
         {/* Header */}
-        <div className="text-center sm:text-left">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                Analytiques
-              </h1>
-              <p className="text-sm sm:text-base text-gray-600 mt-2">
-                Analyse approfondie de la performance de votre entreprise
-              </p>
-              {usingLocalData && <p className="mt-1 text-xs font-semibold text-blue-700">{localNotice}</p>}
-            </div>
-            <div className="flex items-center gap-3">
-              {shouldSeeOnlyTodayData() && (
-                <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg border border-blue-200">
-                  <Shield className="w-4 h-4" />
-                  <span className="text-sm font-medium">
-                    Vue limitée - Données du jour uniquement
-                  </span>
-                </div>
+        <PageHeader
+          eyebrow="Rapports"
+          title="Analytiques"
+          description="Vue d'ensemble des performances et opérations."
+          meta={(usingLocalData || shouldSeeOnlyTodayData()) ? (
+            <>
+              {usingLocalData && (
+                <span className="ui-badge ui-badge-info max-w-full">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" aria-hidden="true" />
+                  <span className="truncate">{localNotice}</span>
+                </span>
               )}
-              <button
-                onClick={fetchAnalytics}
-                disabled={loading}
-                className="px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                <span className="text-sm">Actualiser</span>
+              {shouldSeeOnlyTodayData() && (
+                <span className="ui-badge ui-badge-neutral">
+                  <Shield className="h-3 w-3" aria-hidden="true" /> Vue du jour uniquement
+                </span>
+              )}
+            </>
+          ) : undefined}
+          actions={
+            <>
+              <button type="button" onClick={fetchAnalytics} disabled={loading} className="ui-btn ui-btn-secondary">
+                <RefreshCw className={loading ? "animate-spin" : ""} /> Actualiser
               </button>
-              <button
-                onClick={generatePDF}
-                disabled={loading || !analytics}
-                className="px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg border border-green-200 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                <span className="text-sm">Télécharger PDF</span>
+              <button type="button" onClick={generatePDF} disabled={loading || !analytics} className="ui-btn ui-btn-primary">
+                <Download /> Télécharger PDF
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {/* Timeframe Selection */}
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-              Période d'analyse: {getTimeframeLabel()}
-            </h3>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              {/* Date Picker for Day View */}
+        <section className="ui-card p-4 sm:p-5" aria-label="Filtres du rapport">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Période du rapport</p>
+              <p className="mt-1 truncate text-sm font-semibold text-slate-900">{getTimeframeLabel()}</p>
+            </div>
+            <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="min-w-0">
+                <span className="mb-1.5 block text-xs font-medium text-slate-500">Période</span>
+                <div className="ui-segmented w-full sm:w-auto" role="group" aria-label="Choisir la période">
+                  {(["day", "week", "month", "year"] as const).map((period) => (
+                    <button
+                      key={period}
+                      type="button"
+                      onClick={() => handleTimeframeChange(period)}
+                      className="ui-segment"
+                      disabled={shouldSeeOnlyTodayData() && period !== "day"}
+                      aria-pressed={timeframe === period}
+                    >
+                      {period === "day" && "Jour"}
+                      {period === "week" && "Semaine"}
+                      {period === "month" && "Mois"}
+                      {period === "year" && "Année"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {timeframe === "day" && (
-                <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-300 px-3 py-2 shadow-sm w-full sm:w-auto">
-                  <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                  <label
-                    htmlFor="date-picker"
-                    className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap"
-                  >
-                    Date:
-                  </label>
-                  <input
-                    id="date-picker"
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="ml-2 px-2 py-1 border-none bg-transparent text-xs sm:text-sm focus:outline-none focus:ring-0 text-gray-900 font-medium w-full"
-                    disabled={shouldSeeOnlyTodayData()}
-                  />
+                <div className="min-w-0 sm:w-44">
+                  <label htmlFor="date-picker" className="mb-1.5 block text-xs font-medium text-slate-500">Date</label>
+                  <div className="relative">
+                    <input
+                      id="date-picker"
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="ui-input"
+                      disabled={shouldSeeOnlyTodayData()}
+                    />
+                  </div>
                 </div>
               )}
 
               {timeframe === "year" && availableYears.length > 1 && (
-                <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-300 px-3 py-2 shadow-sm w-full sm:w-auto">
-                  <button
-                    onClick={() => navigateYear("prev")}
-                    disabled={availableYears.indexOf(selectedYear) === availableYears.length - 1}
-                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
-                  </button>
-                  <span className="text-xs sm:text-sm font-medium text-gray-900 px-2 min-w-[60px] sm:min-w-[80px] text-center">
-                    {selectedYear}
-                  </span>
-                  <button
-                    onClick={() => navigateYear("next")}
-                    disabled={availableYears.indexOf(selectedYear) === 0}
-                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
-                  </button>
+                <div>
+                  <span className="mb-1.5 block text-xs font-medium text-slate-500">Année</span>
+                  <div className="flex min-h-11 items-center rounded-lg border border-slate-300 bg-white">
+                    <button type="button" aria-label="Année précédente" onClick={() => navigateYear("prev")} disabled={availableYears.indexOf(selectedYear) === availableYears.length - 1} className="ui-icon-btn"><ChevronLeft /></button>
+                    <span className="min-w-16 px-2 text-center text-sm font-semibold tabular-nums text-slate-900">{selectedYear}</span>
+                    <button type="button" aria-label="Année suivante" onClick={() => navigateYear("next")} disabled={availableYears.indexOf(selectedYear) === 0} className="ui-icon-btn"><ChevronRight /></button>
+                  </div>
                 </div>
               )}
 
-              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-full sm:w-auto">
-                {(["day", "week", "month", "year"] as const).map((period) => (
-                  <button
-                    key={period}
-                    onClick={() => handleTimeframeChange(period)}
-                    className={`px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 flex-1 sm:flex-none ${
-                      timeframe === period
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : shouldSeeOnlyTodayData() && period !== "day"
-                        ? "text-gray-400 cursor-not-allowed opacity-50"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                    }`}
-                    disabled={shouldSeeOnlyTodayData() && period !== "day"}
-                  >
-                    {period === "day" && "Jour"}
-                    {period === "week" && "Semaine"}
-                    {period === "month" && "Mois"}
-                    {period === "year" && "Année"}
-                  </button>
-                ))}
+              <div className="min-w-0">
+                <span className="mb-1.5 block text-xs font-medium text-slate-500">Région</span>
+                <RegionFilterPills value={regionFilter} onChange={setRegionFilter} />
               </div>
-
-              <RegionFilterPills value={regionFilter} onChange={setRegionFilter} />
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+        <section aria-labelledby="financial-overview-title">
+          <h2 id="financial-overview-title" className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Aperçu financier</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Link to="/sales" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs sm:text-sm text-gray-600">
+                <p className="text-xs font-medium text-slate-500">
                   Ventes Totales
                 </p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
                   {analytics.totalSales}
                 </p>
-                <div className="flex items-center mt-1">
+                <div className="mt-2 flex items-center">
                   {analytics.recentTrends.salesGrowth >= 0 ? (
-                    <ArrowUp className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
+                    <ArrowUp className="h-3.5 w-3.5 text-emerald-600" />
                   ) : (
-                    <ArrowDown className="w-3 h-3 sm:w-4 sm:h-4 text-red-500" />
+                    <ArrowDown className="h-3.5 w-3.5 text-red-600" />
                   )}
                   <span
-                    className={`text-xs sm:text-sm ml-1 ${
+                    className={`ml-1 text-xs font-semibold tabular-nums ${
                       analytics.recentTrends.salesGrowth >= 0
-                        ? "text-green-500"
-                        : "text-red-500"
+                        ? "text-emerald-600"
+                        : "text-red-600"
                     }`}
                   >
                     {Math.abs(analytics.recentTrends.salesGrowth)}%
                   </span>
                 </div>
               </div>
-              <div className="p-2 sm:p-3 bg-blue-100 rounded-full">
-                <BarChart3 className="w-4 h-4 sm:w-6 sm:h-6 text-blue-600" />
+              <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
+                <BarChart3 className="h-5 w-5" />
               </div>
             </div>
-          </div>
+          </Link>
 
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+          <Link to="/sales" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs sm:text-sm text-gray-600">Revenu Total</p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                <p className="text-xs font-medium text-slate-500">Revenu Total</p>
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
                   {formatCurrency(analytics.totalRevenue)}
                 </p>
-                <div className="flex items-center mt-1">
+                <div className="mt-2 flex items-center">
                   {analytics.recentTrends.revenueGrowth >= 0 ? (
-                    <ArrowUp className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
+                    <ArrowUp className="h-3.5 w-3.5 text-emerald-600" />
                   ) : (
-                    <ArrowDown className="w-3 h-3 sm:w-4 sm:h-4 text-red-500" />
+                    <ArrowDown className="h-3.5 w-3.5 text-red-600" />
                   )}
                   <span
-                    className={`text-xs sm:text-sm ml-1 ${
+                    className={`ml-1 text-xs font-semibold tabular-nums ${
                       analytics.recentTrends.revenueGrowth >= 0
-                        ? "text-green-500"
-                        : "text-red-500"
+                        ? "text-emerald-600"
+                        : "text-red-600"
                     }`}
                   >
                     {Math.abs(analytics.recentTrends.revenueGrowth)}%
                   </span>
                 </div>
               </div>
-              <div className="p-2 sm:p-3 bg-green-100 rounded-full">
-                <DollarSign className="w-4 h-4 sm:w-6 sm:h-6 text-green-600" />
+              <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
+                <DollarSign className="h-5 w-5" />
               </div>
             </div>
-          </div>
+          </Link>
 
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+          <Link to="/entryhistory" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs sm:text-sm text-gray-600">
+                <p className="text-xs font-medium text-slate-500">
                   Entrées d'Argent
                 </p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
                   {formatCurrency(analytics.totalEntries)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">Total reçu</p>
               </div>
-              <div className="p-2 sm:p-3 bg-yellow-100 rounded-full">
-                <FileText className="w-4 h-4 sm:w-6 sm:h-6 text-yellow-600" />
+              <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
+                <FileText className="h-5 w-5" />
               </div>
             </div>
-          </div>
+          </Link>
 
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+          <Link to="/sortiehistory" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-red-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs sm:text-sm text-gray-600">
+                <p className="text-xs font-medium text-slate-500">
                   Dépenses Validées
                 </p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-red-700 lg:text-3xl">
                   {formatCurrency(analytics.totalValidatedExpenses)}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">Total validé</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {analytics.totalValidatedExpenseCount} dépense{analytics.totalValidatedExpenseCount === 1 ? "" : "s"} dans ce rapport
+                </p>
               </div>
-              <div className="p-2 sm:p-3 bg-red-100 rounded-full">
-                <Receipt className="w-4 h-4 sm:w-6 sm:h-6 text-red-600" />
+              <div className="rounded-lg bg-red-50 p-2 text-red-700">
+                <Receipt className="h-5 w-5" />
               </div>
             </div>
-          </div>
+          </Link>
         </div>
+        </section>
 
         {/* Additional Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+        <section aria-labelledby="operational-indicators-title">
+          <h2 id="operational-indicators-title" className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Indicateurs opérationnels</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs sm:text-sm text-gray-600">Revenu Net</p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                <p className="text-xs font-medium text-slate-500">Revenu Net</p>
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
                   {formatCurrency(analytics.netRevenue)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">(Ventes + Entrées) - Dépenses</p>
               </div>
-              <div className="p-2 sm:p-3 bg-purple-100 rounded-full">
-                <Calculator className="w-4 h-4 sm:w-6 sm:h-6 text-purple-600" />
+              <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
+                <Calculator className="h-5 w-5" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+          <Link to="/customers" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs sm:text-sm text-gray-600">
+                <p className="text-xs font-medium text-slate-500">
                   Clients Totaux
                 </p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
                   {analytics.totalCustomers}
                 </p>
-                <div className="flex items-center mt-1">
-                  <ArrowUp className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
-                  <span className="text-xs sm:text-sm ml-1 text-green-500">
-                    {analytics.recentTrends.customerGrowth}%
+                <div className="mt-2 flex items-center">
+                  {analytics.recentTrends.customerGrowth >= 0 ? (
+                    <ArrowUp className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <ArrowDown className="h-3.5 w-3.5 text-red-600" />
+                  )}
+                  <span className={`ml-1 text-xs font-semibold tabular-nums ${analytics.recentTrends.customerGrowth >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {Math.abs(analytics.recentTrends.customerGrowth)}%
                   </span>
                 </div>
               </div>
-              <div className="p-2 sm:p-3 bg-orange-100 rounded-full">
-                <Users className="w-4 h-4 sm:w-6 sm:h-6 text-orange-600" />
+              <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
+                <Users className="h-5 w-5" />
               </div>
             </div>
-          </div>
+          </Link>
 
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+          <Link to="/products" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs sm:text-sm text-gray-600">
+                <p className="text-xs font-medium text-slate-500">
                   Produits Totaux
                 </p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
                   {analytics.totalProducts}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">Produits actifs</p>
               </div>
-              <div className="p-2 sm:p-3 bg-indigo-100 rounded-full">
-                <Package className="w-4 h-4 sm:w-6 sm:h-6 text-indigo-600" />
+              <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
+                <Package className="h-5 w-5" />
               </div>
             </div>
-          </div>
+          </Link>
 
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
+          <Link to="/reservationhistory" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs sm:text-sm text-gray-600">
+                <p className="text-xs font-medium text-slate-500">
                   Réservations
                 </p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
                   {reservationsStats.count}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
                   {formatCurrency(reservationsStats.value)}
                 </p>
               </div>
-              <div className="p-2 sm:p-3 bg-teal-100 rounded-full">
-                <Calendar className="w-4 h-4 sm:w-6 sm:h-6 text-teal-600" />
+              <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
+                <Calendar className="h-5 w-5" />
               </div>
             </div>
-          </div>
+          </Link>
         </div>
+        </section>
+
+        {/* Daily/weekly report-only detail; editing and validation stay in SortieHistory. */}
+        {(timeframe === "day" || timeframe === "week") && (
+        <section className="order-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-labelledby="validated-expenses-title">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Dépenses validées</p>
+              <div className="flex items-center gap-2">
+                <span className="rounded-lg bg-red-100 p-2">
+                  <Receipt className="h-5 w-5 text-red-700" />
+                </span>
+                <h2 id="validated-expenses-title" className="text-base font-semibold text-slate-950">
+                  Sorties approuvées <span className="tabular-nums text-slate-500">({analytics.totalValidatedExpenseCount})</span>
+                </h2>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                Montant et raison des dépenses incluses dans ce rapport.
+              </p>
+            </div>
+            <Link
+              to="/sortiehistory"
+              className="inline-flex items-center gap-2 self-start rounded-lg px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:self-auto"
+            >
+              Ouvrir l'historique <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          {analytics.validatedExpenses.length > 0 ? (
+            <ul className="divide-y divide-slate-100">
+              {analytics.validatedExpenses.map((expense) => (
+                <li
+                  key={expense._id}
+                  className="flex min-w-0 flex-col gap-3 px-4 py-4 transition-colors hover:bg-red-50/40 min-[430px]:flex-row min-[430px]:items-start min-[430px]:justify-between sm:px-5"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-red-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-red-700">
+                        Dépense
+                      </span>
+                      <span className="text-xs font-medium text-slate-400">{expense.expenseId}</span>
+                      {expense.regionCode && (
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                          {expense.regionCode}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 break-words text-sm font-semibold text-slate-900">{expense.reason}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {new Date(expense.validatedAt || expense.createdAt).toLocaleDateString("fr-FR", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                  <p className="shrink-0 self-end text-base font-semibold tabular-nums text-red-700 min-[430px]:self-auto">
+                    − {formatCurrency(expense.amount)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="px-6 py-10 text-center">
+              <span className="mx-auto grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-slate-400"><Receipt className="h-5 w-5" /></span>
+              <p className="mt-3 text-sm font-semibold text-slate-700">
+                Aucune dépense validée pour cette période.
+              </p>
+            </div>
+          )}
+        </section>
+        )}
 
         {/* Sales Chart */}
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
-              Tendances des Ventes ({getTimeframeLabel()})
-            </h3>
+        <section className="order-1 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="sales-performance-title">
+          <div className="mb-5 flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Performance des ventes</p>
+              <h2 id="sales-performance-title" className="mt-1 flex items-center gap-2 text-base font-semibold text-slate-950">
+                <TrendingUp className="h-4 w-4 text-blue-700" /> Tendances des ventes
+              </h2>
+            </div>
+            <span className="text-sm font-medium text-slate-500">{getTimeframeLabel()}</span>
           </div>
 
-          <div className="space-y-4 overflow-x-auto">
-            {timeframe === "year" ? (
+          <div className="overflow-x-auto">
+            {chartData.length === 0 ? (
+              <div className="py-10 text-center">
+                <span className="mx-auto grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-slate-400"><TrendingUp className="h-5 w-5" /></span>
+                <p className="mt-3 text-sm font-semibold text-slate-700">Aucune vente sur cette période</p>
+                <p className="mt-1 text-xs text-slate-500">Les tendances apparaîtront dès qu'une vente sera enregistrée.</p>
+              </div>
+            ) : timeframe === "year" ? (
               // Yearly view with months for selected year
-              <div className="mb-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
+              <div className="mb-2">
+                <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <Calendar className="h-4 w-4 text-slate-400" />
                   Année {selectedYear}
-                </h4>
-                <div className="space-y-4 ml-0 sm:ml-4 min-w-[300px]">
+                </h3>
+                <div className="min-w-[300px] space-y-4">
                   {chartData.map((month: any, index: number) => (
                     <div
                       key={index}
                       className="flex items-center gap-3 sm:gap-4"
                     >
-                      <div className="w-28 sm:w-40 text-xs sm:text-sm text-gray-600 font-medium capitalize">
+                      <div className="w-28 text-xs font-medium capitalize text-slate-600 sm:w-40 sm:text-sm">
                         {month.monthName}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs sm:text-sm text-gray-700 truncate">
+                          <span className="truncate text-xs text-slate-700 sm:text-sm">
                             {month.sales} ventes
                           </span>
-                          <span className="text-xs sm:text-sm font-medium text-gray-900 whitespace-nowrap ml-2">
+                          <span className="ml-2 whitespace-nowrap text-xs font-semibold tabular-nums text-slate-900 sm:text-sm">
                             {formatCurrency(month.revenue)}
                           </span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="h-1.5 w-full rounded-full bg-slate-100">
                           <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            className="h-1.5 rounded-full bg-blue-700 transition-[width] duration-300"
                             style={{
                               width: `${(month.revenue / maxRevenue) * 100}%`,
                             }}
@@ -993,9 +1112,9 @@ export default function Analytics() {
               chartData.map((item: any, index: number) => (
                 <div
                   key={index}
-                  className="flex items-center gap-3 sm:gap-4 min-w-[300px]"
+                  className="flex min-w-[300px] items-center gap-3 border-b border-slate-100 py-3 last:border-b-0 sm:gap-4"
                 >
-                  <div className="w-32 sm:w-48 text-xs sm:text-sm text-gray-600 font-medium">
+                  <div className="w-32 text-xs font-medium text-slate-600 sm:w-48 sm:text-sm">
                     {timeframe === "day" ? (
                       <div>
                         <div className="capitalize">
@@ -1024,16 +1143,16 @@ export default function Analytics() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs sm:text-sm text-gray-700">
+                          <span className="text-xs text-slate-700 sm:text-sm">
                         {item.sales} ventes
                       </span>
-                      <span className="text-xs sm:text-sm font-medium text-gray-900 whitespace-nowrap ml-2">
+                      <span className="ml-2 whitespace-nowrap text-xs font-semibold tabular-nums text-slate-900 sm:text-sm">
                         {formatCurrency(item.revenue)}
                       </span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="h-1.5 w-full rounded-full bg-slate-100">
                       <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        className="h-1.5 rounded-full bg-blue-700 transition-[width] duration-300"
                         style={{
                           width: `${(item.revenue / maxRevenue) * 100}%`,
                         }}
@@ -1044,52 +1163,78 @@ export default function Analytics() {
               ))
             )}
           </div>
-        </div>
+        </section>
 
         {/* Top Products */}
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Package className="w-4 h-4 sm:w-5 sm:h-5" />
-            Articles Vendus ({getTimeframeLabel()})
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[32rem] overflow-y-auto">
-            {analytics.topProducts.length > 0 ? (
-              analytics.topProducts.map((product, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 truncate text-sm sm:text-base">
-                      {index + 1}. {product.name}
-                      {product.regionCode && (
-                        <span className="ml-1.5 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
-                          {product.regionCode}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs sm:text-sm text-gray-600">
-                      {product.quantity} unités vendues
-                    </p>
-                  </div>
-                  <div className="text-right ml-2">
-                    <p className="font-medium text-gray-900 text-sm sm:text-base whitespace-nowrap">
-                      {formatCurrency(product.revenue)}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-8 text-gray-500">
-                <Package className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
-                <p className="font-medium text-sm sm:text-base">
-                  Aucun produit vendu
-                </p>
-                <p className="text-xs sm:text-sm">dans cette période</p>
-              </div>
-            )}
+        <section className="order-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-labelledby="sold-items-title">
+          <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Articles vendus</p>
+              <h2 id="sold-items-title" className="mt-1 flex items-center gap-2 text-base font-semibold text-slate-950">
+                <Package className="h-4 w-4 text-blue-700" /> Détail des produits
+              </h2>
+            </div>
+            <div className="flex items-center gap-3 text-sm text-slate-500">
+              <span>{analytics.topProducts.length} article{analytics.topProducts.length === 1 ? "" : "s"}</span>
+              <span className="hidden sm:inline">{getTimeframeLabel()}</span>
+            </div>
           </div>
-        </div>
+
+          {analytics.topProducts.length > 0 ? (
+            <>
+              <div className="hidden max-h-[34rem] overflow-auto md:block">
+                <table className="w-full table-fixed text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="w-14 px-5 py-3">#</th>
+                      <th className="px-3 py-3">Article</th>
+                      <th className="w-28 px-3 py-3">Région</th>
+                      <th className="w-28 px-3 py-3 text-right">Quantité</th>
+                      <th className="w-36 px-5 py-3 text-right">Revenu</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {analytics.topProducts.map((product, index) => (
+                      <tr key={`${product.name}-${product.regionCode || "all"}-${index}`} className="transition-colors hover:bg-slate-50">
+                        <td className="px-5 py-3 text-slate-400 tabular-nums">{index + 1}</td>
+                        <td className="truncate px-3 py-3 font-medium text-slate-900" title={product.name}>{product.name}</td>
+                        <td className="px-3 py-3">
+                          {product.regionCode ? <span className="inline-flex rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{product.regionCode}</span> : <span className="text-slate-400">—</span>}
+                        </td>
+                        <td className="px-3 py-3 text-right font-medium tabular-nums text-slate-700">{product.quantity}</td>
+                        <td className="px-5 py-3 text-right font-semibold tabular-nums text-slate-950">{formatCurrency(product.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <ul className="divide-y divide-slate-100 md:hidden">
+                {analytics.topProducts.map((product, index) => (
+                  <li key={`${product.name}-${product.regionCode || "all"}-${index}`} className="px-4 py-4 transition-colors hover:bg-slate-50">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium tabular-nums text-slate-400">#{index + 1}</span>
+                          {product.regionCode && <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{product.regionCode}</span>}
+                        </div>
+                        <p className="mt-1 break-words text-sm font-semibold text-slate-900">{product.name}</p>
+                        <p className="mt-1 text-xs text-slate-500"><span className="font-semibold tabular-nums text-slate-700">{product.quantity}</span> unités vendues</p>
+                      </div>
+                      <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-950">{formatCurrency(product.revenue)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <div className="px-6 py-12 text-center">
+              <span className="mx-auto grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-slate-400"><Package className="h-5 w-5" /></span>
+              <p className="mt-3 text-sm font-semibold text-slate-700">Aucun article vendu</p>
+              <p className="mt-1 text-xs text-slate-500">Aucun produit ne correspond à la période et à la région sélectionnées.</p>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

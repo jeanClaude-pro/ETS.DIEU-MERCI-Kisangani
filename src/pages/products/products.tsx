@@ -8,6 +8,7 @@ import type { Product, Region } from "../../types";
 import { getProductStatus, units, serverUrl, REGIONS, REGION_CODE_MAP, formatProductLabel } from "../../utils/constants";
 import CategoriesDropdown from "../../components/CategoriesDropdown";
 import { useConnectivity } from "../../context/ConnectivityContext";
+import { EmptyState, LoadingState, PageHeader } from "../../components/ui";
 import { refreshFromServer, subscribeLocal } from "../../services/offlineProductSnapshot";
 
 interface User {
@@ -92,13 +93,13 @@ export default function Products() {
         setProducts((prev) => [...prev, newProduct]);
         setShowAddModal(false);
         resetForm();
-        toast.success("Article ajouté avec succès!");
+        toast.success("Article ajouté avec succès");
       } else {
-        toast.error("echec de l'ajout de l'Article");
+        toast.error("Échec de l'ajout de l'article");
       }
     } catch (error) {
       console.error("erreur d'ajout de l'Article:", error);
-      toast.error("Error creating product");
+      toast.error("Erreur lors de l'ajout de l'article");
     }
   };
 
@@ -123,13 +124,13 @@ export default function Products() {
         );
         setShowEditModal(false);
         resetForm();
-        toast.success("Product updated successfully!");
+        toast.success("Article mis à jour avec succès");
       } else {
-        toast.error("Failed to update product");
+        toast.error("Échec de la mise à jour de l'article");
       }
     } catch (error) {
       console.error("Error updating product:", error);
-      toast.error("Error updating product");
+      toast.error("Erreur lors de la mise à jour de l'article");
     }
   };
 
@@ -138,7 +139,7 @@ export default function Products() {
       toast.info("Connexion requise pour supprimer un article.");
       return;
     }
-    if (!confirm("Are you sure you want to delete this product?")) return;
+    if (!confirm("Voulez-vous vraiment supprimer cet article ?")) return;
     try {
       const response = await fetch(`${serverUrl}/products/${id}`, {
         method: "DELETE",
@@ -149,13 +150,13 @@ export default function Products() {
       });
       if (response.ok) {
         setProducts((prev) => prev.filter((p) => p._id !== id));
-        toast.success("Product deleted");
+        toast.success("Article supprimé");
       } else {
-        toast.error("Failed to delete product");
+        toast.error("Échec de la suppression de l'article");
       }
     } catch (error) {
       console.error("Error deleting product:", error);
-      toast.error("Error deleting product");
+      toast.error("Erreur lors de la suppression de l'article");
     }
   };
 
@@ -242,29 +243,30 @@ export default function Products() {
     if (isAdmin) {
       // Admin sees exact stock numbers
       return (
-        <span
-          className={`text-sm ${
-            product.stock <= product.minStock
-              ? "text-red-600 font-medium"
-              : "text-gray-900"
-          }`}
-        >
-          {product.stock} {product.unit}
+        <span className="inline-flex items-center gap-2">
+          <span className={`tabular-nums ${product.stock <= product.minStock ? "font-semibold text-red-700" : "text-slate-900"}`}>
+            {product.stock} {product.unit}
+          </span>
+          {product.stock === 0 ? (
+            <span className="ui-badge ui-badge-danger">Rupture</span>
+          ) : product.stock <= product.minStock ? (
+            <span className="ui-badge ui-badge-warning">Faible</span>
+          ) : null}
         </span>
       );
     } else {
       // Staff sees stock status instead of exact numbers
       if (product.stock === 0) {
         return (
-          <span className="text-sm text-red-600 font-medium">En rupture</span>
+          <span className="ui-badge ui-badge-danger">En rupture</span>
         );
       } else if (product.stock <= product.minStock) {
         return (
-          <span className="text-sm text-orange-600 font-medium">Stock faible</span>
+          <span className="ui-badge ui-badge-warning">Stock faible</span>
         );
       } else {
         return (
-          <span className="text-sm text-green-600 font-medium">En stock</span>
+          <span className="ui-badge ui-badge-success">En stock</span>
         );
       }
     }
@@ -276,21 +278,21 @@ export default function Products() {
       // Admin sees all stock details
       return (
         <>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Stock Actuel:</span>
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">Stock actuel</span>
             <span
-              className={`font-medium ${
+              className={`font-medium tabular-nums ${
                 product.stock <= product.minStock
-                  ? "text-red-600"
-                  : "text-gray-900"
+                  ? "text-red-700"
+                  : "text-slate-900"
               }`}
             >
               {product.stock} {product.unit}
             </span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Stock minimal:</span>
-            <span className="font-medium">
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">Stock minimal</span>
+            <span className="font-medium tabular-nums text-slate-900">
               {product.minStock} {product.unit}
             </span>
           </div>
@@ -299,68 +301,70 @@ export default function Products() {
     } else {
       // Staff sees only stock status
       return (
-        <div className="flex justify-between">
-          <span className="text-gray-600">Statut du stock:</span>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-slate-500">Statut du stock</span>
           {product.stock === 0 ? (
-            <span className="font-medium text-red-600">En rupture</span>
+            <span className="ui-badge ui-badge-danger">En rupture</span>
           ) : product.stock <= product.minStock ? (
-            <span className="font-medium text-orange-600">Stock faible</span>
+            <span className="ui-badge ui-badge-warning">Stock faible</span>
           ) : (
-            <span className="font-medium text-green-600">En stock</span>
+            <span className="ui-badge ui-badge-success">En stock</span>
           )}
         </div>
       );
     }
   };
 
+  const closeFormModal = () => {
+    setShowAddModal(false);
+    setShowEditModal(false);
+    resetForm();
+  };
+  const money = (value?: number) =>
+    typeof value === "number" ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value) : "—";
+
   return (
-    <div className="space-y-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Articles</h1>
-          <p className="text-gray-600">Gérez votre catalogue des Articles</p>
-          {!isAdmin && (
-            <p className="text-sm text-blue-600 mt-1">
-              Staff
-            </p>
-          )}
-        </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <Plus className="w-4 h-4 " />
-          Ajouter un nouvel Article
-        </button>
-      </div>
+    <div className="ui-page">
+      <PageHeader
+        eyebrow="Stock"
+        title="Articles & stock"
+        description="Gérez votre catalogue d’articles, les prix et les niveaux de stock."
+        meta={!isAdmin ? <span className="ui-badge ui-badge-neutral">Vue personnel</span> : undefined}
+        actions={
+          <button type="button" onClick={() => setShowAddModal(true)} className="ui-btn ui-btn-primary">
+            <Plus />
+            Ajouter un article
+          </button>
+        }
+      />
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-300">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Recherchez des Articles par nom..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
-              />
-            </div>
-          </div>
-          <div className="sm:w-64">
-            <CategoriesDropdown
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
+      <section className="ui-card p-4 sm:p-5" aria-label="Filtres des articles">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem_12rem] md:items-start">
+          <div className="relative">
+            <label htmlFor="product-search" className="sr-only">Rechercher un article</label>
+            <Search className="ui-field-icon" aria-hidden="true" />
+            <input
+              id="product-search"
+              type="search"
+              placeholder="Rechercher un article par nom…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="ui-input ui-input-icon"
             />
           </div>
-          <div className="sm:w-52">
+          <CategoriesDropdown
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            emptyLabel="Toutes les catégories"
+          />
+          <div>
+            <label htmlFor="product-region" className="sr-only">Région</label>
             <select
+              id="product-region"
               value={selectedRegion}
               onChange={(e) => setSelectedRegion(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
+              className="ui-input"
             >
               <option value="">Toutes les régions</option>
               {REGIONS.map((r) => (
@@ -371,106 +375,91 @@ export default function Products() {
             </select>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Products Grid */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-300">
+      {/* Products table */}
+      <section className="ui-card overflow-hidden" aria-labelledby="products-title">
+        <div className="ui-card-header">
+          <h2 id="products-title" className="ui-section-title flex items-center gap-2">
+            <Package className="h-4 w-4 text-blue-700" />
+            Catalogue
+            {!loading && <span className="ui-badge ui-badge-neutral tabular-nums">{filteredProducts.length}</span>}
+          </h2>
+        </div>
         {loading ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2 text-gray-600">Chargement des Articles......</p>
-          </div>
+          <LoadingState label="Chargement des articles…" />
         ) : filteredProducts.length === 0 ? (
-          <div className="p-8 text-center">
-            <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-            <p className="text-gray-600">Aucun article trouvé</p>
-          </div>
+          <EmptyState
+            icon={Package}
+            title="Aucun article trouvé"
+            description="Modifiez la recherche ou les filtres pour afficher d’autres articles."
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+          <div className="ui-table-wrap">
+            <table className="ui-table">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    #
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Article
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Categorie
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Stock
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Statut
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th scope="col">Article</th>
+                  <th scope="col">Catégorie</th>
+                  <th scope="col" className="text-right">Prix de vente</th>
+                  {isAdmin && <th scope="col" className="text-right">Coût unitaire</th>}
+                  <th scope="col">Stock</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col" className="ui-sticky-end text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody>
                 {filteredProducts.map((product, idx) => (
-                  <tr key={product._id ?? idx} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {idx + 1}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                            {product.name}
-                            {product.regionCode && (
-                              <span className="inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
-                                {product.regionCode}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {product.brand}
-                          </div>
-                        </div>
+                  <tr key={product._id ?? idx}>
+                    <td className="min-w-[14rem]">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="w-6 shrink-0 text-xs tabular-nums text-slate-400">{idx + 1}</span>
+                        <span className="min-w-0">
+                          <span className="block break-words font-medium text-slate-900">{product.name}</span>
+                          {product.brand && <span className="block text-xs text-slate-500">{product.brand}</span>}
+                        </span>
+                        {product.regionCode && <span className="ui-tag">{product.regionCode}</span>}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {product.category}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {renderStockInfo(product)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          product.status === "active"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
+                    <td className="whitespace-nowrap">{product.category || <span className="text-slate-400">—</span>}</td>
+                    <td className="ui-num whitespace-nowrap font-medium text-slate-900">{money(product.price)}</td>
+                    {isAdmin && <td className="ui-num whitespace-nowrap text-slate-600">{money(product.unitCost)}</td>}
+                    <td className="whitespace-nowrap">{renderStockInfo(product)}</td>
+                    <td>
+                      <span className={`ui-badge ${product.status === "active" ? "ui-badge-success" : "ui-badge-neutral"}`}>
                         {getProductStatus(product.status)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2">
+                    <td className="ui-sticky-end">
+                      <div className="ui-row-actions">
                         <button
+                          type="button"
                           onClick={() => openViewModal(product)}
-                          className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                          className="ui-icon-btn ui-icon-btn-primary"
+                          aria-label={`Voir ${product.name}`}
+                          title="Voir"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye />
                         </button>
                         {isAdmin && (
                           <>
                             <button
+                              type="button"
                               onClick={() => openEditModal(product)}
-                              className="text-green-600 hover:text-green-900 p-1 rounded"
+                              className="ui-icon-btn ui-icon-btn-warning"
+                              aria-label={`Modifier ${product.name}`}
+                              title="Modifier"
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit />
                             </button>
                             <button
+                              type="button"
                               onClick={() => deleteProduct(product._id)}
-                              className="text-red-600 hover:text-red-900 p-1 rounded"
+                              className="ui-icon-btn ui-icon-btn-danger"
+                              aria-label={`Supprimer ${product.name}`}
+                              title="Supprimer"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 />
                             </button>
                           </>
                         )}
@@ -482,43 +471,34 @@ export default function Products() {
             </table>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Add/Edit Product Modal - Only for Admin */}
       {(showAddModal || showEditModal) && isAdmin && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {showEditModal ? "Modifier l'Article" : "Ajouter un Article"}
+        <div className="ui-dialog-overlay" role="presentation">
+          <form onSubmit={handleSubmit} className="ui-dialog max-w-3xl" role="dialog" aria-modal="true" aria-labelledby="product-form-title">
+            <div className="ui-dialog-header">
+              <div>
+                <h2 id="product-form-title" className="ui-dialog-title">
+                  {showEditModal ? "Modifier l'article" : "Ajouter un article"}
                 </h2>
-                <button
-                  onClick={() => {
-                    setShowAddModal(false);
-                    setShowEditModal(false);
-                    resetForm();
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+                <p className="mt-0.5 text-sm text-slate-500">Les champs marqués <span className="ui-required">*</span> sont obligatoires.</p>
               </div>
+              <button type="button" onClick={closeFormModal} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
+              </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="ui-dialog-body">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 {/* Basic Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">
-                    Information Basique
-                  </h3>
+                <fieldset className="space-y-4">
+                  <legend className="ui-kicker mb-3">Informations générales</legend>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nom de l'Article *
-                    </label>
+                    <label htmlFor="product-name" className="ui-label">Nom de l'article <span className="ui-required">*</span></label>
                     <input
+                      id="product-name"
                       type="text"
                       required
                       value={formData.name}
@@ -529,18 +509,17 @@ export default function Products() {
                           name: e.target.value,
                         }))
                       }
-                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg outline-none ${showEditModal ? "bg-gray-100 cursor-not-allowed" : "focus:ring-2 focus:ring-blue-500 focus:border-transparent"}`}
+                      className={`ui-input ${showEditModal ? "cursor-not-allowed bg-slate-50 text-slate-600" : ""}`}
                     />
                     {showEditModal && (
-                      <p className="mt-1 text-xs text-gray-500">Le nom original est permanent et ne peut pas être traduit.</p>
+                      <p className="ui-help">Le nom original est permanent et ne peut pas être traduit.</p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Description
-                    </label>
+                    <label htmlFor="product-description" className="ui-label">Description</label>
                     <textarea
+                      id="product-description"
                       rows={3}
                       value={formData.description}
                       onChange={(e) =>
@@ -549,15 +528,14 @@ export default function Products() {
                           description: e.target.value,
                         }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
+                      className="ui-input"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Categorie *
-                    </label>
+                    <label htmlFor="product-category" className="ui-label">Catégorie <span className="ui-required">*</span></label>
                     <CategoriesDropdown
+                      id="product-category"
                       selectedCategory={formData.category || ""}
                       setSelectedCategory={(categoryName) =>
                         setFormData((prev) => ({
@@ -569,10 +547,9 @@ export default function Products() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Marques
-                    </label>
+                    <label htmlFor="product-brand" className="ui-label">Marque</label>
                     <input
+                      id="product-brand"
                       type="text"
                       value={formData.brand}
                       onChange={(e) =>
@@ -581,67 +558,64 @@ export default function Products() {
                           brand: e.target.value,
                         }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
+                      className="ui-input"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Statut
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          status: e.target.value as "active" | "inactive",
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
-                    >
-                      <option value="active">Actif</option>
-                      <option value="inactive">Inactif</option>
-                    </select>
-                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="product-status" className="ui-label">Statut</label>
+                      <select
+                        id="product-status"
+                        value={formData.status}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            status: e.target.value as "active" | "inactive",
+                          }))
+                        }
+                        className="ui-input"
+                      >
+                        <option value="active">Actif</option>
+                        <option value="inactive">Inactif</option>
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Région *
-                    </label>
-                    <select
-                      required
-                      value={formData.region || ""}
-                      onChange={(e) => {
-                        const region = e.target.value as Region;
-                        setFormData((prev) => ({
-                          ...prev,
-                          region,
-                          regionCode: REGION_CODE_MAP[region],
-                        }));
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
-                    >
-                      {REGIONS.map((r) => (
-                        <option key={r.regionCode} value={r.region}>
-                          {r.region} ({r.regionCode})
-                        </option>
-                      ))}
-                    </select>
+                    <div>
+                      <label htmlFor="product-region-field" className="ui-label">Région <span className="ui-required">*</span></label>
+                      <select
+                        id="product-region-field"
+                        required
+                        value={formData.region || ""}
+                        onChange={(e) => {
+                          const region = e.target.value as Region;
+                          setFormData((prev) => ({
+                            ...prev,
+                            region,
+                            regionCode: REGION_CODE_MAP[region],
+                          }));
+                        }}
+                        className="ui-input"
+                      >
+                        {REGIONS.map((r) => (
+                          <option key={r.regionCode} value={r.region}>
+                            {r.region} ({r.regionCode})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
+                </fieldset>
 
                 {/* Pricing & Inventory */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">
-                    Stock
-                  </h3>
+                <fieldset className="space-y-4">
+                  <legend className="ui-kicker mb-3">Stock & coût</legend>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Stock Total
-                      </label>
+                      <label htmlFor="product-stock" className="ui-label">Stock total</label>
                       <input
+                        id="product-stock"
                         type="number"
                         value={formData.stock}
                         onChange={(e) =>
@@ -650,14 +624,14 @@ export default function Products() {
                             stock: Number.parseInt(e.target.value) || 0,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
+                        className="ui-input tabular-nums"
+                        inputMode="numeric"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Unité
-                      </label>
+                      <label htmlFor="product-unit" className="ui-label">Unité</label>
                       <select
+                        id="product-unit"
                         value={formData.unit}
                         onChange={(e) =>
                           setFormData((prev) => ({
@@ -665,7 +639,7 @@ export default function Products() {
                             unit: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
+                        className="ui-input"
                       >
                         {units.map((unit, idx) => (
                           <option key={idx} value={unit}>
@@ -675,10 +649,26 @@ export default function Products() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Coût unitaire (USD)
-                      </label>
+                      <label htmlFor="product-min-stock" className="ui-label">Stock minimum</label>
                       <input
+                        id="product-min-stock"
+                        type="number"
+                        value={formData.minStock}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            minStock: Number.parseInt(e.target.value) || 0,
+                          }))
+                        }
+                        className="ui-input tabular-nums"
+                        inputMode="numeric"
+                      />
+                      <p className="ui-help">Seuil d’alerte de stock faible.</p>
+                    </div>
+                    <div>
+                      <label htmlFor="product-unit-cost" className="ui-label">Coût unitaire (USD)</label>
+                      <input
+                        id="product-unit-cost"
                         type="number"
                         min="0"
                         step="0.01"
@@ -689,168 +679,107 @@ export default function Products() {
                             unitCost: Number.parseFloat(e.target.value) || 0,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
+                        className="ui-input tabular-nums"
+                        inputMode="decimal"
                       />
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Stock minimum
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.minStock}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            minStock: Number.parseInt(e.target.value) || 0,
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                </div>
+                </fieldset>
               </div>
+            </div>
 
-              {/* Form Actions */}
-              <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddModal(false);
-                    setShowEditModal(false);
-                    resetForm();
-                  }}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                >
-                  {showEditModal ? "Mettre à jour l'Article" : "Ajouter l'Article"}
-                </button>
-              </div>
-            </form>
-          </div>
+            {/* Form Actions */}
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={closeFormModal} className="ui-btn ui-btn-ghost">
+                Annuler
+              </button>
+              <button type="submit" className="ui-btn ui-btn-primary">
+                {showEditModal ? "Mettre à jour l'article" : "Ajouter l'article"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
       {/* Quick View Modal */}
       {showViewModal && selectedProduct && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Détails de l'Article
-                </h2>
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
+        <div className="ui-dialog-overlay" role="presentation">
+          <div className="ui-dialog max-w-xl" role="dialog" aria-modal="true" aria-labelledby="product-view-title">
+            <div className="ui-dialog-header">
+              <h2 id="product-view-title" className="ui-dialog-title">Détails de l'article</h2>
+              <button type="button" onClick={() => setShowViewModal(false)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
+              </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              <div className="flex items-start gap-6">
-                <div className="flex-1">
-                  <h3 className="text-2xl font-bold text-gray-900">
-                    {formatProductLabel(selectedProduct)}
-                  </h3>
-                  <p className="text-gray-600 mt-1">{selectedProduct.brand}</p>
-                  <p className="text-gray-700 mt-2">
-                    {selectedProduct.description}
-                  </p>
-                  <div className="mt-4 flex items-center gap-4">
-                    {typeof selectedProduct.price === "number" && (
-                      <span className="text-2xl font-bold text-green-600">
-                        ${selectedProduct.price.toFixed(2)}
-                      </span>
-                    )}
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        selectedProduct.status === "active"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {selectedProduct.status}
+            <div className="ui-dialog-body space-y-5">
+              <div>
+                <h3 className="break-words text-lg font-semibold text-slate-950">
+                  {formatProductLabel(selectedProduct)}
+                </h3>
+                {selectedProduct.brand && <p className="mt-0.5 text-sm text-slate-500">{selectedProduct.brand}</p>}
+                {selectedProduct.description && <p className="mt-2 text-sm text-slate-700">{selectedProduct.description}</p>}
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  {typeof selectedProduct.price === "number" && (
+                    <span className="text-2xl font-semibold tabular-nums text-slate-950">
+                      ${selectedProduct.price.toFixed(2)}
+                    </span>
+                  )}
+                  <span className={`ui-badge ${selectedProduct.status === "active" ? "ui-badge-success" : "ui-badge-neutral"}`}>
+                    {getProductStatus(selectedProduct.status)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="ui-muted-panel space-y-2 text-sm">
+                  <h4 className="ui-kicker">Informations</h4>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Catégorie</span>
+                    <span className="text-right font-medium text-slate-900">{selectedProduct.category || "—"}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Unité</span>
+                    <span className="font-medium text-slate-900">{selectedProduct.unit}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Région</span>
+                    <span className="text-right font-medium text-slate-900">
+                      {selectedProduct.region} ({selectedProduct.regionCode})
                     </span>
                   </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-gray-900">
-                    Informations sur l'Article
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Categorie:</span>
-                      <span className="font-medium">
-                        {selectedProduct.category}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Unité:</span>
-                      <span className="font-medium">
-                        {selectedProduct.unit}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Région:</span>
-                      <span className="font-medium">
-                        {selectedProduct.region} ({selectedProduct.regionCode})
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-gray-900">Stock</h4>
-                  <div className="space-y-2 text-sm">
-                    {renderStockDetails(selectedProduct)}
-                  </div>
+                <div className="ui-muted-panel space-y-2 text-sm">
+                  <h4 className="ui-kicker">Stock</h4>
+                  {renderStockDetails(selectedProduct)}
                 </div>
               </div>
 
               {selectedProduct.weight > 0 && (
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-gray-900">
-                    Propriétés physiques
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Poids:</span>
-                      <span className="font-medium">
-                        {selectedProduct.weight} kg
-                      </span>
-                    </div>
-                  </div>
+                <div className="ui-muted-panel flex justify-between text-sm">
+                  <span className="text-slate-500">Poids</span>
+                  <span className="font-medium tabular-nums text-slate-900">{selectedProduct.weight} kg</span>
                 </div>
               )}
+            </div>
 
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setShowViewModal(false)} className="ui-btn ui-btn-ghost">
+                Fermer
+              </button>
               {isAdmin && (
-                <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
-                  <button
-                    onClick={() => {
-                      setShowViewModal(false);
-                      openEditModal(selectedProduct);
-                    }}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <Edit className="w-4 h-4" />
-                    Modifier l'Article
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowViewModal(false);
+                    openEditModal(selectedProduct);
+                  }}
+                  className="ui-btn ui-btn-primary"
+                >
+                  <Edit />
+                  Modifier l'article
+                </button>
               )}
             </div>
           </div>

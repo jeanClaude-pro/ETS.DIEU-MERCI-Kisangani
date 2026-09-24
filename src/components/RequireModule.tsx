@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { effectiveModulesForUser } from "./navigationConfig";
 import { ShieldAlert } from "lucide-react";
@@ -19,12 +19,17 @@ export const RequireModule: React.FC<React.PropsWithChildren<{ moduleId: string 
     : offlineSession!.modules.includes(moduleId);
   if (!allowed) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-8 text-center">
-        <ShieldAlert className="h-10 w-10 text-red-500" />
-        <h1 className="text-xl font-bold text-gray-900">Accès non autorisé</h1>
-        <p className="max-w-sm text-sm text-gray-600">
-          Vous n'avez pas la permission d'accéder à ce module. Contactez un administrateur si vous pensez qu'il s'agit d'une erreur.
-        </p>
+      <div className="flex min-h-[60vh] items-center justify-center p-4 sm:p-8">
+        <div className="ui-card flex max-w-md flex-col items-center px-6 py-10 text-center">
+          <span className="grid h-11 w-11 place-items-center rounded-lg bg-red-50 text-red-600" aria-hidden="true">
+            <ShieldAlert className="h-5 w-5" />
+          </span>
+          <h1 className="mt-4 text-lg font-semibold text-slate-950">Accès non autorisé</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Vous n'avez pas la permission d'accéder à ce module. Contactez un administrateur si vous pensez qu'il s'agit d'une erreur.
+          </p>
+          <Link to="/" className="ui-btn ui-btn-secondary mt-5">Retour à l'accueil</Link>
+        </div>
       </div>
     );
   }

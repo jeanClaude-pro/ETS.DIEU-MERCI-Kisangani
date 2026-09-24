@@ -12,7 +12,7 @@ export const RequireAuth: React.FC<React.PropsWithChildren> = ({
   // If not logged in, show toast once
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      toast.error("You must be logged in to access this page.");
+      toast.error("Veuillez vous connecter pour accéder à cette page.");
     }
   }, [loading, isAuthenticated]);
 

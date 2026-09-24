@@ -9,6 +9,8 @@ type Props = {
   emptyLabel?: string;
   emptyValue?: string;
   showSearch?: boolean;
+  /** Lets a surrounding <label htmlFor> name the select. */
+  id?: string;
 };
 
 const CategoriesDropdown = ({
@@ -17,6 +19,7 @@ const CategoriesDropdown = ({
   emptyLabel = "Sélectionner la catégorie",
   emptyValue = "",
   showSearch = true,
+  id,
 }: Props) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,16 +77,16 @@ const CategoriesDropdown = ({
       : matches;
   }, [categories, query, selectedCategory]);
 
-  if (loading) return <p className="py-2 text-sm text-gray-600">Chargement des catégories…</p>;
+  if (loading) return <div className="ui-skeleton h-11 w-full rounded-lg" role="status" aria-label="Chargement des catégories…" />;
 
   return (
     <div className="w-full space-y-2">
       {showSearch && categories.length > 10 && (
         <div className="relative">
-          <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+          <Search aria-hidden="true" className="ui-field-icon" />
           <input
             aria-label="Rechercher une catégorie"
-            className="min-h-11 w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-base outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 sm:text-sm"
+            className="ui-input ui-input-icon"
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Rechercher une catégorie…"
             type="search"
@@ -92,10 +95,11 @@ const CategoriesDropdown = ({
         </div>
       )}
       <select
-        aria-label="Catégorie"
+        id={id}
+        aria-label={id ? undefined : "Catégorie"}
         value={selectedCategory}
         onChange={handleChange}
-        className="min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 sm:text-sm"
+        className="ui-input"
       >
         <option value={emptyValue}>{emptyLabel}</option>
         {selectedCategory && selectedCategory !== emptyValue &&
@@ -109,12 +113,12 @@ const CategoriesDropdown = ({
         ))}
       </select>
       {loadError && (
-        <p className="text-xs text-red-700" role="alert">
+        <p className="ui-error-text mt-0" role="alert">
           Les catégories n&apos;ont pas pu être chargées.
         </p>
       )}
       {!loadError && query && visibleCategories.length === 0 && (
-        <p className="text-xs text-gray-500">Aucune catégorie correspondante.</p>
+        <p className="ui-help mt-0">Aucune catégorie correspondante.</p>
       )}
     </div>
   );

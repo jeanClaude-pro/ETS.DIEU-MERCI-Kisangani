@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { KeyRound, Store } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { effectiveModulesForUser, navigationSections } from "./navigationConfig";
 import SyncStatusIndicator from "./SyncStatusIndicator";
 import { useAuth } from "../hooks/useAuth";
@@ -18,23 +18,23 @@ export default function AppHeader() {
 
   return (
     <header className="app-header">
-      <Link to="/" className="app-header-brand" aria-label="Retour à l’accueil">
-        <span className="app-header-mark" aria-hidden="true"><Store className="h-4 w-4" /></span>
+      <Link to="/" className="app-header-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="Retour à l’accueil">
+        <span className="app-header-mark" aria-hidden="true"><img src="/Mrcleanlogo.png" alt="" /></span>
         <span>
-          <strong>BOUTIQUE C'EST DIEU QUI PARTAGE</strong>
-          <small>{current?.label ?? "Espace de travail"}</small>
+          <small>C'est Dieu qui partage</small>
+          <strong>{current?.label ?? "Espace de travail"}</strong>
         </span>
       </Link>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {canConfigureOfflinePin && (
           <Link
             to="/offline-pin-setup"
-            className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="inline-flex h-9 min-w-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition-colors duration-150 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             aria-label="Configurer le code PIN hors ligne"
             title="Sécurité hors ligne"
           >
-            <KeyRound className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">PIN hors ligne</span>
+            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden md:inline">PIN hors ligne</span>
           </Link>
         )}
         <SyncStatusIndicator />

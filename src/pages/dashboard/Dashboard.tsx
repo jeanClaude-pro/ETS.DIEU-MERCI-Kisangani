@@ -10,7 +10,9 @@ import {
   TrendingUp,
   ShoppingCart,
   ArrowUp,
+  ArrowDown,
 } from "lucide-react";
+import { EmptyState, MetricCard, PageHeader } from "../../components/ui";
 import RegionFilterPills from "../../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../../types";
 import { useConnectivity } from "../../context/ConnectivityContext";
@@ -119,7 +121,7 @@ export default function Dashboard() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+    return new Date(dateString).toLocaleDateString("fr-FR", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -127,226 +129,139 @@ export default function Dashboard() {
     });
   };
 
+  // Display-only: the arrow and colour follow the sign of the value.
+  const renderGrowth = (value: number, suffix: string) => {
+    const positive = Number(value) >= 0;
+    return (
+      <span className={`inline-flex items-center gap-1 font-medium ${positive ? "text-emerald-700" : "text-red-700"}`}>
+        {positive ? <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" /> : <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />}
+        <span className="tabular-nums">{positive ? "+" : "−"}{Math.abs(Number(value) || 0)}%</span>
+        <span className="font-normal text-slate-500">{suffix}</span>
+      </span>
+    );
+  };
+
+  const header = (
+    <PageHeader
+      eyebrow="Aperçu"
+      title="Tableau de bord"
+      description="Aperçu de la performance de votre entreprise."
+      meta={usingLocalData ? <span className="ui-badge ui-badge-info">Hors ligne · données locales incluant les ventes en attente</span> : undefined}
+      actions={<RegionFilterPills value={regionFilter} onChange={setRegionFilter} />}
+    />
+  );
+
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tableau de bord</h1>
-          <p className="text-gray-600">
-            Aperçu de la performance de votre entreprise
-          </p>
+      <div className="ui-page" aria-busy="true">
+        {header}
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => <div key={index} className="ui-skeleton h-28 rounded-xl" />)}
         </div>
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-500 mt-2">Loading dashboard...</p>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="ui-skeleton h-72 rounded-xl" />
+          <div className="ui-skeleton h-72 rounded-xl" />
         </div>
+        <span className="sr-only" role="status">Chargement du tableau de bord…</span>
       </div>
     );
   }
 
   if (!stats) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tableau de bord</h1>
-          <p className="text-gray-600">
-            Aperçu de la performance de votre entreprise
-          </p>
-        </div>
-        <div className="text-center py-12 text-gray-500">
-          <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>Unable to load dashboard data</p>
+      <div className="ui-page">
+        {header}
+        <div className="ui-card">
+          <EmptyState icon={BarChart3} title="Impossible de charger le tableau de bord" description="Vérifiez la connexion puis réessayez." />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tableau de bord</h1>
-          <p className="text-gray-600">
-            Aperçu de la performance de votre entreprise
-          </p>
-          {usingLocalData && <p className="mt-1 text-xs font-semibold text-blue-700">Hors ligne · Données locales incluant les ventes en attente</p>}
-        </div>
-        <RegionFilterPills value={regionFilter} onChange={setRegionFilter} />
-      </div>
+    <div className="ui-page">
+      {header}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
-                Revenue Totale
-              </p>
-              <p className="text-2xl font-bold text-gray-900">
-                {formatCurrency(stats.totalRevenue)}
-              </p>
-              <div className="flex items-center mt-1">
-                <ArrowUp className="w-4 h-4 text-green-500" />
-                <span className="text-xs text-green-500 ml-1">
-                  +{stats.revenueGrowth}% par rapport au mois dernier
-                </span>
-              </div>
-            </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <DollarSign className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
-                Ventes Totales
-              </p>
-              <p className="text-2xl font-bold text-gray-900">
-                {stats.totalSales}
-              </p>
-              <div className="flex items-center mt-1">
-                <ArrowUp className="w-4 h-4 text-green-500" />
-                <span className="text-xs text-green-500 ml-1">
-                  +{stats.salesGrowth}% par rapport au mois dernier
-                </span>
-              </div>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-full">
-              <ShoppingCart className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Produits</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {stats.totalProducts}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">Products Actifs</p>
-            </div>
-            <div className="p-3 bg-purple-100 rounded-full">
-              <Package className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Clients</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {stats.totalCustomers}
-              </p>
-              <div className="flex items-center mt-1">
-                <ArrowUp className="w-4 h-4 text-green-500" />
-                <span className="text-xs text-green-500 ml-1">
-                  +{stats.customerGrowth}% Croissance
-                </span>
-              </div>
-            </div>
-            <div className="p-3 bg-orange-100 rounded-full">
-              <Users className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <MetricCard label="Revenu total" value={formatCurrency(stats.totalRevenue)} icon={DollarSign} tone="primary" hint={renderGrowth(stats.revenueGrowth, "vs mois dernier")} />
+        <MetricCard label="Ventes totales" value={stats.totalSales} icon={ShoppingCart} hint={renderGrowth(stats.salesGrowth, "vs mois dernier")} />
+        <MetricCard label="Produits" value={stats.totalProducts} icon={Package} hint="Produits actifs" />
+        <MetricCard label="Clients" value={stats.totalCustomers} icon={Users} hint={renderGrowth(stats.customerGrowth, "croissance")} />
       </div>
 
-      {/* Charts and Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            Ventes Récentes
-          </h3>
-          <div className="space-y-4">
-            {stats.recentSales.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <ShoppingCart className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>Pas de Ventes Récentes</p>
-              </div>
-            ) : (
-              stats.recentSales.map((sale, index) => (
-                <div
-                  key={sale._id || index}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
+      {/* Recent activity */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section className="ui-card overflow-hidden" aria-labelledby="recent-sales-title">
+          <div className="ui-card-header">
+            <h2 id="recent-sales-title" className="ui-section-title flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-blue-700" />
+              Ventes récentes
+            </h2>
+          </div>
+          {stats.recentSales.length === 0 ? (
+            <EmptyState icon={ShoppingCart} title="Pas de ventes récentes" description="Les dernières ventes apparaîtront ici." />
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {stats.recentSales.map((sale, index) => (
+                <li key={sale._id || index} className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700" aria-hidden="true">
+                      <ShoppingCart className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-900">
                         Vente #{sale.saleId?.slice(-6) || sale._id?.slice(-6) || "N/A"}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        {sale.customer?.name || "Unknown"} •{" "}
-                        {formatDate(sale.createdAt || sale.date || sale.saleDate)}
+                      <p className="truncate text-xs text-slate-500">
+                        {sale.customer?.name || "Inconnu"} · {formatDate(sale.createdAt || sale.date || sale.saleDate)}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">
-                      {formatCurrency(sale.total || 0)}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {sale.items?.length || 0} Articles
-                    </p>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(sale.total || 0)}</p>
+                    <p className="text-xs text-slate-500">{sale.items?.length || 0} article(s)</p>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-        <div className="bg-white p-6 rounded-lg shadow border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Package className="w-5 h-5" />
-            Alertes de stock faible
-          </h3>
-          <div className="space-y-4">
-            {stats.lowStockProducts.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>Tous les produits Bien Stockés</p>
-              </div>
-            ) : (
-              stats.lowStockProducts.map((product, index) => (
-                <div
-                  key={product._id || index}
-                  className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {product.name || "Unknown Product"}
-                        {product.regionCode && (
-                          <span className="ml-1.5 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
-                            {product.regionCode}
-                          </span>
-                        )}
+        <section className="ui-card overflow-hidden" aria-labelledby="low-stock-title">
+          <div className="ui-card-header">
+            <h2 id="low-stock-title" className="ui-section-title flex items-center gap-2">
+              <Package className="h-4 w-4 text-amber-600" />
+              Alertes de stock faible
+            </h2>
+            {stats.lowStockProducts.length > 0 && <span className="ui-badge ui-badge-warning tabular-nums">{stats.lowStockProducts.length}</span>}
+          </div>
+          {stats.lowStockProducts.length === 0 ? (
+            <EmptyState icon={Package} title="Tous les produits sont bien stockés" description="Aucun article sous le seuil d'alerte." />
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {stats.lowStockProducts.map((product, index) => (
+                <li key={product._id || index} className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-700" aria-hidden="true">
+                      <Package className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-slate-900">
+                        <span className="truncate">{product.name || "Produit inconnu"}</span>
+                        {product.regionCode && <span className="ui-tag">{product.regionCode}</span>}
                       </p>
-                      <p className="text-xs text-red-600">
-                        Avertissement De Stock Faible
-                      </p>
+                      <p className="text-xs text-slate-500">{formatCurrency(product.price || 0)}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-red-700">
-                      {product.stock || 0} Restant
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {formatCurrency(product.price || 0)}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                  <span className={`ui-badge shrink-0 tabular-nums ${(product.stock || 0) === 0 ? "ui-badge-danger" : "ui-badge-warning"}`}>
+                    {product.stock || 0} restant(s)
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );

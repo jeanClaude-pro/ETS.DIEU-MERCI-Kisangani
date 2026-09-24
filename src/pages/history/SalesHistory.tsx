@@ -20,7 +20,9 @@ import {
   Filter,
   ChevronDown,
   Shield,
+  X,
 } from "lucide-react";
+import { Alert, EmptyState, LoadingState, MetricCard, PageHeader } from "../../components/ui";
 import RegionFilterPills from "../../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../../types";
 import { isReportableSale, projectSalesToRegion } from "../../utils/regionalSales";
@@ -430,12 +432,12 @@ export default function SalesHistory() {
           updateEditedSales(validSales);
         } else {
           console.warn("Unexpected sales data structure:", data);
-          setError("Unexpected response format from server");
+          setError("Format de réponse inattendu du serveur");
         }
       } else {
         console.error("Sales fetch failed:", res.status);
         const errorText = await res.text();
-        setError(`Failed to load sales: ${res.status} ${errorText}`);
+        setError(`Échec du chargement des ventes : ${res.status} ${errorText}`);
       }
     } catch (error) {
       console.error("Error loading sales:", error);
@@ -669,8 +671,8 @@ export default function SalesHistory() {
     const changes = latestEdit.changes;
 
     return (
-      <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <h4 className="font-medium text-yellow-800 mb-2 flex items-center gap-2">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-900">
           <History className="w-4 h-4" />
           Dernière modification
         </h4>
@@ -700,13 +702,13 @@ export default function SalesHistory() {
                     {field.replace(/([A-Z])/g, ' $1').toLowerCase()}:
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-red-50 p-2 rounded">
-                      <div className="text-red-600 font-medium">Avant:</div>
-                      <div className="truncate">{JSON.stringify(changeData.from)}</div>
+                    <div className="min-w-0 rounded-md bg-red-50 p-2">
+                      <div className="font-semibold text-red-700">Avant</div>
+                      <div className="truncate" title={JSON.stringify(changeData.from)}>{JSON.stringify(changeData.from)}</div>
                     </div>
-                    <div className="bg-green-50 p-2 rounded">
-                      <div className="text-green-600 font-medium">Après:</div>
-                      <div className="truncate">{JSON.stringify(changeData.to)}</div>
+                    <div className="min-w-0 rounded-md bg-emerald-50 p-2">
+                      <div className="font-semibold text-emerald-700">Après</div>
+                      <div className="truncate" title={JSON.stringify(changeData.to)}>{JSON.stringify(changeData.to)}</div>
                     </div>
                   </div>
                 </div>
@@ -725,7 +727,7 @@ export default function SalesHistory() {
       const dataToExport = showEditedSales ? editedSales : filteredSales;
       
       if (dataToExport.length === 0) {
-        setError("No data to export");
+        setError("Aucune donnée à exporter");
         return;
       }
 
@@ -820,11 +822,11 @@ export default function SalesHistory() {
       link.click();
       document.body.removeChild(link);
 
-      setMessage(`✅ ${dataToExport.length} sales with ${itemRows.length} items exported successfully!`);
+      setMessage(`${dataToExport.length} ventes et ${itemRows.length} lignes d'articles exportées.`);
       
     } catch (error) {
       console.error('Export error:', error);
-      setError('Failed to export sales data');
+      setError("Échec de l'export des ventes");
     }
   };
 
@@ -833,7 +835,7 @@ export default function SalesHistory() {
       const dataToExport = showEditedSales ? editedSales : filteredSales;
       
       if (dataToExport.length === 0) {
-        setError("No data to export");
+        setError("Aucune donnée à exporter");
         return;
       }
 
@@ -861,11 +863,11 @@ export default function SalesHistory() {
       link.click();
       document.body.removeChild(link);
 
-      setMessage(`✅ ${dataToExport.length} sales exported as JSON!`);
+      setMessage(`${dataToExport.length} ventes exportées au format JSON.`);
       
     } catch (error) {
       console.error('JSON export error:', error);
-      setError('Failed to export JSON data');
+      setError("Échec de l'export JSON");
     }
   };
 
@@ -878,8 +880,8 @@ export default function SalesHistory() {
       .then((destination) => {
         setMessage(
           destination === "usb"
-            ? "✅ Reçu et souche envoyés à l'imprimante thermique."
-            : "✅ Reçu et souche imprimés successivement dans le navigateur.",
+            ? "Reçu et souche envoyés à l'imprimante thermique."
+            : "Reçu et souche imprimés successivement dans le navigateur.",
         );
       })
       .catch((printError: unknown) => {
@@ -907,7 +909,7 @@ export default function SalesHistory() {
     // complete original receipt so hidden items from the other region survive.
     const fullSale = sales.find((candidate) => candidate._id === sale._id) || sale;
     if (fullSale.status === "voided" || fullSale.status === "corrected") {
-      setError("Cannot edit a voided or corrected sale");
+      setError("Impossible de modifier une vente annulée ou corrigée");
       return;
     }
 
@@ -948,7 +950,7 @@ export default function SalesHistory() {
     );
 
     if (product && newQuantity > product.stock + updatedItems[index].quantity) {
-      setError(`Insufficient stock. Available: ${product.stock}`);
+      setError(`Stock insuffisant. Disponible : ${product.stock}`);
       return;
     }
 
@@ -985,7 +987,7 @@ export default function SalesHistory() {
 
   const addNewItem = () => {
     if (products.length === 0) {
-      setError("No products available. Please refresh products first.");
+      setError("Aucun article disponible. Actualisez d'abord la liste des articles.");
       return;
     }
 
@@ -1010,7 +1012,7 @@ export default function SalesHistory() {
   const updateItemProduct = (index: number, productId: string) => {
     const product = products.find((p) => p._id === productId);
     if (!product) {
-      setError("Selected product not found");
+      setError("Article sélectionné introuvable");
       return;
     }
 
@@ -1038,17 +1040,17 @@ export default function SalesHistory() {
     if (!editingSale) return;
 
     if (editForm.items.length === 0) {
-      setError("Sale must contain at least one item");
+      setError("La vente doit contenir au moins un article");
       return;
     }
 
     if (!editForm.customer.name || !editForm.customer.phone) {
-      setError("Customer name and phone are required");
+      setError("Le nom et le téléphone du client sont obligatoires");
       return;
     }
 
     if (!editForm.reason) {
-      setError("Please provide a reason for editing this sale");
+      setError("Veuillez indiquer la raison de la modification");
       return;
     }
 
@@ -1091,7 +1093,7 @@ export default function SalesHistory() {
 
       if (response.ok) {
         await response.json();
-        setMessage("✅ Sale updated successfully");
+        setMessage("Vente mise à jour avec succès");
 
         // Refresh the sales list immediately
         await fetchSales();
@@ -1111,7 +1113,7 @@ export default function SalesHistory() {
       }
     } catch (error) {
       console.error("Error updating sale:", error);
-      setError("Failed to update sale. Please check your connection.");
+      setError("Échec de la mise à jour de la vente. Vérifiez votre connexion.");
     } finally {
       setLoading(false);
     }
@@ -1119,7 +1121,7 @@ export default function SalesHistory() {
 
   const handleVoidSale = async (sale: Sale) => {
     if (sale.status === "voided") {
-      setError("Sale is already voided");
+      setError("Cette vente est déjà annulée");
       return;
     }
 
@@ -1148,15 +1150,15 @@ export default function SalesHistory() {
       );
 
       if (response.ok) {
-        setMessage("✅ Sale voided successfully");
+        setMessage("Vente annulée avec succès");
         await fetchSales();
         setShowModal(false);
       } else {
         const errorData = await response.json();
-        setError(errorData.error || "Failed to void sale");
+        setError(errorData.error || "Échec de l'annulation de la vente");
       }
     } catch (error) {
-      setError("Failed to void sale");
+      setError("Échec de l'annulation de la vente");
       console.error("Error voiding sale:", error);
     } finally {
       setLoading(false);
@@ -1177,533 +1179,380 @@ export default function SalesHistory() {
 
   const renderSaleRegionBadge = (codes: string[]) => {
     if (codes.length === 0) {
-      return <span className="text-xs text-gray-400">—</span>;
+      return <span className="text-xs text-slate-400">—</span>;
     }
     if (codes.length > 1) {
       return (
-        <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+        <span className="ui-badge ui-badge-info">
           Mixte
         </span>
       );
     }
     return (
-      <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+      <span className="ui-tag">
         {codes[0]}
       </span>
     );
   };
 
-  return (
-    <div className="space-y-6 p-6 flex-1 overflow-auto">
-      <div className="flex items-center justify-between flex-wrap gap-4 overflow-auto">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Historique des ventes
-          </h1>
-          <p className="text-gray-600">
-            Voir toutes les transactions et ventes passées
-          </p>
-        </div>
-        <div className="flex gap-3">
-          {/* Region Filter */}
-          <RegionFilterPills
-            value={queryParams.region as RegionCodeFilter}
-            onChange={(value) => handleQueryParamChange("region", value)}
-          />
+  // Display-only labels; the stored values are left untouched.
+  const saleStatusLabel: Record<string, string> = { completed: "Terminée", voided: "Annulée", pending: "En attente", corrected: "Corrigée" };
+  const saleStatusTone = (status: string) =>
+    status === "completed" ? "ui-badge-success" : status === "voided" ? "ui-badge-danger" : "ui-badge-warning";
+  const paymentLabel: Record<string, string> = { cash: "Cash", card: "Carte", transfer: "Transfert", other: "Autre" };
+  const timeframeLabels: Record<typeof timeframeType, string> = { today: "Aujourd'hui", day: "Jour précis", month: "Mois", year: "Année", custom: "Plage de dates" };
+  const syncBlocked = (sale: Sale) => Boolean(sale.localSyncState && sale.localSyncState !== "SYNCED");
 
-          {/* NEW: Edited Sales Filter Button */}
-          <button
-            onClick={() => setShowEditedSales(!showEditedSales)}
-            className={`px-4 py-2 rounded-lg border transition-all duration-200 flex items-center gap-2 ${
-              showEditedSales
-                ? "bg-blue-500 text-white border-blue-500 shadow-sm"
-                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-            }`}
-          >
-            <Filter className="w-4 h-4" />
-            {showEditedSales ? "Toutes les ventes" : "Ventes modifiées"}
-            {showEditedSales && (
-              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                {editedSales.length}
+  return (
+    <div className="ui-page ui-page-wide">
+      <PageHeader
+        eyebrow="Transactions"
+        title="Historique des ventes"
+        description="Retrouvez, consultez et réimprimez les ventes enregistrées."
+        actions={
+          <>
+            <button type="button" onClick={exportToJSON} className="ui-btn ui-btn-secondary" title="Exporter les ventes au format JSON">
+              <FileText />
+              Export JSON
+            </button>
+            <button type="button" onClick={exportDetailedSalesToCSV} className="ui-btn ui-btn-primary" title="Exporter les ventes au format CSV">
+              <Download />
+              Export CSV
+            </button>
+          </>
+        }
+      />
+
+      {/* Summary Stats - ONLY VISIBLE TO ADMINS */}
+      {isAdmin && displayedSummaryStats && (
+        <section aria-labelledby="sales-summary-title" className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 id="sales-summary-title" className="ui-kicker flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5" />
+              Synthèse (vue administrateur)
+            </h2>
+            {currentUser && (
+              <span className="ui-badge ui-badge-neutral max-w-full truncate">
+                Connecté : {currentUser.name} ({currentUser.role})
               </span>
             )}
-          </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <MetricCard label="Enregistrements" value={displayedSummaryStats.totalRecords} icon={FileText} />
+            <MetricCard label="Revenus" value={formatCurrency(displayedSummaryStats.revenue)} tone="success" icon={Download} />
+            <MetricCard label="Dépenses" value={formatCurrency(displayedSummaryStats.expenses)} tone="danger" icon={Minus} />
+            <MetricCard label="Net" value={formatCurrency(displayedSummaryStats.net)} tone="primary" icon={Package} />
+            <MetricCard label="Nombre de ventes" value={displayedSummaryStats.salesCount} icon={FileText} />
+            <MetricCard label="Nombre de dépenses" value={displayedSummaryStats.expensesCount} icon={Minus} />
+          </div>
+        </section>
+      )}
 
-          {/* Export Button */}
-          <button
-            onClick={exportDetailedSalesToCSV}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-            title="Export sales data to CSV"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
-
-          {/* Export JSON Button */}
-          <button
-            onClick={exportToJSON}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
-            title="Export sales data to JSON"
-          >
-            <FileText className="w-4 h-4" />
-            Export JSON
-          </button>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+      {/* Toolbar: search, scope and period */}
+      <section className="ui-card" aria-label="Recherche et filtres">
+        <div className="flex flex-col gap-3 p-4 sm:p-5 xl:flex-row xl:items-center">
+          <div className="relative min-w-0 flex-1">
+            <label htmlFor="sales-search" className="sr-only">Rechercher une vente</label>
+            <Search className="ui-field-icon" aria-hidden="true" />
             <input
-              type="text"
-              placeholder="Search sales..."
-              className="pl-10 w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              id="sales-search"
+              type="search"
+              placeholder="Rechercher une vente…"
+              className="ui-input ui-input-icon"
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
-        </div>
-      </div>
-
-      {/* Summary Stats - ONLY VISIBLE TO ADMINS */}
-      {isAdmin && displayedSummaryStats && (
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
-              <Shield className="w-5 h-5" />
-              Summary Statistics (Admin View)
-            </h3>
-            {currentUser && (
-              <span className="text-sm text-blue-700 bg-blue-100 px-3 py-1 rounded-full">
-                Logged in as: {currentUser.name} ({currentUser.role})
-              </span>
-            )}
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Total Records</p>
-                  <p className="text-2xl font-bold text-gray-900">{displayedSummaryStats.totalRecords}</p>
-                </div>
-                <FileText className="w-8 h-8 text-blue-500" />
-              </div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Revenue</p>
-                  <p className="text-2xl font-bold text-green-600">{formatCurrency(displayedSummaryStats.revenue)}</p>
-                </div>
-                <Download className="w-8 h-8 text-green-500" />
-              </div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Expenses</p>
-                  <p className="text-2xl font-bold text-red-600">{formatCurrency(displayedSummaryStats.expenses)}</p>
-                </div>
-                <Minus className="w-8 h-8 text-red-500" />
-              </div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Net</p>
-                  <p className="text-2xl font-bold text-blue-600">{formatCurrency(displayedSummaryStats.net)}</p>
-                </div>
-                <Package className="w-8 h-8 text-blue-500" />
-              </div>
-            </div>
-          </div>
-          
-          {/* Additional stats row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Total Sales</p>
-                  <p className="text-xl font-bold text-green-700">{displayedSummaryStats.salesCount}</p>
-                </div>
-                <FileText className="w-6 h-6 text-green-500" />
-              </div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Total Expenses</p>
-                  <p className="text-xl font-bold text-red-700">{displayedSummaryStats.expensesCount}</p>
-                </div>
-                <Minus className="w-6 h-6 text-red-500" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Timeframe Filter Section */}
-      <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-            {showEditedSales ? "Ventes modifiées" : "Toutes les ventes"} - {getTimeframeDescription()}
-          </h3>
-          
-          <div className="flex flex-wrap gap-2">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <RegionFilterPills
+              value={queryParams.region as RegionCodeFilter}
+              onChange={(value) => handleQueryParamChange("region", value)}
+            />
             <button
+              type="button"
+              onClick={() => setShowEditedSales(!showEditedSales)}
+              aria-pressed={showEditedSales}
+              className={`ui-btn ${showEditedSales ? "ui-btn-primary" : "ui-btn-secondary"}`}
+            >
+              <History />
+              {showEditedSales ? "Toutes les ventes" : "Ventes modifiées"}
+              {showEditedSales && (
+                <span className="rounded-full bg-white/20 px-1.5 text-xs tabular-nums">{editedSales.length}</span>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => setShowFilters(!showFilters)}
-              className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center gap-2"
+              aria-expanded={showFilters}
+              aria-controls="sales-filters"
+              className="ui-btn ui-btn-secondary"
             >
-              <Filter className="w-4 h-4" />
-              {showFilters ? "Hide Filters" : "Show Filters"}
-              <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-            </button>
-            
-            <button
-              onClick={clearAllFilters}
-              className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Clear Filters
+              <Filter />
+              Période & filtres
+              <ChevronDown className={`transition-transform duration-150 ${showFilters ? "rotate-180" : ""}`} />
             </button>
           </div>
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <p className="flex min-w-0 items-center gap-2 text-slate-600">
+            <Calendar className="h-4 w-4 shrink-0 text-slate-400" />
+            <span className="truncate">
+              <span className="font-medium text-slate-900">{showEditedSales ? "Ventes modifiées" : "Toutes les ventes"}</span>
+              {" · "}{getTimeframeDescription()}
+            </span>
+          </p>
+          <button type="button" onClick={clearAllFilters} className="ui-btn ui-btn-ghost ui-btn-sm self-start sm:self-auto">
+            <RefreshCw />
+            Réinitialiser les filtres
+          </button>
         </div>
 
         {/* Timeframe Selection */}
         {showFilters && (
-          <div className="space-y-4">
+          <div id="sales-filters" className="space-y-4 border-t border-slate-100 px-4 py-4 sm:px-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Timeframe Type
-              </label>
-              <div className="flex flex-wrap gap-2">
+              <span className="ui-label">Période</span>
+              <div className="ui-segmented w-full sm:w-auto" role="group" aria-label="Type de période">
                 {(["today", "day", "month", "year", "custom"] as const).map((type) => (
                   <button
+                    type="button"
                     key={type}
                     onClick={() => handleTimeframeTypeChange(type)}
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                      timeframeType === type
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                    aria-pressed={timeframeType === type}
+                    className="ui-segment"
                   >
-                    {type === "today" && "Today"}
-                    {type === "day" && "Specific Day"}
-                    {type === "month" && "Specific Month"}
-                    {type === "year" && "Specific Year"}
-                    {type === "custom" && "Custom Range"}
+                    {timeframeLabels[type]}
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Specific timeframe inputs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {timeframeType === "day" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    value={queryParams.date}
-                    onChange={(e) => handleQueryParamChange("date", e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
-              )}
-
-              {timeframeType === "month" && (
-                <>
+            {timeframeType !== "today" && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {timeframeType === "day" && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Year
-                    </label>
+                    <label htmlFor="sales-date" className="ui-label">Date</label>
                     <input
+                      id="sales-date"
+                      type="date"
+                      value={queryParams.date}
+                      onChange={(e) => handleQueryParamChange("date", e.target.value)}
+                      className="ui-input"
+                    />
+                  </div>
+                )}
+
+                {timeframeType === "month" && (
+                  <>
+                    <div>
+                      <label htmlFor="sales-month-year" className="ui-label">Année</label>
+                      <input
+                        id="sales-month-year"
+                        type="number"
+                        value={queryParams.year}
+                        onChange={(e) => handleQueryParamChange("year", e.target.value)}
+                        min="2000"
+                        max="2100"
+                        className="ui-input tabular-nums"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="sales-month" className="ui-label">Mois</label>
+                      <select
+                        id="sales-month"
+                        value={queryParams.month}
+                        onChange={(e) => handleQueryParamChange("month", e.target.value)}
+                        className="ui-input capitalize"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => {
+                          const monthNum = (i + 1).toString().padStart(2, '0');
+                          return (
+                            <option key={monthNum} value={monthNum}>
+                              {new Date(2000, i).toLocaleString('fr-FR', { month: 'long' })} ({monthNum})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {timeframeType === "year" && (
+                  <div>
+                    <label htmlFor="sales-year" className="ui-label">Année</label>
+                    <input
+                      id="sales-year"
                       type="number"
                       value={queryParams.year}
                       onChange={(e) => handleQueryParamChange("year", e.target.value)}
                       min="2000"
                       max="2100"
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className="ui-input tabular-nums"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Month
-                    </label>
-                    <select
-                      value={queryParams.month}
-                      onChange={(e) => handleQueryParamChange("month", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    >
-                      {Array.from({ length: 12 }, (_, i) => {
-                        const monthNum = (i + 1).toString().padStart(2, '0');
-                        return (
-                          <option key={monthNum} value={monthNum}>
-                            {new Date(2000, i).toLocaleString('default', { month: 'long' })} ({monthNum})
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                </>
-              )}
+                )}
 
-              {timeframeType === "year" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Year
-                  </label>
-                  <input
-                    type="number"
-                    value={queryParams.year}
-                    onChange={(e) => handleQueryParamChange("year", e.target.value)}
-                    min="2000"
-                    max="2100"
-                    className="w-full p-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
-              )}
-
-              {timeframeType === "custom" && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      From Date
-                    </label>
-                    <input
-                      type="date"
-                      value={queryParams.from}
-                      onChange={(e) => handleQueryParamChange("from", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      To Date
-                    </label>
-                    <input
-                      type="date"
-                      value={queryParams.to}
-                      onChange={(e) => handleQueryParamChange("to", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
+                {timeframeType === "custom" && (
+                  <>
+                    <div>
+                      <label htmlFor="sales-from" className="ui-label">Du</label>
+                      <input
+                        id="sales-from"
+                        type="date"
+                        value={queryParams.from}
+                        onChange={(e) => handleQueryParamChange("from", e.target.value)}
+                        className="ui-input"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="sales-to" className="ui-label">Au</label>
+                      <input
+                        id="sales-to"
+                        type="date"
+                        value={queryParams.to}
+                        onChange={(e) => handleQueryParamChange("to", e.target.value)}
+                        className="ui-input"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Advanced Filters */}
             <div>
               <button
+                type="button"
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                aria-expanded={showAdvancedFilters}
+                className="inline-flex min-h-9 items-center gap-1 rounded-md text-sm font-semibold text-blue-700 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
-                {showAdvancedFilters ? "Hide Advanced Filters" : "Show Advanced Filters"}
-                <ChevronDown className={`w-4 h-4 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
+                {showAdvancedFilters ? "Masquer les filtres avancés" : "Afficher les filtres avancés"}
+                <ChevronDown className={`h-4 w-4 transition-transform duration-150 ${showAdvancedFilters ? "rotate-180" : ""}`} />
               </button>
 
               {showAdvancedFilters && (
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="ui-muted-panel mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Sale Type
-                    </label>
+                    <label htmlFor="sales-type" className="ui-label">Type</label>
                     <select
+                      id="sales-type"
                       value={queryParams.type}
                       onChange={(e) => handleQueryParamChange("type", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className="ui-input"
                     >
-                      <option value="">Sales & Reservations</option>
-                      <option value="sale">Sale</option>
-                      <option value="reservation">Reservation</option>
+                      <option value="">Ventes et réservations</option>
+                      <option value="sale">Ventes</option>
+                      <option value="reservation">Réservations</option>
                     </select>
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Status
-                    </label>
+                    <label htmlFor="sales-status" className="ui-label">Statut</label>
                     <select
+                      id="sales-status"
                       value={queryParams.status}
                       onChange={(e) => handleQueryParamChange("status", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className="ui-input"
                     >
-                      <option value="">All Status</option>
-                      <option value="completed">Completed</option>
-                      <option value="pending">Pending</option>
+                      <option value="">Tous les statuts</option>
+                      <option value="completed">Terminée</option>
+                      <option value="pending">En attente</option>
                     </select>
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Customer Phone
-                    </label>
+                    <label htmlFor="sales-phone" className="ui-label">Téléphone du client</label>
                     <input
+                      id="sales-phone"
                       type="text"
                       value={queryParams.customerPhone}
                       onChange={(e) => handleQueryParamChange("customerPhone", e.target.value)}
-                      placeholder="Filter by phone..."
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      placeholder="Filtrer par téléphone…"
+                      className="ui-input"
+                      inputMode="tel"
                     />
                   </div>
                 </div>
               )}
             </div>
+
+            {/* Applied Filters Summary */}
+            {appliedFilters && (
+              <p className="text-xs text-slate-500">
+                <span className="font-medium text-slate-700">Filtres appliqués :</span>{" "}
+                Statut : {appliedFilters.status}, Type : {appliedFilters.type}
+                {appliedFilters.customerPhone !== 'none' && `, Téléphone : ${appliedFilters.customerPhone}`}
+              </p>
+            )}
           </div>
         )}
+      </section>
 
-        {/* Applied Filters Summary */}
-        {appliedFilters && (
-          <div className="mt-4 text-sm text-gray-600">
-            <span className="font-medium">Applied filters:</span>
-            <span className="ml-2">
-              Status: {appliedFilters.status}, Type: {appliedFilters.type}
-              {appliedFilters.customerPhone !== 'none' && `, Phone: ${appliedFilters.customerPhone}`}
-            </span>
-          </div>
-        )}
-      </div>
+      {message && <Alert tone="success" onDismiss={() => setMessage(null)}>{message}</Alert>}
+      {error && <Alert tone="danger" onDismiss={() => setError(null)}>{error}</Alert>}
 
-      {message && (
-        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg border border-green-200">
-          {message}
-          <button
-            onClick={() => setMessage(null)}
-            className="float-right text-green-700 hover:text-green-900"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg border border-red-200">
-          {error}
-          <button
-            onClick={() => setError(null)}
-            className="float-right text-red-700 hover:text-red-900"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            {showEditedSales ? "Ventes modifiées" : "Transactions de vente"} ({filteredSales.length})
+      <section className="ui-card overflow-hidden" aria-labelledby="sales-table-title">
+        <div className="ui-card-header">
+          <h2 id="sales-table-title" className="ui-section-title flex items-center gap-2">
+            <FileText className="h-4 w-4 text-blue-700" />
+            {showEditedSales ? "Ventes modifiées" : "Transactions de vente"}
+            <span className="ui-badge ui-badge-neutral tabular-nums">{filteredSales.length}</span>
           </h2>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="ui-table-wrap">
           {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-500 mt-2">Chargement des ventes...</p>
-            </div>
+            <LoadingState label="Chargement des ventes…" />
           ) : filteredSales.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>
-                {showEditedSales 
-                  ? "Aucune vente modifiée trouvée" 
-                  : "Aucune vente trouvée"
-                }
-              </p>
-              <p className="text-sm">pour la période sélectionnée</p>
-            </div>
+            <EmptyState
+              icon={FileText}
+              title={showEditedSales ? "Aucune vente modifiée trouvée" : "Aucune vente trouvée"}
+              description="Aucune transaction ne correspond à la période et aux filtres sélectionnés."
+            />
           ) : (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Identifiant de vente
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Client
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Agent
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Articles
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Région
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Payement
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Statut
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    {showEditedSales && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Dernière modification
-                      </th>
-                    )}
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredSales.map((sale) => (
-                    <tr key={sale._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {sale.saleId}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {sale.customer.name}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {sale.customer.phone}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {sale.salesPerson || "Non spécifié"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {sale.items.length} Article(s)
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {renderSaleRegionBadge(saleRegionBadges.get(sale._id) || [])}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {formatCurrency(sale.total)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          {sale.paymentMethod}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                            sale.status === "completed"
-                              ? "bg-green-100 text-green-800"
-                              : sale.status === "voided"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {sale.status}
+            <table className="ui-table min-w-full">
+              <thead>
+                <tr>
+                  <th scope="col">Vente</th>
+                  <th scope="col">Client</th>
+                  <th scope="col" className="text-center">Articles</th>
+                  <th scope="col">Région</th>
+                  <th scope="col" className="text-right">Total</th>
+                  <th scope="col">Paiement</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Date · Agent</th>
+                  {showEditedSales && <th scope="col">Dernière modification</th>}
+                  <th scope="col" className="ui-sticky-end text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSales.map((sale) => (
+                  <tr key={sale._id}>
+                    <td className="whitespace-nowrap font-medium text-slate-900">
+                      {sale.saleId}
+                    </td>
+                    <td className="max-w-[12rem]">
+                      <div className="flex flex-col">
+                        <span className="truncate text-slate-900" title={sale.customer.name}>{sale.customer.name}</span>
+                        {sale.customer.phone && <span className="text-xs tabular-nums text-slate-500">{sale.customer.phone}</span>}
+                      </div>
+                    </td>
+                    <td className="text-center tabular-nums">{sale.items.length}</td>
+                    <td>{renderSaleRegionBadge(saleRegionBadges.get(sale._id) || [])}</td>
+                    <td className="ui-num whitespace-nowrap font-semibold text-slate-900">{formatCurrency(sale.total)}</td>
+                    <td>
+                      <span className="ui-badge ui-badge-neutral">{paymentLabel[sale.paymentMethod] || sale.paymentMethod}</span>
+                    </td>
+                    <td>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`ui-badge ${saleStatusTone(sale.status)}`}>
+                          {saleStatusLabel[sale.status] || sale.status}
                         </span>
                         {sale.localSyncState && (
-                          <div className={`mt-1 text-[11px] font-semibold ${
+                          <span className={`text-[11px] font-semibold ${
                             sale.localSyncState === "CONFLICT" || sale.localSyncState === "FAILED_PERMANENT"
                               ? "text-amber-700"
                               : sale.localSyncState === "SYNCED" ? "text-emerald-700" : "text-blue-700"
@@ -1713,267 +1562,205 @@ export default function SalesHistory() {
                               : sale.localSyncState === "CONFLICT" || sale.localSyncState === "FAILED_PERMANENT"
                                 ? "À vérifier"
                                 : "En attente de synchronisation"}
-                          </div>
+                          </span>
                         )}
+                      </div>
+                    </td>
+                    <td className="min-w-[7rem]">
+                      <div className="flex flex-col">
+                        <span className="whitespace-nowrap text-slate-700">{formatDate(sale.createdAt)}</span>
+                        <span className="text-xs text-slate-500">{sale.salesPerson || "Non spécifié"}</span>
+                      </div>
+                    </td>
+                    {showEditedSales && (
+                      <td className="whitespace-nowrap text-slate-500">
+                        {sale.editedAt ? formatDate(sale.editedAt) : "N/A"}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(sale.createdAt)}
-                      </td>
-                      {showEditedSales && (
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {sale.editedAt ? formatDate(sale.editedAt) : "N/A"}
-                        </td>
-                      )}
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex gap-2">
-                          {showEditedSales ? (
-                            <button
-                              onClick={() => viewEditedSaleDetails(sale)}
-                              className="text-blue-600 hover:text-blue-900 p-1 rounded"
-                              title="Voir les détails des modifications"
-                            >
-                              <History className="w-4 h-4" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => viewSaleDetails(sale)}
-                              className="text-blue-600 hover:text-blue-900 p-1 rounded"
-                              title="Voir les détails de"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                          )}
+                    )}
+                    <td className="ui-sticky-end">
+                      <div className="ui-row-actions">
+                        {showEditedSales ? (
                           <button
-                            onClick={() => printSavedSale(sale)}
-                            className="text-purple-600 hover:text-purple-900 p-2 min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg active:bg-purple-50"
-                            title="Réimprimer le reçu et la souche"
-                            aria-label={`Réimprimer la vente ${sale.saleId}`}
+                            type="button"
+                            onClick={() => viewEditedSaleDetails(sale)}
+                            className="ui-icon-btn ui-icon-btn-primary"
+                            title="Voir les détails des modifications"
+                            aria-label={`Voir les modifications de la vente ${sale.saleId}`}
                           >
-                            <Printer className="w-4 h-4" />
+                            <History />
                           </button>
-                          {!showEditedSales && (
-                            <>
-                              <button
-                                onClick={() => openEditModal(sale)}
-                                disabled={
-                                  sale.status === "voided" ||
-                                  sale.status === "corrected" ||
-                                  Boolean(sale.localSyncState && sale.localSyncState !== "SYNCED")
-                                }
-                                className={`p-1 rounded ${
-                                  sale.status === "voided" ||
-                                  sale.status === "corrected" ||
-                                  Boolean(sale.localSyncState && sale.localSyncState !== "SYNCED")
-                                    ? "text-gray-400 cursor-not-allowed"
-                                    : "text-yellow-600 hover:text-yellow-900"
-                                }`}
-                                title={sale.localSyncState && sale.localSyncState !== "SYNCED" ? "Connexion requise" : "Edit Sale"}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => generateReceiptPDF(sale)}
-                                className="text-green-600 hover:text-green-900 p-1 rounded"
-                                title="Télécharger le reçu et la souche PDF"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleVoidSale(sale)}
-                                disabled={sale.status === "voided" || Boolean(sale.localSyncState && sale.localSyncState !== "SYNCED")}
-                                className={`p-1 rounded ${
-                                  sale.status === "voided" || (sale.localSyncState && sale.localSyncState !== "SYNCED")
-                                    ? "text-gray-400 cursor-not-allowed"
-                                    : "text-red-600 hover:text-red-900"
-                                }`}
-                                title={sale.localSyncState && sale.localSyncState !== "SYNCED" ? "Connexion requise" : "Void Sale"}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => viewSaleDetails(sale)}
+                            className="ui-icon-btn ui-icon-btn-primary"
+                            title="Voir les détails"
+                            aria-label={`Voir la vente ${sale.saleId}`}
+                          >
+                            <Eye />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => printSavedSale(sale)}
+                          className="ui-icon-btn"
+                          title="Réimprimer le reçu et la souche"
+                          aria-label={`Réimprimer la vente ${sale.saleId}`}
+                        >
+                          <Printer />
+                        </button>
+                        {!showEditedSales && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(sale)}
+                              disabled={
+                                sale.status === "voided" ||
+                                sale.status === "corrected" ||
+                                syncBlocked(sale)
+                              }
+                              className="ui-icon-btn ui-icon-btn-warning"
+                              title={syncBlocked(sale) ? "Connexion requise" : "Modifier la vente"}
+                              aria-label={`Modifier la vente ${sale.saleId}`}
+                            >
+                              <Edit />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => generateReceiptPDF(sale)}
+                              className="ui-icon-btn ui-icon-btn-success"
+                              title="Télécharger le reçu et la souche PDF"
+                              aria-label={`Télécharger le PDF de la vente ${sale.saleId}`}
+                            >
+                              <Download />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleVoidSale(sale)}
+                              disabled={sale.status === "voided" || syncBlocked(sale)}
+                              className="ui-icon-btn ui-icon-btn-danger"
+                              title={syncBlocked(sale) ? "Connexion requise" : "Annuler la vente"}
+                              aria-label={`Annuler la vente ${sale.saleId}`}
+                            >
+                              <Trash2 />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
         {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
-            <span className="text-sm text-gray-600">
+          <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <span className="text-sm tabular-nums text-slate-600">
               Page {pagination.currentPage} sur {pagination.totalPages} · {pagination.totalRecords} ventes
             </span>
             <div className="flex gap-2">
-              <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="px-3 py-1.5 border rounded disabled:opacity-50">Précédent</button>
-              <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="px-3 py-1.5 border rounded disabled:opacity-50">Suivant</button>
+              <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none">Précédent</button>
+              <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none">Suivant</button>
             </div>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Sale Details Modal */}
       {showModal && selectedSale && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Détails de la vente
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="sale-details-title">
+          <div className="ui-dialog max-w-2xl">
+            <div className="ui-dialog-header">
+              <div className="min-w-0">
+                <h3 id="sale-details-title" className="ui-dialog-title">Détails de la vente</h3>
+                <p className="mt-0.5 truncate text-sm text-slate-500">{selectedSale.saleId}</p>
+              </div>
+              <button type="button" onClick={() => setShowModal(false)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="ui-dialog-body space-y-5">
               {/* Sale Info */}
-              <div className="grid grid-cols-2 gap-4">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Identifiant de vente
-                  </label>
-                  <p className="text-sm text-gray-900">{selectedSale.saleId}</p>
+                  <dt className="text-xs font-medium text-slate-500">Date</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{formatDate(selectedSale.createdAt)}</dd>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {formatDate(selectedSale.createdAt)}
-                  </p>
+                  <dt className="text-xs font-medium text-slate-500">Statut</dt>
+                  <dd className="mt-1">
+                    <span className={`ui-badge ${saleStatusTone(selectedSale.status)}`}>
+                      {saleStatusLabel[selectedSale.status] || selectedSale.status}
+                    </span>
+                  </dd>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Methode de Payment{" "}
-                  </label>
-                  <p className="text-sm text-gray-900 capitalize">
-                    {selectedSale.paymentMethod}
-                  </p>
+                  <dt className="text-xs font-medium text-slate-500">Méthode de paiement</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{paymentLabel[selectedSale.paymentMethod] || selectedSale.paymentMethod}</dd>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Statut
-                  </label>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                      selectedSale.status === "completed"
-                        ? "bg-green-100 text-green-800"
-                        : selectedSale.status === "voided"
-                        ? "bg-red-100 text-red-800"
-                        : "bg-yellow-100 text-yellow-800"
-                    }`}
-                  >
-                    {selectedSale.status}
-                  </span>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Agent
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {selectedSale.salesPerson || "Non spécifié"}
-                  </p>
+                  <dt className="text-xs font-medium text-slate-500">Agent</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{selectedSale.salesPerson || "Non spécifié"}</dd>
                 </div>
                 {selectedSale.editedBy && (
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Dernière modification
-                    </label>
-                    <p className="text-sm text-gray-900">
-                      By: {selectedSale.editedBy} at{" "}
+                    <dt className="text-xs font-medium text-slate-500">Dernière modification</dt>
+                    <dd className="mt-0.5 text-sm text-slate-900">
+                      Par {selectedSale.editedBy} le{" "}
                       {selectedSale.editedAt
                         ? formatDate(selectedSale.editedAt)
                         : "N/A"}
-                    </p>
+                    </dd>
                   </div>
                 )}
-              </div>
+              </dl>
 
               {/* Customer Info */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Information sur le client
-                </h4>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nom
-                      </label>
-                      <p className="text-sm text-gray-900">
-                        {selectedSale.customer.name}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Phone
-                      </label>
-                      <p className="text-sm text-gray-900">
-                        {selectedSale.customer.phone}
-                      </p>
-                    </div>
-                    {selectedSale.customer.email && (
-                      <div className="col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Email
-                        </label>
-                        <p className="text-sm text-gray-900">
-                          {selectedSale.customer.email}
-                        </p>
-                      </div>
-                    )}
+                <h4 className="ui-kicker mb-2 flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Client</h4>
+                <dl className="ui-muted-panel grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium text-slate-500">Nom</dt>
+                    <dd className="mt-0.5 break-words text-sm text-slate-900">{selectedSale.customer.name}</dd>
                   </div>
-                </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-500">Téléphone</dt>
+                    <dd className="mt-0.5 text-sm tabular-nums text-slate-900">{selectedSale.customer.phone || "—"}</dd>
+                  </div>
+                  {selectedSale.customer.email && (
+                    <div className="col-span-2 min-w-0">
+                      <dt className="text-xs font-medium text-slate-500">Email</dt>
+                      <dd className="mt-0.5 break-words text-sm text-slate-900">{selectedSale.customer.email}</dd>
+                    </div>
+                  )}
+                </dl>
               </div>
 
               {/* Items */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <Package className="w-4 h-4" />
-                  Articles ({selectedSale.items.length})
-                </h4>
-                <div className="space-y-3">
+                <h4 className="ui-kicker mb-2 flex items-center gap-1.5"><Package className="h-3.5 w-3.5" />Articles ({selectedSale.items.length})</h4>
+                <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                   {selectedSale.items.map((item, index) => (
-                    <div key={index} className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h5 className="font-medium text-gray-900">
-                            {item.name}
-                            <span className={`ml-2 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded ${item.regionCode ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}`}>
-                              {item.regionCode || "Unknown region"}
-                            </span>
-                          </h5>
-                          <p className="text-sm text-gray-600">
-                            Nombre de pieces: {item.quantity} ×{" "}
-                            {formatCurrency(item.price)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium text-gray-900">
-                            {formatCurrency(item.netTotal ?? item.total)}
-                          </p>
-                        </div>
+                    <li key={index} className="flex items-start justify-between gap-3 px-3.5 py-3">
+                      <div className="min-w-0">
+                        <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-slate-900">
+                          <span className="break-words">{item.name}</span>
+                          <span className={item.regionCode ? "ui-tag" : "ui-badge ui-badge-warning"}>
+                            {item.regionCode || "Région inconnue"}
+                          </span>
+                        </p>
+                        <p className="mt-0.5 text-xs tabular-nums text-slate-500">
+                          {item.quantity} pièce(s) × {formatCurrency(item.price)}
+                        </p>
                       </div>
-                    </div>
+                      <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">
+                        {formatCurrency(item.netTotal ?? item.total)}
+                      </p>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
 
               {/* Show edit history if available */}
@@ -1982,65 +1769,48 @@ export default function SalesHistory() {
               )}
 
               {/* Totals */}
-              <div className="border-t border-gray-200 pt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600">Sous-total:</span>
-                  <span className="text-sm text-gray-900">
-                    {formatCurrency(selectedSale.subtotal)}
-                  </span>
+              <div className="space-y-1.5 border-t border-slate-200 pt-4 text-sm tabular-nums">
+                <div className="flex justify-between text-slate-600">
+                  <span>Sous-total</span>
+                  <span className="text-slate-900">{formatCurrency(selectedSale.subtotal)}</span>
                 </div>
-                {Number(selectedSale.discount || 0) > 0 && <div className="flex justify-between text-sm mb-2"><span>Remise allouée:</span><span>-{formatCurrency(selectedSale.discount || 0)}</span></div>}
-                {Number(selectedSale.tax || 0) > 0 && <div className="flex justify-between text-sm mb-2"><span>Taxe allouée:</span><span>{formatCurrency(selectedSale.tax || 0)}</span></div>}
-                {Number(selectedSale.transportCost || 0) > 0 && <div className="flex justify-between text-sm mb-2"><span>Transport alloué:</span><span>{formatCurrency(selectedSale.transportCost || 0)}</span></div>}
-                {isAdmin && Number.isFinite(selectedSale.cost) && <div className="flex justify-between text-sm mb-2"><span>Coût:</span><span>{formatCurrency(selectedSale.cost || 0)}</span></div>}
-                {isAdmin && Number.isFinite(selectedSale.profit) && <div className="flex justify-between text-sm mb-2"><span>Profit:</span><span>{formatCurrency(selectedSale.profit || 0)}</span></div>}
-                <div className="flex justify-between items-center text-lg font-semibold">
-                  <span className="text-gray-900">Total:</span>
-                  <span className="text-gray-900">
-                    {formatCurrency(selectedSale.total)}
-                  </span>
+                {Number(selectedSale.discount || 0) > 0 && <div className="flex justify-between text-slate-600"><span>Remise allouée</span><span className="text-slate-900">-{formatCurrency(selectedSale.discount || 0)}</span></div>}
+                {Number(selectedSale.tax || 0) > 0 && <div className="flex justify-between text-slate-600"><span>Taxe allouée</span><span className="text-slate-900">{formatCurrency(selectedSale.tax || 0)}</span></div>}
+                {Number(selectedSale.transportCost || 0) > 0 && <div className="flex justify-between text-slate-600"><span>Transport alloué</span><span className="text-slate-900">{formatCurrency(selectedSale.transportCost || 0)}</span></div>}
+                {isAdmin && Number.isFinite(selectedSale.cost) && <div className="flex justify-between text-slate-600"><span>Coût</span><span className="text-slate-900">{formatCurrency(selectedSale.cost || 0)}</span></div>}
+                {isAdmin && Number.isFinite(selectedSale.profit) && <div className="flex justify-between text-slate-600"><span>Profit</span><span className="text-slate-900">{formatCurrency(selectedSale.profit || 0)}</span></div>}
+                <div className="flex items-center justify-between pt-1.5 text-base font-semibold text-slate-950">
+                  <span>Total</span>
+                  <span className="text-lg">{formatCurrency(selectedSale.total)}</span>
                 </div>
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => generateReceiptPDF(selectedSale)}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Télécharger PDF + Souche
-                </button>
-                <button
-                  onClick={() => printSavedSale(selectedSale)}
-                  className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Printer className="w-4 h-4" />
-                  Imprimer Reçu + Souche
-                </button>
-                <button
-                  onClick={() => openEditModal(selectedSale)}
-                  disabled={
-                    selectedSale.status === "voided" ||
-                    selectedSale.status === "corrected"
-                  }
-                  className={`px-4 py-2 border rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                    selectedSale.status === "voided" ||
-                    selectedSale.status === "corrected"
-                      ? "border-gray-300 text-gray-400 cursor-not-allowed"
-                      : "border-yellow-300 text-yellow-600 hover:bg-yellow-50"
-                  }`}
-                >
-                  <Edit className="w-4 h-4" />
-                  Modifier la vente
-                </button>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
+            {/* Actions */}
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="ui-btn ui-btn-ghost">
+                Fermer
+              </button>
+              <button
+                type="button"
+                onClick={() => openEditModal(selectedSale)}
+                disabled={
+                  selectedSale.status === "voided" ||
+                  selectedSale.status === "corrected"
+                }
+                className="ui-btn ui-btn-secondary"
+              >
+                <Edit />
+                Modifier
+              </button>
+              <button type="button" onClick={() => generateReceiptPDF(selectedSale)} className="ui-btn ui-btn-secondary">
+                <Download />
+                PDF + souche
+              </button>
+              <button type="button" onClick={() => printSavedSale(selectedSale)} className="ui-btn ui-btn-primary">
+                <Printer />
+                Imprimer reçu + souche
+              </button>
             </div>
           </div>
         </div>
@@ -2048,124 +1818,86 @@ export default function SalesHistory() {
 
       {/* NEW: Edited Sale Details Modal */}
       {showEditedDetailsModal && selectedEditedSale && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Détails des modifications - {selectedEditedSale.saleId}
-              </h3>
-              <button
-                onClick={() => setShowEditedDetailsModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="edited-sale-title">
+          <div className="ui-dialog max-w-3xl">
+            <div className="ui-dialog-header">
+              <div className="min-w-0">
+                <h3 id="edited-sale-title" className="ui-dialog-title">Détails des modifications</h3>
+                <p className="mt-0.5 truncate text-sm text-slate-500">{selectedEditedSale.saleId}</p>
+              </div>
+              <button type="button" onClick={() => setShowEditedDetailsModal(false)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="ui-dialog-body space-y-5">
               {/* Current Sale Info */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3 bg-blue-50 p-3 rounded-lg">
-                  État actuel de la vente
-                </h4>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Client
-                    </label>
-                    <p className="text-sm text-gray-900">
+                <h4 className="ui-kicker mb-2">État actuel de la vente</h4>
+                <dl className="ui-muted-panel grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium text-slate-500">Client</dt>
+                    <dd className="mt-0.5 break-words text-sm text-slate-900">
                       {selectedEditedSale.customer.name} ({selectedEditedSale.customer.phone})
-                    </p>
+                    </dd>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Total actuel
-                    </label>
-                    <p className="text-sm font-medium text-gray-900">
-                      {formatCurrency(selectedEditedSale.total)}
-                    </p>
+                    <dt className="text-xs font-medium text-slate-500">Total actuel</dt>
+                    <dd className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(selectedEditedSale.total)}</dd>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Méthode de paiement
-                    </label>
-                    <p className="text-sm text-gray-900 capitalize">
-                      {selectedEditedSale.paymentMethod}
-                    </p>
+                    <dt className="text-xs font-medium text-slate-500">Méthode de paiement</dt>
+                    <dd className="mt-0.5 text-sm text-slate-900">{paymentLabel[selectedEditedSale.paymentMethod] || selectedEditedSale.paymentMethod}</dd>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Articles
-                    </label>
-                    <p className="text-sm text-gray-900">
-                      {selectedEditedSale.items.length} article(s)
-                    </p>
+                    <dt className="text-xs font-medium text-slate-500">Articles</dt>
+                    <dd className="mt-0.5 text-sm text-slate-900">{selectedEditedSale.items.length} article(s)</dd>
                   </div>
-                </div>
+                </dl>
               </div>
 
               {/* Edit History */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Historique des modifications
-                </h4>
-                <div className="space-y-4">
+                <h4 className="ui-kicker mb-2">Historique des modifications</h4>
+                <div className="space-y-3">
                   {selectedEditedSale.editHistory && selectedEditedSale.editHistory.length > 0 ? (
                     selectedEditedSale.editHistory.map((edit, index) => (
-                      <div key={edit._id || index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <div className="flex justify-between items-start mb-3">
+                      <div key={edit._id || index} className="rounded-lg border border-slate-200 p-4">
+                        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div>
-                            <h5 className="font-medium text-gray-900">
+                            <h5 className="text-sm font-semibold text-slate-900">
                               Modification #{selectedEditedSale.editHistory!.length - index}
                             </h5>
-                            <p className="text-sm text-gray-600">
-                              {formatDate(edit.editedAt)}
-                            </p>
+                            <p className="text-xs text-slate-500">{formatDate(edit.editedAt)}</p>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium text-gray-900">
-                              Par: {edit.editedBy}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Raison: {edit.reason}
-                            </p>
+                          <div className="text-sm sm:text-right">
+                            <p className="font-medium text-slate-900">Par : {edit.editedBy}</p>
+                            <p className="text-slate-600">Raison : {edit.reason}</p>
                           </div>
                         </div>
 
                         {edit.changes && Object.keys(edit.changes).length > 0 && (
                           <div className="space-y-3">
-                            <h6 className="font-medium text-gray-700 text-sm">Changements détaillés:</h6>
+                            <h6 className="text-xs font-semibold text-slate-600">Changements détaillés</h6>
                             {Object.entries(edit.changes).map(([field, changeData]: [string, any]) => (
-                              <div key={field} className="border-l-4 border-blue-500 pl-3">
-                                <div className="font-medium text-gray-700 text-sm capitalize mb-2">
-                                  {field.replace(/([A-Z])/g, ' $1').toLowerCase()}:
+                              <div key={field} className="border-l-2 border-blue-500 pl-3">
+                                <div className="mb-2 text-sm font-medium capitalize text-slate-700">
+                                  {field.replace(/([A-Z])/g, ' $1').toLowerCase()}
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                  <div className="bg-red-50 p-3 rounded border border-red-200">
-                                    <div className="text-red-700 font-medium mb-1">Avant:</div>
-                                    <div className="text-red-600 break-words">
-                                      {typeof changeData.from === 'object' 
+                                <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+                                  <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                                    <div className="mb-1 text-xs font-semibold text-red-700">Avant</div>
+                                    <div className="whitespace-pre-wrap break-words text-red-800">
+                                      {typeof changeData.from === 'object'
                                         ? JSON.stringify(changeData.from, null, 2)
                                         : String(changeData.from || 'N/A')
                                       }
                                     </div>
                                   </div>
-                                  <div className="bg-green-50 p-3 rounded border border-green-200">
-                                    <div className="text-green-700 font-medium mb-1">Après:</div>
-                                    <div className="text-green-600 break-words">
-                                      {typeof changeData.to === 'object' 
+                                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                                    <div className="mb-1 text-xs font-semibold text-emerald-700">Après</div>
+                                    <div className="whitespace-pre-wrap break-words text-emerald-800">
+                                      {typeof changeData.to === 'object'
                                         ? JSON.stringify(changeData.to, null, 2)
                                         : String(changeData.to || 'N/A')
                                       }
@@ -2179,23 +1911,17 @@ export default function SalesHistory() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                      <p>Aucun détail de modification disponible</p>
-                    </div>
+                    <EmptyState icon={History} title="Aucun détail de modification disponible" />
                   )}
                 </div>
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => setShowEditedDetailsModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
+            {/* Actions */}
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setShowEditedDetailsModal(false)} className="ui-btn ui-btn-secondary">
+                Fermer
+              </button>
             </div>
           </div>
         </div>
@@ -2203,50 +1929,29 @@ export default function SalesHistory() {
 
       {/* Edit Sale Modal */}
       {showEditModal && editingSale && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Edit Sale - {editingSale.saleId}
-              </h3>
-              <button
-                onClick={closeEditModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-sale-title">
+          <div className="ui-dialog max-w-4xl">
+            <div className="ui-dialog-header">
+              <div className="min-w-0">
+                <h3 id="edit-sale-title" className="ui-dialog-title">Modifier la vente</h3>
+                <p className="mt-0.5 truncate text-sm text-slate-500">{editingSale.saleId}</p>
+              </div>
+              <button type="button" onClick={closeEditModal} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {error && (
-                <div className="p-3 bg-red-100 text-red-700 rounded-lg">
-                  {error}
-                </div>
-              )}
+            <div className="ui-dialog-body space-y-6">
+              {error && <Alert tone="danger">{error}</Alert>}
 
               {/* Customer Information */}
-              <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Information sur le client
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <fieldset>
+                <legend className="ui-kicker mb-3">Client</legend>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nom
-                    </label>
+                    <label htmlFor="edit-sale-name" className="ui-label">Nom</label>
                     <input
+                      id="edit-sale-name"
                       type="text"
                       value={editForm.customer.name}
                       onChange={(e) =>
@@ -2255,15 +1960,14 @@ export default function SalesHistory() {
                           customer: { ...prev.customer, name: e.target.value },
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Numéro de téléphone
-                    </label>
+                    <label htmlFor="edit-sale-phone" className="ui-label">Téléphone</label>
                     <input
+                      id="edit-sale-phone"
                       type="tel"
                       value={editForm.customer.phone}
                       onChange={(e) =>
@@ -2272,15 +1976,14 @@ export default function SalesHistory() {
                           customer: { ...prev.customer, phone: e.target.value },
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
+                    <label htmlFor="edit-sale-email" className="ui-label">Email</label>
                     <input
+                      id="edit-sale-email"
                       type="email"
                       value={editForm.customer.email}
                       onChange={(e) =>
@@ -2289,18 +1992,17 @@ export default function SalesHistory() {
                           customer: { ...prev.customer, email: e.target.value },
                         }))
                       }
-                      className="w-full p-2 border rounded"
+                      className="ui-input"
                     />
                   </div>
                 </div>
-              </div>
+              </fieldset>
 
               {/* Payment Method */}
-              <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Methode de payement
-                </h4>
+              <div className="max-w-xs">
+                <label htmlFor="edit-sale-payment" className="ui-label">Méthode de paiement</label>
                 <select
+                  id="edit-sale-payment"
                   value={editForm.paymentMethod}
                   onChange={(e) =>
                     setEditForm((prev) => ({
@@ -2308,70 +2010,59 @@ export default function SalesHistory() {
                       paymentMethod: e.target.value,
                     }))
                   }
-                  className="w-full p-2 border rounded"
+                  className="ui-input"
                 >
                   <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="transfer">Transfer</option>
-                  <option value="other">Other</option>
+                  <option value="card">Carte</option>
+                  <option value="transfer">Transfert</option>
+                  <option value="other">Autre</option>
                 </select>
               </div>
 
               {/* Items Section */}
               <div>
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-md font-medium text-gray-900">
-                    Articles
-                  </h4>
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <h4 className="ui-kicker">Articles</h4>
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={fetchProducts}
                       disabled={loadingProducts}
-                      className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700 disabled:opacity-50 flex items-center gap-1"
+                      className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none"
                     >
-                      <RefreshCw
-                        className={`w-3 h-3 ${
-                          loadingProducts ? "animate-spin" : ""
-                        }`}
-                      />{" "}
-                      Refresh Products
+                      <RefreshCw className={loadingProducts ? "animate-spin" : ""} />
+                      Actualiser les articles
                     </button>
                     <button
+                      type="button"
                       onClick={addNewItem}
                       disabled={products.length === 0}
-                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      className="ui-btn ui-btn-primary ui-btn-sm flex-1 sm:flex-none"
                     >
-                      <Plus className="w-3 h-3" /> Ajouter un article
+                      <Plus /> Ajouter un article
                     </button>
                   </div>
                 </div>
 
                 {products.length === 0 && !loadingProducts && (
-                  <div className="p-3 bg-yellow-100 text-yellow-700 rounded-lg mb-4">
-                    <p className="text-sm">
-                      Aucun article disponible. Veuillez vérifier si des
-                      articles existent dans votre base de données.
-                    </p>
-                  </div>
+                  <Alert tone="warning" className="mb-4">
+                    Aucun article disponible. Veuillez vérifier si des articles existent dans votre base de données.
+                  </Alert>
                 )}
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {editForm.items.map((item, index) => (
-                    <div
-                      key={item._id}
-                      className="border rounded-lg p-4 bg-gray-50"
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                        <div className="md:col-span-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Article
-                          </label>
+                    <div key={item._id} className="ui-muted-panel">
+                      <div className="grid grid-cols-2 items-end gap-3 md:grid-cols-12">
+                        <div className="col-span-2 md:col-span-5">
+                          <label htmlFor={`edit-item-${index}`} className="ui-label">Article</label>
                           {loadingProducts ? (
-                            <div className="p-2 border rounded bg-gray-200 text-gray-600 text-sm">
-                              Loading products...
+                            <div className="flex min-h-11 items-center rounded-lg border border-slate-200 bg-slate-100 px-3 text-sm text-slate-500">
+                              Chargement des articles…
                             </div>
                           ) : products.length === 0 ? (
                             <input
+                              id={`edit-item-${index}`}
                               type="text"
                               value={item.name}
                               onChange={(e) => {
@@ -2382,16 +2073,17 @@ export default function SalesHistory() {
                                   items: updatedItems,
                                 }));
                               }}
-                              placeholder="Product name"
-                              className="w-full p-2 border rounded"
+                              placeholder="Nom de l'article"
+                              className="ui-input"
                             />
                           ) : (
                             <select
+                              id={`edit-item-${index}`}
                               value={item.productId}
                               onChange={(e) =>
                                 updateItemProduct(index, e.target.value)
                               }
-                              className="w-full p-2 border rounded"
+                              className="ui-input"
                             >
                               {products.map((product) => (
                                 <option key={product._id} value={product._id}>
@@ -2406,10 +2098,9 @@ export default function SalesHistory() {
                         </div>
 
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Prix
-                          </label>
+                          <label htmlFor={`edit-price-${index}`} className="ui-label">Prix</label>
                           <input
+                            id={`edit-price-${index}`}
                             type="number"
                             min="0"
                             step="0.01"
@@ -2420,26 +2111,27 @@ export default function SalesHistory() {
                                 parseFloat(e.target.value) || 0
                               )
                             }
-                            className="w-full p-2 border rounded"
+                            className="ui-input tabular-nums"
+                            inputMode="decimal"
                           />
                         </div>
 
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Nombre de pièces{" "}
-                          </label>
-                          <div className="flex items-center border rounded">
+                          <label htmlFor={`edit-qty-${index}`} className="ui-label">Pièces</label>
+                          <div className="flex items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white">
                             <button
                               type="button"
                               onClick={() =>
                                 updateItemQuantity(index, item.quantity - 1)
                               }
-                              className="p-2 hover:bg-gray-200"
+                              className="grid w-10 shrink-0 place-items-center text-slate-600 hover:bg-slate-100"
                               disabled={item.quantity <= 1}
+                              aria-label="Diminuer la quantité"
                             >
-                              <Minus className="w-3 h-3" />
+                              <Minus className="h-3.5 w-3.5" />
                             </button>
                             <input
+                              id={`edit-qty-${index}`}
                               type="number"
                               min="1"
                               value={item.quantity}
@@ -2449,36 +2141,39 @@ export default function SalesHistory() {
                                   parseInt(e.target.value) || 1
                                 )
                               }
-                              className="w-full p-2 text-center border-0"
+                              className="w-full min-w-0 border-0 text-center tabular-nums shadow-none focus:ring-0"
+                              inputMode="numeric"
                             />
                             <button
                               type="button"
                               onClick={() =>
                                 updateItemQuantity(index, item.quantity + 1)
                               }
-                              className="p-2 hover:bg-gray-200"
+                              className="grid w-10 shrink-0 place-items-center text-slate-600 hover:bg-slate-100"
+                              aria-label="Augmenter la quantité"
                             >
-                              <Plus className="w-3 h-3" />
+                              <Plus className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </div>
 
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Total
-                          </label>
-                          <div className="p-2 bg-white border rounded font-medium">
+                          <span className="ui-label">Total</span>
+                          <div className="flex min-h-11 items-center justify-end rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold tabular-nums text-slate-900">
                             {formatCurrency(item.total)}
                           </div>
                         </div>
 
-                        <div className="md:col-span-2">
+                        <div className="md:col-span-1">
                           <button
                             type="button"
                             onClick={() => removeItem(index)}
-                            className="w-full p-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center gap-1"
+                            className="ui-btn ui-btn-danger-outline w-full px-0"
+                            aria-label={`Supprimer ${item.name}`}
+                            title="Supprimer"
                           >
-                            <Trash2 className="w-3 h-3" /> Supprimer
+                            <Trash2 />
+                            <span className="md:sr-only">Supprimer</span>
                           </button>
                         </div>
                       </div>
@@ -2488,59 +2183,54 @@ export default function SalesHistory() {
               </div>
 
               {/* Totals */}
-              <div className="border-t border-gray-200 pt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600">Sous-total:</span>
-                  <span className="text-sm text-gray-900">
-                    {formatCurrency(subtotal)}
-                  </span>
+              <div className="space-y-1.5 border-t border-slate-200 pt-4 text-sm tabular-nums">
+                <div className="flex justify-between text-slate-600">
+                  <span>Sous-total</span>
+                  <span className="text-slate-900">{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex justify-between items-center text-lg font-semibold">
-                  <span className="text-gray-900">Total:</span>
-                  <span className="text-gray-900">{formatCurrency(total)}</span>
+                <div className="flex items-center justify-between text-base font-semibold text-slate-950">
+                  <span>Total</span>
+                  <span className="text-lg">{formatCurrency(total)}</span>
                 </div>
               </div>
 
               {/* Edit Reason */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Raison de modification
-                </h4>
+                <label htmlFor="edit-sale-reason" className="ui-label">Raison de la modification <span className="ui-required">*</span></label>
                 <textarea
+                  id="edit-sale-reason"
                   value={editForm.reason}
                   onChange={(e) =>
                     setEditForm((prev) => ({ ...prev, reason: e.target.value }))
                   }
-                  placeholder="Veuillez indiquer une raison pour la modification de cette vente...."
-                  className="w-full p-2 border rounded h-20"
+                  placeholder="Veuillez indiquer une raison pour la modification de cette vente…"
+                  className="ui-input min-h-20"
                   required
                 />
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={handleEditSale}
-                  disabled={loading || editForm.items.length === 0}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" /> Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Edit className="w-4 h-4" /> Mettre à jour la vente
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={closeEditModal}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
+            {/* Actions */}
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={closeEditModal} className="ui-btn ui-btn-ghost">
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleEditSale}
+                disabled={loading || editForm.items.length === 0}
+                className="ui-btn ui-btn-primary"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="animate-spin" /> Mise à jour…
+                  </>
+                ) : (
+                  <>
+                    <Edit /> Mettre à jour la vente
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

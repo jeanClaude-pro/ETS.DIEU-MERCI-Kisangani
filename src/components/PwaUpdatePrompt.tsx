@@ -129,17 +129,17 @@ export default function PwaUpdatePrompt() {
     <section
       aria-labelledby="pwa-update-title"
       aria-live="polite"
-      className="fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[110] rounded-2xl border border-blue-200 bg-white p-4 shadow-2xl shadow-slate-950/20 min-[481px]:inset-x-auto min-[481px]:right-5 min-[481px]:bottom-[calc(1.25rem+env(safe-area-inset-bottom))] min-[481px]:w-[min(26rem,calc(100vw-2.5rem))] sm:p-5"
+      className="fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[110] rounded-xl border border-slate-200 bg-white p-4 shadow-xl shadow-slate-950/15 min-[481px]:inset-x-auto min-[481px]:right-5 min-[481px]:bottom-[calc(1.25rem+env(safe-area-inset-bottom))] min-[481px]:w-[min(26rem,calc(100vw-2.5rem))] sm:p-5"
       role="status"
     >
       <div className="flex items-start gap-3">
-        <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
+        <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700">
           <Download aria-hidden="true" className="size-5" />
         </div>
 
         <div className="min-w-0 flex-1">
           <h2
-            className="text-base font-bold text-slate-900 sm:text-lg"
+            className="text-base font-semibold text-slate-900"
             id="pwa-update-title"
           >
             Nouvelle version disponible
@@ -163,7 +163,7 @@ export default function PwaUpdatePrompt() {
 
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70 sm:w-auto"
+              className="ui-btn ui-btn-primary w-full disabled:cursor-wait sm:w-auto"
               disabled={isApplying}
               onClick={() => void applyUpdate()}
               type="button"
@@ -175,7 +175,7 @@ export default function PwaUpdatePrompt() {
               {isApplying ? "Mise à jour…" : confirmingWithPending ? "Confirmer la mise à jour" : "Mettre à jour"}
             </button>
             <button
-              className="min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50"
+              className="ui-btn ui-btn-ghost"
               disabled={isApplying}
               onClick={() => { setDismissed(true); setConfirmingWithPending(false); }}
               type="button"

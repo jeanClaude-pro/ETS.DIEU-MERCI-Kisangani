@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { DollarSign, RefreshCw, Calculator, Search } from "lucide-react";
+import { ArrowRight, CheckCircle2, Minus, Plus, RefreshCw, Search, ShoppingCart, Trash2, UserRound } from "lucide-react";
+import { Alert, CurrencyToggle, EmptyState, ExchangeRateChip, PageHeader } from "../components/ui";
 import {
   normalizeSaleReceipt,
   printCommittedSaleAfterDelay,
@@ -284,54 +285,42 @@ export default function NewSale() {
       const availableStock = product.stock - currentCartQuantity;
       
       return (
-        <p className="text-sm text-gray-600 mb-4">
-          Stock disponible: <strong>{product.stock}</strong>
+        <div className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
+          <span className="ui-badge ui-badge-neutral tabular-nums">Stock disponible : {product.stock}</span>
           {currentCartQuantity > 0 && (
-            <span className="ml-2 text-blue-600">
-              (Déjà dans panier: {currentCartQuantity})
-            </span>
+            <span className="ui-badge ui-badge-info tabular-nums">Déjà dans le panier : {currentCartQuantity}</span>
           )}
           {quantity > 0 && (
-            <span className={`ml-4 ${canAddToCart ? 'text-green-600' : 'text-red-600'}`}>
-              Stock restant après vente:{" "}
+            <span className={`ui-badge tabular-nums ${canAddToCart ? "ui-badge-success" : "ui-badge-danger"}`}>
+              Stock restant après vente :{" "}
               {availableStock - quantity >= 0
                 ? availableStock - quantity
-                : "❌ pas assez de stock!"}
+                : "stock insuffisant"}
             </span>
           )}
-        </p>
+        </div>
       );
     } else {
       // Staff sees status messages
       if (product.stock === 0) {
         return (
-          <p className="text-sm text-red-600 mb-4">
-            <strong>❌ En rupture de stock</strong>
-          </p>
+          <p className="ui-badge ui-badge-danger" aria-live="polite">En rupture de stock</p>
         );
       } else if (product.stock <= 5) {
         return (
-          <p className="text-sm text-orange-600 mb-4">
-            <strong>⚠️ Stock faible</strong>
-          </p>
+          <p className="ui-badge ui-badge-warning" aria-live="polite">Stock faible</p>
         );
       } else if (quantity > 0 && !canAddToCart) {
         return (
-          <p className="text-sm text-red-600 mb-4">
-            <strong>❌ Quantité demandée non disponible</strong>
-          </p>
+          <p className="ui-badge ui-badge-danger" aria-live="polite">Quantité demandée non disponible</p>
         );
       } else if (quantity > 0) {
         return (
-          <p className="text-sm text-green-600 mb-4">
-            <strong>✅ Stock suffisant</strong>
-          </p>
+          <p className="ui-badge ui-badge-success" aria-live="polite">Stock suffisant</p>
         );
       } else {
         return (
-          <p className="text-sm text-green-600 mb-4">
-            <strong>✅ En stock</strong>
-          </p>
+          <p className="ui-badge ui-badge-success" aria-live="polite">En stock</p>
         );
       }
     }
@@ -715,7 +704,7 @@ export default function NewSale() {
       resetFormAndCart();
 
       setMessage(
-        "✅ Vente effectuée avec succès ! Impression du reçu et de la souche..."
+        "Vente effectuée avec succès ! Impression du reçu et de la souche..."
       );
       try {
         await printCommittedSaleAfterDelay(newReceiptData);
@@ -747,368 +736,357 @@ export default function NewSale() {
 
   // Check if the product can be added to cart (comprehensive validation)
   const canAddToCart = product && quantity > 0 && unitPrice > 0 && checkStockAfterAdd(product._id, quantity);
+  const cartUnits = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Stepper buttons only rewrite the same quantity field the input edits.
+  const stepQuantity = (delta: number) =>
+    setForm((f) => ({ ...f, quantity: String(Math.max(1, (parseInt(f.quantity) || 0) + delta)) }));
+
+  const scrollToCheckout = () =>
+    document.getElementById("pos-checkout")?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // The running-total bar is redundant while the checkout panel itself is on
+  // screen; this only toggles its visibility.
+  const [checkoutVisible, setCheckoutVisible] = useState(false);
+  useEffect(() => {
+    const panel = document.getElementById("pos-checkout");
+    if (!panel || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => setCheckoutVisible(entry.isIntersecting), { threshold: 0.2 });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className="flex-1 p-6 overflow-auto">
-      <div className="max-w-6xl mx-auto">
-        {/* Header with Exchange Rate */}
-        <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Nouvelle Vente</h2>
-              <p className="text-gray-600 mt-1">Créez une nouvelle vente avec gestion multi-devises</p>
+    <div className={`ui-page ui-page-wide ${cart.length > 0 ? "pb-28 lg:pb-7" : ""}`}>
+      <PageHeader
+        eyebrow="Point de vente"
+        title="Nouvelle vente"
+        description="Ajoutez les articles, identifiez le client puis encaissez."
+        actions={<ExchangeRateChip loading={loadingRate} rate={exchangeRate?.rate} effectiveFrom={exchangeRate?.effectiveFrom} />}
+      />
+
+      {connectivity.status !== "online" && (
+        offlineReadiness.ready ? (
+          <Alert tone="info" title="Mode hors ligne prêt">
+            Cette vente sera enregistrée sur cet appareil et synchronisée automatiquement lorsque la connexion sera rétablie.
+            {lastSnapshotAt && <span className="mt-1 block text-xs opacity-80">Données mises à jour à {new Date(lastSnapshotAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>}
+          </Alert>
+        ) : (
+          <Alert tone="warning" title="Mode hors ligne non préparé">
+            Reconnectez cet appareil pour télécharger les données nécessaires (produits, taux de change) avant de pouvoir vendre hors ligne.
+          </Alert>
+        )
+      )}
+
+      {message && <Alert tone="success">{message}</Alert>}
+      {error && <Alert tone="danger">{error}</Alert>}
+
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:items-start xl:grid-cols-[minmax(0,1fr)_26rem]">
+        <div className="min-w-0 space-y-5">
+          {/* Add items */}
+          <section className="ui-card" aria-labelledby="pos-add-title">
+            <div className="ui-card-header">
+              <h2 id="pos-add-title" className="ui-section-title flex items-center gap-2"><Search className="h-4 w-4 text-blue-700" />Ajouter un article</h2>
+              {products.length > 0 && <span className="text-xs text-slate-500">{products.length} articles disponibles</span>}
             </div>
-            
-            {/* Exchange Rate Display */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 min-w-[280px]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-blue-600" />
-                  <span className="font-semibold text-blue-900">Taux du jour:</span>
+            <div className="ui-card-body space-y-4">
+              <div className="relative" ref={searchRef}>
+                <label htmlFor="pos-product-search" className="ui-label">Article</label>
+                <div className="relative">
+                  <Search className="ui-field-icon" aria-hidden="true" />
+                  <input
+                    id="pos-product-search"
+                    type="text"
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    onFocus={() => setShowSearchResults(true)}
+                    placeholder={loadingProducts ? "Chargement des articles…" : "Rechercher par nom ou SKU…"}
+                    className="ui-input ui-input-icon"
+                    disabled={loadingProducts || products.length === 0}
+                    autoComplete="off"
+                    role="combobox"
+                    aria-expanded={showSearchResults && filteredProducts.length > 0}
+                    aria-controls="pos-product-results"
+                    aria-autocomplete="list"
+                  />
                 </div>
-                {loadingRate ? (
-                  <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-                ) : exchangeRate ? (
-                  <div className="text-right">
-                    <div className="font-bold text-blue-800 text-lg">
-                      1 USD = {new Intl.NumberFormat('fr-FR').format(exchangeRate.rate)} FC
-                    </div>
-                    <div className="text-xs text-blue-600">
-                      Effectif depuis {new Date(exchangeRate.effectiveFrom).toLocaleDateString('fr-FR')}
-                    </div>
+
+                {/* Search Results Dropdown */}
+                {showSearchResults && filteredProducts.length > 0 && (
+                  <div id="pos-product-results" role="listbox" className="absolute inset-x-0 z-20 mt-1 max-h-[min(20rem,55dvh)] overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                    {filteredProducts.map((product) => (
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={form.productId === product._id}
+                        key={product._id}
+                        className="flex w-full min-w-0 flex-col gap-0.5 px-3.5 py-2.5 text-left transition-colors hover:bg-blue-50 focus-visible:bg-blue-50 focus-visible:outline-none"
+                        onClick={() => handleProductSelect(product)}
+                      >
+                        <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-900">
+                          <span className="truncate">{product.name}</span>
+                          {product.regionCode && <span className="ui-tag">{product.regionCode}</span>}
+                        </span>
+                        <span className="flex justify-between gap-3 text-xs text-slate-500">
+                          <span className="truncate">{product.sku && `SKU : ${product.sku}`}</span>
+                          <span className={`shrink-0 font-medium ${product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-amber-700" : "text-emerald-700"}`}>
+                            {renderStockInfo(product)}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
                   </div>
-                ) : (
-                  <span className="text-red-600 text-sm">Taux non disponible</span>
+                )}
+
+                {/* No Results Message */}
+                {showSearchResults && searchTerm && filteredProducts.length === 0 && (
+                  <div className="absolute inset-x-0 z-20 mt-1 rounded-lg border border-slate-200 bg-white px-4 py-5 text-center text-sm text-slate-500 shadow-lg">
+                    Aucun article trouvé
+                  </div>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
 
-        {connectivity.status !== "online" && (
-          offlineReadiness.ready ? (
-            <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900" role="status">
-              <p className="font-bold">Mode hors ligne prêt</p>
-              <p className="mt-0.5">Cette vente sera enregistrée sur cet appareil et synchronisée automatiquement lorsque la connexion sera rétablie.</p>
-              {lastSnapshotAt && <p className="mt-1 text-xs text-blue-700">Données mises à jour à {new Date(lastSnapshotAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</p>}
-            </div>
-          ) : (
-            <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">
-              <p className="font-bold">Mode hors ligne non préparé</p>
-              <p className="mt-0.5">Reconnectez cet appareil pour télécharger les données nécessaires (produits, taux de change) avant de pouvoir vendre hors ligne.</p>
-            </div>
-          )
-        )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="pos-quantity" className="ui-label">Nombre de pièces</label>
+                  <div className="flex items-stretch gap-2">
+                    <button type="button" onClick={() => stepQuantity(-1)} className="ui-btn ui-btn-secondary w-11 shrink-0 px-0" aria-label="Diminuer la quantité"><Minus /></button>
+                    <input
+                      id="pos-quantity"
+                      type="number"
+                      name="quantity"
+                      value={form.quantity}
+                      onChange={handleChange}
+                      placeholder="0"
+                      className="ui-input text-center font-semibold tabular-nums"
+                      min={1}
+                      inputMode="numeric"
+                    />
+                    <button type="button" onClick={() => stepQuantity(1)} className="ui-btn ui-btn-secondary w-11 shrink-0 px-0" aria-label="Augmenter la quantité"><Plus /></button>
+                  </div>
+                </div>
 
-        {message && (
-          <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">
-            {message}
-          </div>
-        )}
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">{error}</div>
-        )}
+                <div>
+                  <label htmlFor="pos-unit-price" className="ui-label">
+                    Prix unitaire <span className="font-normal text-slate-500">({form.currencyMode === 'usd' ? 'USD' : 'FC'})</span>
+                  </label>
+                  <div className="flex items-stretch gap-2">
+                  <div className="min-w-0 flex-1">
+                  {form.currencyMode === 'usd' ? (
+                    <input
+                      id="pos-unit-price"
+                      type="number"
+                      step="0.01"
+                      name="unitPrice"
+                      value={form.unitPrice}
+                      onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
+                      placeholder={product?.price ? `ex : ${product.price}` : "Prix en USD"}
+                      className="ui-input tabular-nums"
+                      min={0.01}
+                      inputMode="decimal"
+                    />
+                  ) : (
+                    <input
+                      id="pos-unit-price"
+                      type="number"
+                      name="priceInFC"
+                      value={form.priceInFC}
+                      onChange={(e) => setForm({ ...form, priceInFC: e.target.value })}
+                      placeholder="Prix en FC"
+                      className="ui-input tabular-nums"
+                      min={1}
+                      inputMode="numeric"
+                    />
+                  )}
+                  </div>
+                  <CurrencyToggle mode={form.currencyMode} onToggle={toggleCurrencyMode} label="Devise du prix" />
+                  </div>
 
-        <div className="bg-white shadow-lg rounded-xl p-6 mb-6 border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4 text-gray-900">Ajouter les articles</h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="relative" ref={searchRef}>
-              <label className="block mb-2 font-medium text-gray-700">Articles</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={handleSearchChange}
-                  onFocus={() => setShowSearchResults(true)}
-                  placeholder="Rechercher un article..."
-                  className="w-full p-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={loadingProducts || products.length === 0}
-                />
+                  {/* Conversion Display */}
+                  {form.unitPrice && form.currencyMode === 'usd' && exchangeRate && (
+                    <p className="ui-help tabular-nums">≈ {formatFc(parseFloat(form.unitPrice) * exchangeRate.rate)}</p>
+                  )}
+                  {form.priceInFC && form.currencyMode === 'fc' && exchangeRate && (
+                    <p className="ui-help tabular-nums">≈ {formatCurrency(parseFloat(form.priceInFC) / exchangeRate.rate)}</p>
+                  )}
+                </div>
               </div>
-              
-              {/* Search Results Dropdown */}
-              {showSearchResults && filteredProducts.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-                  {filteredProducts.map((product) => (
-                    <div
-                      key={product._id}
-                      className="px-4 py-3 cursor-pointer hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
-                      onClick={() => handleProductSelect(product)}
-                    >
-                      <div className="font-medium text-gray-900 flex items-center gap-2">
-                        {product.name}
-                        {product.regionCode && (
-                          <span className="inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
-                            {product.regionCode}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-gray-600 flex justify-between">
-                        <span>{product.sku && `SKU: ${product.sku}`}</span>
-                        <span className={product.stock === 0 ? "text-red-600" : product.stock <= 5 ? "text-orange-600" : "text-green-600"}>
-                          {renderStockInfo(product)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* No Results Message */}
-              {showSearchResults && searchTerm && filteredProducts.length === 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 text-center text-gray-500">
-                  Aucun article trouvé
-                </div>
-              )}
-            </div>
 
-            <div>
-              <label className="block mb-2 font-medium text-gray-700">Nombre de pièces</label>
-              <input
-                type="number"
-                name="quantity"
-                value={form.quantity}
-                onChange={handleChange}
-                placeholder="Entrer le nombre de pièces"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                min={1}
-              />
-            </div>
+              {product && renderAvailableStockMessage(product, quantity)}
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block font-medium text-gray-700">Prix unitaire</label>
+              <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-500">
+                  {quantity > 0 && unitPrice > 0 ? (
+                    <>Sous-total : <span className="font-semibold tabular-nums text-slate-900">{formatCurrency(itemTotal)}</span></>
+                  ) : (
+                    "Sélectionnez un article, une quantité et un prix."
+                  )}
+                </p>
                 <button
                   type="button"
-                  onClick={toggleCurrencyMode}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                  onClick={handleAddToCart}
+                  disabled={!canAddToCart}
+                  className="ui-btn ui-btn-primary w-full sm:w-auto"
                 >
-                  <Calculator className="w-3 h-3" />
-                  {form.currencyMode === 'usd' ? 'USD → FC' : 'FC → USD'}
+                  <ShoppingCart />
+                  Ajouter au panier
                 </button>
               </div>
-              
-              {form.currencyMode === 'usd' ? (
+            </div>
+          </section>
+
+          {/* Customer */}
+          <section className="ui-card" aria-labelledby="pos-customer-title">
+            <div className="ui-card-header">
+              <h2 id="pos-customer-title" className="ui-section-title flex items-center gap-2"><UserRound className="h-4 w-4 text-blue-700" />Client</h2>
+            </div>
+            <div className="ui-card-body space-y-4">
+              <label className="flex min-h-11 cursor-pointer select-none items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5">
                 <input
-                  type="number"
-                  step="0.01"
-                  name="unitPrice"
-                  value={form.unitPrice}
-                  onChange={(e) => setForm({ ...form, unitPrice: e.target.value })}
-                  placeholder={product?.price ? `ex: ${product.price}` : "Entrer le prix en USD"}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  min={0.01}
+                  type="checkbox"
+                  checked={form.isWalkIn}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, isWalkIn: e.target.checked }))
+                  }
+                  className="ui-checkbox"
                 />
+                <span className="text-sm">
+                  <span className="font-medium text-slate-900">Client de passage</span>
+                  <span className="block text-xs text-slate-500">Décochez pour saisir un client enregistré.</span>
+                </span>
+              </label>
+
+              {form.isWalkIn ? (
+                <div>
+                  <label className="ui-label" htmlFor="walkInCustomerName">
+                    Nom du client <span className="font-normal text-slate-500">(optionnel)</span>
+                  </label>
+                  <input
+                    id="walkInCustomerName"
+                    type="text"
+                    name="customerName"
+                    value={form.customerName}
+                    onChange={handleChange}
+                    placeholder={walkInCustomer?.name || "Walk-in Customer"}
+                    className="ui-input"
+                    autoComplete="off"
+                  />
+                </div>
               ) : (
-                <input
-                  type="number"
-                  name="priceInFC"
-                  value={form.priceInFC}
-                  onChange={(e) => setForm({ ...form, priceInFC: e.target.value })}
-                  placeholder="Entrer le prix en FC"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  min={1}
-                />
-              )}
-              
-              {/* Conversion Display */}
-              {form.unitPrice && form.currencyMode === 'usd' && exchangeRate && (
-                <p className="text-xs text-green-600 mt-1">
-                  ≈ {formatFc(parseFloat(form.unitPrice) * exchangeRate.rate)}
-                </p>
-              )}
-              {form.priceInFC && form.currencyMode === 'fc' && exchangeRate && (
-                <p className="text-xs text-green-600 mt-1">
-                  ≈ {formatCurrency(parseFloat(form.priceInFC) / exchangeRate.rate)}
-                </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label htmlFor="pos-customer-name" className="ui-label">
+                      Nom du client <span className="ui-required">*</span>
+                    </label>
+                    <input
+                      id="pos-customer-name"
+                      type="text"
+                      name="customerName"
+                      value={form.customerName}
+                      onChange={handleChange}
+                      placeholder="Nom complet"
+                      className="ui-input"
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="pos-customer-phone" className="ui-label">
+                      Téléphone <span className="ui-required">*</span>
+                    </label>
+                    <input
+                      id="pos-customer-phone"
+                      type="tel"
+                      name="customerPhone"
+                      value={form.customerPhone}
+                      onChange={handleChange}
+                      placeholder="+243 …"
+                      className="ui-input"
+                      autoComplete="off"
+                      inputMode="tel"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label htmlFor="pos-customer-email" className="ui-label">
+                      Email <span className="font-normal text-slate-500">(optionnel)</span>
+                    </label>
+                    <input
+                      id="pos-customer-email"
+                      type="email"
+                      name="customerEmail"
+                      value={form.customerEmail}
+                      onChange={handleChange}
+                      placeholder="client@exemple.com"
+                      className="ui-input"
+                      autoComplete="off"
+                      inputMode="email"
+                    />
+                  </div>
+                </div>
               )}
             </div>
-          </div>
-
-          {product && renderAvailableStockMessage(product, quantity)}
-
-          <button
-            type="button"
-            onClick={handleAddToCart}
-            disabled={!canAddToCart}
-            className={`px-6 py-3 rounded-lg font-medium flex items-center gap-2 ${
-              canAddToCart
-                ? "bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                : "bg-gray-400 cursor-not-allowed text-white"
-            } transition-colors`}
-          >
-            <RefreshCw className="w-4 h-4" />
-            Ajouter au panier
-          </button>
-
-          {cart.length > 0 && (
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-4 text-gray-900">Articles du panier</h3>
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Articles</th>
-                      <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Pièces</th>
-                      <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Prix unitaire</th>
-                      <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Total</th>
-                      <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {cart.map((item, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {item.name}
-                          {item.regionCode && (
-                            <span className="ml-2 inline-flex px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-800">
-                              {item.regionCode}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-center text-gray-600">{item.quantity}</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900">
-                          {formatCurrency(item.unitPrice)}
-                          {exchangeRate && (
-                            <div className="text-xs text-gray-500">
-                              ≈ {formatFc(item.unitPrice * exchangeRate.rate)}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900">
-                          {formatCurrency(item.total)}
-                          {exchangeRate && (
-                            <div className="text-xs text-gray-500">
-                              ≈ {formatFc(item.total * exchangeRate.rate)}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => removeFromCart(index)}
-                            className="text-red-600 hover:text-red-800 text-sm font-medium"
-                          >
-                            Enlever
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-gray-50">
-                    <tr>
-                      <td colSpan={3} className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
-                        Total:
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
-                        {formatCurrency(cartTotal)}
-                        {exchangeRate && (
-                          <div className="text-xs text-gray-500">
-                            ≈ {formatFc(cartTotal * exchangeRate.rate)}
-                          </div>
-                        )}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
+          </section>
         </div>
 
-        <div className="bg-white shadow-lg rounded-xl p-6 border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4 text-gray-900">
-            Informations du client
-          </h3>
+        {/* Order summary / checkout */}
+        <aside id="pos-checkout" className="ui-card min-w-0 scroll-mt-20 lg:sticky lg:top-20" aria-labelledby="pos-cart-title">
+          <div className="ui-card-header">
+            <h2 id="pos-cart-title" className="ui-section-title flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-blue-700" />Panier</h2>
+            <span className="ui-badge ui-badge-neutral tabular-nums">{cart.length} ligne{cart.length === 1 ? "" : "s"} · {cartUnits} pièce{cartUnits === 1 ? "" : "s"}</span>
+          </div>
 
-          <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={form.isWalkIn}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, isWalkIn: e.target.checked }))
-              }
-              className="w-4 h-4 rounded border-gray-300 focus:ring-2 focus:ring-blue-500"
-            />
-            <span className="font-medium text-gray-700">
-              Client de passage (Walk-in Customer)
-            </span>
-          </label>
-
-          {form.isWalkIn ? (
-            <div className="mb-6 space-y-3 rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-600">
-              <label className="block font-medium text-gray-700" htmlFor="walkInCustomerName">
-                Nom du client de passage (optionnel)
-              </label>
-              <input
-                id="walkInCustomerName"
-                type="text"
-                name="customerName"
-                value={form.customerName}
-                onChange={handleChange}
-                placeholder={walkInCustomer?.name || "Walk-in Customer"}
-                className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <p>Décochez la case ci-dessus pour sélectionner un client enregistré.</p>
-            </div>
+          {cart.length === 0 ? (
+            <EmptyState icon={ShoppingCart} title="Panier vide" description="Les articles ajoutés apparaîtront ici." className="py-10" />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <label className="block mb-2 font-medium text-gray-700">
-                  Nom du client <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="customerName"
-                  value={form.customerName}
-                  onChange={handleChange}
-                  placeholder="Entrer le nom du client"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block mb-2 font-medium text-gray-700">
-                  Numéro de téléphone du client <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  name="customerPhone"
-                  value={form.customerPhone}
-                  onChange={handleChange}
-                  placeholder="Entrer le numéro de téléphone"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block mb-2 font-medium text-gray-700">
-                  Email du client (optionnel)
-                </label>
-                <input
-                  type="email"
-                  name="customerEmail"
-                  value={form.customerEmail}
-                  onChange={handleChange}
-                  placeholder="Entrer l'email du client"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
+            <ul className="max-h-[22rem] divide-y divide-slate-100 overflow-y-auto">
+              {cart.map((item, index) => (
+                <li key={index} className="flex min-w-0 items-start gap-3 px-4 py-3 sm:px-5">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-slate-900">
+                      <span className="break-words">{item.name}</span>
+                      {item.regionCode && <span className="ui-tag">{item.regionCode}</span>}
+                    </p>
+                    <p className="mt-0.5 text-xs tabular-nums text-slate-500">
+                      {item.quantity} × {formatCurrency(item.unitPrice)}
+                      {exchangeRate && <span className="text-slate-400"> · ≈ {formatFc(item.unitPrice * exchangeRate.rate)}</span>}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(item.total)}</p>
+                    {exchangeRate && <p className="text-xs tabular-nums text-slate-500">≈ {formatFc(item.total * exchangeRate.rate)}</p>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeFromCart(index)}
+                    className="ui-icon-btn ui-icon-btn-danger -mr-2 -mt-1.5"
+                    aria-label={`Enlever ${item.name} du panier`}
+                    title="Enlever"
+                  >
+                    <Trash2 />
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div className="space-y-4 border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:px-5">
+            <div className="flex items-end justify-between gap-3">
+              <span className="text-sm font-medium text-slate-600">Total à payer</span>
+              <span className="text-right">
+                <span className="block text-2xl font-semibold tracking-tight tabular-nums text-slate-950">{formatCurrency(cartTotal)}</span>
+                {exchangeRate && <span className="block text-sm font-medium tabular-nums text-slate-500">≈ {formatFc(cartTotal * exchangeRate.rate)}</span>}
+              </span>
+            </div>
+
             <div>
-              <label className="block mb-2 font-medium text-gray-700">
-                Méthode de paiement
-              </label>
+              <label htmlFor="pos-payment-method" className="ui-label">Méthode de paiement</label>
               <select
+                id="pos-payment-method"
                 name="paymentMethod"
                 value={form.paymentMethod}
                 onChange={handleChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="ui-input"
               >
                 <option value="cash">Cash</option>
                 <option value="mpesa">M-Pesa ou Airtel Money (Transfert)</option>
@@ -1117,30 +1095,51 @@ export default function NewSale() {
                 <option value="other">Autres</option>
               </select>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            onClick={handleSale}
-            disabled={!isFormValid || submitting}
-            className={`px-8 py-3 rounded-lg font-medium text-lg ${
-              isFormValid && !submitting
-                ? "bg-green-600 hover:bg-green-700 text-white shadow-sm"
-                : "bg-gray-400 cursor-not-allowed text-white"
-            } transition-colors`}
-          >
-            {submitting ? (
-              <span className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                En cours d'enregistrement...
-              </span>
-            ) : (
-              "Enregistrer la vente"
+            {!form.isWalkIn && cart.length > 0 && !isFormValid && (
+              <p className="text-xs font-medium text-amber-700">Renseignez le nom et le téléphone du client pour continuer.</p>
             )}
-          </button>
-        </div>
 
+            <button
+              type="submit"
+              onClick={handleSale}
+              disabled={!isFormValid || submitting}
+              className="ui-btn ui-btn-success ui-btn-lg ui-btn-block"
+            >
+              {submitting ? (
+                <>
+                  <RefreshCw className="animate-spin" />
+                  Enregistrement en cours…
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 />
+                  Enregistrer la vente
+                </>
+              )}
+            </button>
+          </div>
+        </aside>
       </div>
+
+      {/* Phone/tablet checkout bar: running total always in reach. */}
+      {cart.length > 0 && !checkoutVisible && (
+        <div className="pos-checkout-bar lg:hidden">
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-slate-500">{cartUnits} pièce{cartUnits === 1 ? "" : "s"} · Total</p>
+              <p className="truncate text-lg font-semibold leading-tight tabular-nums text-slate-950">
+                {formatCurrency(cartTotal)}
+                {exchangeRate && <span className="ml-1.5 text-xs font-medium text-slate-500">≈ {formatFc(cartTotal * exchangeRate.rate)}</span>}
+              </p>
+            </div>
+            <button type="button" onClick={scrollToCheckout} className="ui-btn ui-btn-primary shrink-0">
+              Finaliser
+              <ArrowRight />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

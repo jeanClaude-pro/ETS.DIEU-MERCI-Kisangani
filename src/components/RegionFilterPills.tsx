@@ -13,16 +13,17 @@ const RegionFilterPills = ({ value, onChange }: Props) => {
   ];
 
   return (
-    <div className="flex w-full sm:w-auto rounded-lg border border-gray-300 overflow-hidden">
+    <div className="grid w-full grid-cols-3 overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm sm:inline-flex sm:w-auto" role="group" aria-label="Filtrer par région">
       {options.map((opt) => (
         <button
           key={opt.value || "all"}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`flex-1 sm:flex-none px-3 py-2 text-sm transition-colors whitespace-nowrap ${
+          aria-pressed={value === opt.value}
+          className={`min-h-11 px-2 py-1.5 text-center text-xs font-semibold leading-tight transition-colors duration-150 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:min-h-10 sm:whitespace-nowrap sm:px-3 [&:not(:first-child)]:border-l [&:not(:first-child)]:border-slate-200 ${
             value === opt.value
-              ? "bg-blue-500 text-white"
-              : "bg-white text-gray-700 hover:bg-gray-50"
+              ? "bg-blue-700 text-white"
+              : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           }`}
         >
           {opt.label}

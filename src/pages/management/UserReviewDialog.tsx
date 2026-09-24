@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "react-toastify";
 import { X } from "lucide-react";
+import { Alert, LoadingState } from "../../components/ui";
 import type { Role } from "../../types/auth";
 import { navigationSections, defaultModulesForRole } from "../../components/navigationConfig";
 import {
@@ -155,175 +156,193 @@ export default function UserReviewDialog({ userId, onClose }: { userId: string; 
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
+        className="ui-dialog-overlay"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={() => onClose(changed)}
       >
         <motion.div
-          className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
-          initial={{ y: "100%" }}
-          animate={{ y: 0 }}
-          exit={{ y: "100%" }}
-          transition={{ type: "spring", damping: 28, stiffness: 320 }}
+          className="ui-dialog max-w-lg"
+          initial={{ y: 24, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 24, opacity: 0 }}
+          transition={{ type: "spring", damping: 30, stiffness: 340 }}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="user-review-title"
         >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 sticky top-0 bg-white">
-            <h2 className="text-lg font-bold text-gray-900">Examiner le compte</h2>
-            <button onClick={() => onClose(changed)} className="p-2 rounded-full hover:bg-gray-100" aria-label="Fermer">
-              <X className="w-5 h-5" />
+          <div className="ui-dialog-header">
+            <h2 id="user-review-title" className="ui-dialog-title">Examiner le compte</h2>
+            <button type="button" onClick={() => onClose(changed)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+              <X />
             </button>
           </div>
 
           {loading || !user ? (
-            <div className="p-8 text-center text-gray-500">Chargement...</div>
+            <LoadingState label="Chargement du compte…" />
           ) : (
-            <div className="p-5 space-y-5">
-              <div>
-                <p className="font-semibold text-gray-900">{user.username}</p>
-                <p className="text-sm text-gray-500">{user.email}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Inscrit le {user.createdAt ? new Date(user.createdAt).toLocaleDateString("fr-FR") : "—"}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rôle</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-base"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as Role)}
-                >
-                  {ROLE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {role === "admin" ? (
-                <div className="rounded-lg bg-blue-50 text-blue-800 text-sm p-3">
-                  Accès complet (Administrateur) — les administrateurs ont accès à tous les modules et ne peuvent pas être restreints.
-                </div>
-              ) : (
-                <div>
-                  <p className="block text-sm font-medium text-gray-700 mb-2">Modules autorisés</p>
-                  <div className="space-y-3 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                    {ASSIGNABLE_SECTIONS.map((section) => {
-                      const ids = section.items.map((i) => i.id);
-                      const allSelected = ids.every((id) => modules.includes(id));
-                      return (
-                        <div key={section.title}>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase text-gray-500">{section.title}</p>
-                            <button
-                              type="button"
-                              className="text-xs text-blue-600 hover:underline"
-                              onClick={() => toggleSection(ids, allSelected)}
-                            >
-                              {allSelected ? "Tout désélectionner" : "Tout sélectionner"}
-                            </button>
-                          </div>
-                          <div className="mt-1 space-y-1">
-                            {section.items.map((item) => (
-                              <label key={item.id} className="flex items-center gap-2 py-1 text-sm text-gray-700">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4"
-                                  checked={modules.includes(item.id)}
-                                  onChange={() => toggleModule(item.id)}
-                                />
-                                {item.label}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    Résumé — Rôle : <strong>{ROLE_OPTIONS.find((r) => r.value === role)?.label}</strong>
-                    {" · "}Modules autorisés : {summaryLabels.length ? summaryLabels.join(", ") : "aucun"}
+            <>
+              <div className="ui-dialog-body space-y-5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-sm font-semibold uppercase text-slate-600" aria-hidden="true">
+                    {user.username?.charAt(0) || "?"}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="break-words font-semibold text-slate-900">{user.username}</p>
+                    <p className="break-all text-sm text-slate-500">{user.email}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      Inscrit le {user.createdAt ? new Date(user.createdAt).toLocaleDateString("fr-FR") : "—"}
+                    </p>
                   </div>
                 </div>
-              )}
 
-              {!!user.history?.length && (
                 <div>
-                  <p className="text-sm font-medium text-gray-700 mb-1">Historique</p>
-                  <ul className="text-xs text-gray-500 space-y-1 max-h-28 overflow-y-auto">
-                    {[...user.history].reverse().map((entry, idx) => (
-                      <li key={idx}>
-                        {ACTION_LABELS[entry.action] || entry.action}
-                        {entry.performedByUsername ? ` — par ${entry.performedByUsername}` : ""}
-                        {" · "}{new Date(entry.at).toLocaleString("fr-FR")}
-                      </li>
+                  <label htmlFor="user-review-role" className="ui-label">Rôle</label>
+                  <select
+                    id="user-review-role"
+                    className="ui-input"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as Role)}
+                  >
+                    {ROLE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
-                  </ul>
+                  </select>
                 </div>
-              )}
 
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                {role === "admin" ? (
+                  <Alert tone="info">
+                    Accès complet (Administrateur) — les administrateurs ont accès à tous les modules et ne peuvent pas être restreints.
+                  </Alert>
+                ) : (
+                  <fieldset>
+                    <legend className="ui-label">Modules autorisés</legend>
+                    <div className="max-h-72 space-y-4 overflow-y-auto rounded-lg border border-slate-200 p-3">
+                      {ASSIGNABLE_SECTIONS.map((section) => {
+                        const ids = section.items.map((i) => i.id);
+                        const allSelected = ids.every((id) => modules.includes(id));
+                        return (
+                          <div key={section.title}>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="ui-kicker">{section.title}</p>
+                              <button
+                                type="button"
+                                className="rounded px-1 text-xs font-semibold text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                onClick={() => toggleSection(ids, allSelected)}
+                              >
+                                {allSelected ? "Tout désélectionner" : "Tout sélectionner"}
+                              </button>
+                            </div>
+                            <div className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                              {section.items.map((item) => (
+                                <label key={item.id} className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-md px-2 text-sm text-slate-700 hover:bg-slate-50">
+                                  <input
+                                    type="checkbox"
+                                    className="ui-checkbox"
+                                    checked={modules.includes(item.id)}
+                                    onChange={() => toggleModule(item.id)}
+                                  />
+                                  {item.label}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="ui-help">
+                      Résumé — Rôle : <strong className="font-semibold text-slate-700">{ROLE_OPTIONS.find((r) => r.value === role)?.label}</strong>
+                      {" · "}Modules autorisés : {summaryLabels.length ? summaryLabels.join(", ") : "aucun"}
+                    </p>
+                  </fieldset>
+                )}
+
+                {!!user.history?.length && (
+                  <div>
+                    <p className="ui-kicker mb-2">Historique</p>
+                    <ul className="max-h-32 space-y-1.5 overflow-y-auto text-xs text-slate-500">
+                      {[...user.history].reverse().map((entry, idx) => (
+                        <li key={idx} className="flex gap-2">
+                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300" aria-hidden="true" />
+                          <span>
+                            <span className="font-medium text-slate-700">{ACTION_LABELS[entry.action] || entry.action}</span>
+                            {entry.performedByUsername ? ` — par ${entry.performedByUsername}` : ""}
+                            {" · "}{new Date(entry.at).toLocaleString("fr-FR")}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div className="ui-dialog-footer">
                 {(user.status === "pending" || user.status === "rejected") && (
                   <>
-                    <button
-                      disabled={saving}
-                      onClick={handleApprove}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                    >
-                      Approuver
-                    </button>
                     {user.status === "pending" && (
                       <button
+                        type="button"
                         disabled={saving}
                         onClick={handleReject}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                        className="ui-btn ui-btn-danger-outline"
                       >
                         Refuser
                       </button>
                     )}
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={handleApprove}
+                      className="ui-btn ui-btn-success"
+                    >
+                      Approuver
+                    </button>
                   </>
                 )}
                 {user.status === "active" && (
                   <>
                     <button
-                      disabled={saving}
-                      onClick={handleSave}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      Enregistrer
-                    </button>
-                    <button
+                      type="button"
                       disabled={saving}
                       onClick={handleSuspend}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                      className="ui-btn ui-btn-danger-outline"
                     >
                       Suspendre
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={handleSave}
+                      className="ui-btn ui-btn-primary"
+                    >
+                      Enregistrer
                     </button>
                   </>
                 )}
                 {user.status === "suspended" && (
                   <>
                     <button
-                      disabled={saving}
-                      onClick={handleSave}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      Enregistrer
-                    </button>
-                    <button
+                      type="button"
                       disabled={saving}
                       onClick={handleReactivate}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                      className="ui-btn ui-btn-success"
                     >
                       Réactiver
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={handleSave}
+                      className="ui-btn ui-btn-primary"
+                    >
+                      Enregistrer
                     </button>
                   </>
                 )}
               </div>
-            </div>
+            </>
           )}
         </motion.div>
       </motion.div>

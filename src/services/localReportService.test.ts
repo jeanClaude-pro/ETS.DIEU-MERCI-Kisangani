@@ -52,3 +52,25 @@ test("transaction exchange-rate snapshots remain attached and are never replaced
   assert.equal(report.totalRevenue, 20.3);
   assert.equal(Math.round(report.totalRevenue * Number(original.exchangeRateSnapshot?.rate)), 56840);
 });
+
+test("cached validated expenses keep their report count, amount and reason offline", () => {
+  const validatedExpenses = [{
+    _id: "expense-1",
+    expenseId: "EXP-1",
+    reason: "Transport de la marchandise",
+    amount: 12.5,
+    createdAt: "2026-09-20T08:00:00.000Z",
+    validatedAt: "2026-09-20T09:00:00.000Z",
+  }];
+  const report = buildLocalAnalytics(
+    [sale()],
+    localReportRange({ date: "2026-09-20" }),
+    "",
+    { totalValidatedExpenses: 12.5, totalValidatedExpenseCount: 1, validatedExpenses },
+  ).data;
+
+  assert.equal(report.totalValidatedExpenseCount, 1);
+  assert.equal(report.totalValidatedExpenses, 12.5);
+  assert.equal(report.validatedExpenses[0]?.reason, "Transport de la marchandise");
+  assert.equal(report.netRevenue, 7.8);
+});

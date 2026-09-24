@@ -1,7 +1,14 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      React owns every DOM text node under #root. Browser page translation
+      (Chrome/Google Translate) swaps those nodes for <font> wrappers, so React
+      later calls removeChild/insertBefore on nodes that are no longer attached
+      ("NotFoundError ... An error occurred in the <Text> component").
+    -->
+    <meta name="google" content="notranslate" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#1d4ed8" />
     <meta

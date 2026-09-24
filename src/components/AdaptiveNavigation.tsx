@@ -24,7 +24,7 @@ const NavLink = ({ item, compact = false, onNavigate }: { item: NavigationItem; 
       aria-current={active ? "page" : undefined}
       className={`native-nav-link ${active ? "native-nav-link-active" : ""} ${compact ? "native-nav-link-compact" : ""}`}
     >
-      <Icon className="h-5 w-5 shrink-0" />
+      <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
       <span>{compact ? item.shortLabel : item.label}</span>
       {Boolean(item.badge) && <span className="ml-auto min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-[11px] font-bold text-white" aria-label={`${item.badge} ventes à traiter`}>{item.badge}</span>}
     </Link>
@@ -56,8 +56,8 @@ function MobileNavigation() {
     <>
       <nav className="phone-tab-bar" aria-label="Navigation principale" style={{ gridTemplateColumns: `repeat(${primary.length + 1}, minmax(0, 1fr))` }}>
         {primary.map((item) => <NavLink key={item.id} item={item} compact />)}
-        <button type="button" onClick={() => setOpen(true)} className={`native-nav-link native-nav-link-compact ${open ? "native-nav-link-active" : ""}`} aria-label="Plus de modules">
-          <MoreHorizontal className="h-5 w-5" /><span>Plus</span>
+        <button type="button" onClick={() => setOpen(true)} className={`native-nav-link native-nav-link-compact ${open ? "native-nav-link-active" : ""}`} aria-label="Plus de modules" aria-expanded={open} aria-haspopup="dialog">
+          <MoreHorizontal className="h-5 w-5" aria-hidden="true" /><span>Plus</span>
         </button>
       </nav>
       <AnimatePresence>
@@ -65,14 +65,14 @@ function MobileNavigation() {
           <motion.div className="native-sheet-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setOpen(false)}>
             <motion.section className="native-sheet" initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 28, stiffness: 330 }} onClick={(event) => event.stopPropagation()} aria-modal="true" role="dialog" aria-label="Plus de modules">
               <div className="native-sheet-handle" />
-              <div className="flex items-center justify-between px-5 pb-3">
-                <div><p className="font-bold text-gray-900">Autres modules</p><p className="text-sm text-gray-500">{user?.username}</p></div>
+              <div className="flex items-center justify-between gap-3 px-1 pb-3">
+                <div className="min-w-0"><p className="text-base font-semibold text-slate-900">Autres modules</p><p className="truncate text-sm text-slate-500">{user?.username}</p></div>
                 <button type="button" className="touch-icon-button" onClick={() => setOpen(false)} aria-label="Fermer" autoFocus><X className="h-5 w-5" /></button>
               </div>
               <div className="native-sheet-grid">
                 {secondary.map((item) => <NavLink key={item.id} item={item} onNavigate={() => setOpen(false)} />)}
               </div>
-              <button type="button" className="native-sheet-logout" onClick={() => { clearAuth(); navigate("/login", { replace: true }); }}><LogOut className="h-5 w-5" />Se déconnecter</button>
+              <button type="button" className="native-sheet-logout" onClick={() => { clearAuth(); navigate("/login", { replace: true }); }}><LogOut className="h-4 w-4" aria-hidden="true" />Se déconnecter</button>
             </motion.section>
           </motion.div>
         )}
@@ -102,7 +102,7 @@ function TabletNavigation() {
       </aside>
       <AnimatePresence>
         {tabletOpen && (<motion.div className="tablet-drawer-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setTabletOpen(false)}>
-          <motion.aside className="tablet-drawer" initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }} transition={{ duration: .22 }} onClick={(event) => event.stopPropagation()}>
+          <motion.aside className="tablet-drawer" role="dialog" aria-modal="true" aria-label="Tous les modules" initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }} transition={{ duration: .22 }} onClick={(event) => event.stopPropagation()}>
             <header className="tablet-drawer-header"><div className="flex items-center gap-3"><img src="/Mrcleanlogo.png" alt="Logo de la boutique" /><div><strong>C'EST DIEU QUI PARTAGE</strong><small>Kisangani</small></div></div><button type="button" className="touch-icon-button" onClick={() => setTabletOpen(false)} aria-label="Fermer le menu"><X className="h-5 w-5" /></button></header>
             <nav className="tablet-drawer-nav">{sections.map((section) => <section key={section.title}><h2>{section.title}</h2>{section.items.map((item) => <NavLink key={item.id} item={item} />)}</section>)}</nav>
           </motion.aside>

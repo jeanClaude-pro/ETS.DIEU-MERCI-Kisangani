@@ -14,8 +14,10 @@ import {
   DollarSign,
   ShoppingBag,
   RefreshCw,
-  AlertCircle,
+  UserPlus,
+  X,
 } from "lucide-react";
+import { Alert, EmptyState, LoadingState, MetricCard, PageHeader } from "../../components/ui";
 import { useConnectivity } from "../../context/ConnectivityContext";
 import { cacheCustomers, getLocalCustomers } from "../../services/localCustomerReadModel";
 
@@ -259,66 +261,40 @@ export default function Customers() {
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
-          <p className="text-gray-600">Gérez vos relations clients</p>
-          {usingLocalData && <p className="mt-1 text-xs font-semibold text-blue-700">Hors ligne · Clients mis en cache et ventes locales incluses</p>}
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={refreshCustomers}
-            disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-            {refreshing ? "Actualisation..." : "Actualiser"}
-          </button>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-          >
-            Ajouter un Client
-          </button>
-        </div>
-      </div>
+    <div className="ui-page">
+      <PageHeader
+        eyebrow="Relations clients"
+        title="Clients"
+        description="Consultez le fichier clients, leurs achats et leur historique."
+        meta={usingLocalData ? <span className="ui-badge ui-badge-info">Hors ligne · clients en cache et ventes locales incluses</span> : undefined}
+        actions={
+          <>
+            <button type="button" onClick={refreshCustomers} disabled={refreshing} className="ui-btn ui-btn-secondary">
+              <RefreshCw className={refreshing ? "animate-spin" : ""} />
+              {refreshing ? "Actualisation…" : "Actualiser"}
+            </button>
+            <button type="button" onClick={() => setShowAddModal(true)} className="ui-btn ui-btn-primary">
+              <UserPlus />
+              Ajouter un client
+            </button>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="md:col-span-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="rechercher les clients..."
-              className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-            />
-          </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border">
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-blue-600" />
-            <div>
-              <p className="text-sm text-gray-600">Nombre Total de Clients</p>
-              <p className="text-xl font-semibold text-gray-900">{pagination.total}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow border">
-          <div className="flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-green-600" />
-            <div>
-              <p className="text-sm text-gray-600">Revenue Totale Clients</p>
-              <p className="text-xl font-semibold text-gray-900">
-                {formatCurrency(portfolioTotal)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {activeCustomerCount} clients actifs
-              </p>
-            </div>
-          </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard label="Nombre total de clients" value={pagination.total} icon={Users} />
+        <MetricCard label="Revenu total clients" value={formatCurrency(portfolioTotal)} hint={`${activeCustomerCount} clients actifs`} icon={DollarSign} />
+        <div className="relative col-span-2 self-end">
+          <label htmlFor="customer-search" className="sr-only">Rechercher un client</label>
+          <Search className="ui-field-icon" aria-hidden="true" />
+          <input
+            id="customer-search"
+            type="search"
+            placeholder="Rechercher un client par nom ou téléphone…"
+            className="ui-input ui-input-icon"
+            value={searchTerm}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+          />
         </div>
       </div>
 
@@ -327,150 +303,98 @@ export default function Customers() {
           customer.totalPurchases > 0 &&
           (customer.totalSpent === 0 || customer.totalSpent > 100000)
       ) && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-yellow-600" />
-            <div>
-              <p className="text-sm font-medium text-yellow-800">
-                Attention: Statistiques potentiellement inexactes
-              </p>
-              <p className="text-sm text-yellow-700">
-                Certaines statistiques clients peuvent être incorrectes suite à
-                des modifications de ventes. Utilisez "Recalculer les
-                statistiques" pour corriger.
-              </p>
-            </div>
-          </div>
-        </div>
+        <Alert tone="warning" title="Statistiques potentiellement inexactes">
+          Certaines statistiques clients peuvent être incorrectes suite à des modifications de ventes. Utilisez « Recalculer les statistiques » pour corriger.
+        </Alert>
       )}
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Répertoire clients ({pagination.total})
+      <section className="ui-card overflow-hidden" aria-labelledby="customers-title">
+        <div className="ui-card-header">
+          <h2 id="customers-title" className="ui-section-title flex items-center gap-2">
+            <Users className="h-4 w-4 text-blue-700" />
+            Répertoire clients
+            <span className="ui-badge ui-badge-neutral tabular-nums">{pagination.total}</span>
           </h2>
-          <button
-            onClick={refreshCustomers}
-            disabled={refreshing}
-            className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-            Actualiser
-          </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="ui-table-wrap">
           {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-500 mt-2">Chargement des clients...</p>
-            </div>
+            <LoadingState label="Chargement des clients…" />
           ) : filteredCustomers.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>Aucun client trouvé</p>
-            </div>
+            <EmptyState icon={Users} title="Aucun client trouvé" description="Modifiez la recherche ou ajoutez un nouveau client." />
           ) : (
             <>
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="ui-table min-w-full">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Client
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contact
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Nombre d'achats
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Montant total dépensé
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Dernier Achat
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th scope="col">Client</th>
+                  <th scope="col">Contact</th>
+                  <th scope="col" className="text-right">Achats</th>
+                  <th scope="col" className="text-right">Total dépensé</th>
+                  <th scope="col">Dernier achat</th>
+                  <th scope="col" className="ui-sticky-end text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody>
                 {filteredCustomers.map((customer) => (
-                  <tr key={customer._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span className="text-sm font-medium text-blue-600">
-                              {customer.name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {customer.name}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Client depuis {formatDate(customer.createdAt)}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 flex items-center gap-1">
-                        <Phone className="w-3 h-3" />
-                        {customer.phone}
-                      </div>
-                      {customer.email && (
-                        <div className="text-sm text-gray-500 flex items-center gap-1">
-                          <Mail className="w-3 h-3" />
-                          {customer.email}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-1">
-                        <ShoppingBag className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-900">
-                          {customer.totalPurchases}
+                  <tr key={customer._id}>
+                    <td className="min-w-[13rem]">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-semibold text-blue-700" aria-hidden="true">
+                          {customer.name.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block break-words font-medium text-slate-900">{customer.name}</span>
+                          <span className="block text-xs text-slate-500">Client depuis {formatDate(customer.createdAt)}</span>
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {formatCurrency(customer.totalSpent)}
+                    <td className="whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="flex items-center gap-1.5 tabular-nums text-slate-900">
+                          <Phone className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                          {customer.phone}
+                        </span>
+                        {customer.email && (
+                          <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                            <Mail className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                            {customer.email}
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(customer.lastPurchaseDate)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
+                    <td className="ui-num">{customer.totalPurchases}</td>
+                    <td className="ui-num whitespace-nowrap font-semibold text-slate-900">{formatCurrency(customer.totalSpent)}</td>
+                    <td className="whitespace-nowrap text-slate-500">{formatDate(customer.lastPurchaseDate)}</td>
+                    <td className="ui-sticky-end">
+                      <div className="ui-row-actions">
                         <button
+                          type="button"
                           onClick={() => viewCustomerDetails(customer)}
-                          className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                          className="ui-icon-btn ui-icon-btn-primary"
                           title="Voir les détails du client"
+                          aria-label={`Voir ${customer.name}`}
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye />
                         </button>
                         <button
+                          type="button"
                           onClick={() => recalculateCustomerStats(customer._id)}
                           disabled={recalculating === customer._id}
-                          className="text-green-600 hover:text-green-900 p-1 rounded disabled:opacity-50"
+                          className="ui-icon-btn ui-icon-btn-success"
                           title="Recalculer les statistiques"
+                          aria-label={`Recalculer les statistiques de ${customer.name}`}
                         >
-                          <RefreshCw
-                            className={`w-4 h-4 ${
-                              recalculating === customer._id ? "animate-spin" : ""
-                            }`}
-                          />
+                          <RefreshCw className={recalculating === customer._id ? "animate-spin" : ""} />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDeleteCustomer(customer._id)}
-                          className="text-red-600 hover:text-red-900 p-1 rounded"
-                          title="supprimer le client"
+                          className="ui-icon-btn ui-icon-btn-danger"
+                          title="Supprimer le client"
+                          aria-label={`Supprimer ${customer.name}`}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 />
                         </button>
                       </div>
                     </td>
@@ -479,198 +403,133 @@ export default function Customers() {
               </tbody>
             </table>
             {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between border-t px-4 py-3">
-                <span className="text-sm text-gray-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
+              <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <span className="text-sm tabular-nums text-slate-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
                 <div className="flex gap-2">
-                  <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="px-3 py-1.5 border rounded disabled:opacity-50">Précédent</button>
-                  <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="px-3 py-1.5 border rounded disabled:opacity-50">Suivant</button>
+                  <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none">Précédent</button>
+                  <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none">Suivant</button>
                 </div>
               </div>
             )}
             </>
           )}
         </div>
-
-        {/* REMOVED PAGINATION SECTION - No more page navigation */}
-      </div>
+      </section>
 
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Ajouter un Nouveau Client</h3>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+        <div className="ui-dialog-overlay" role="presentation">
+          <form onSubmit={handleAddCustomer} className="ui-dialog max-w-md" role="dialog" aria-modal="true" aria-labelledby="add-customer-title">
+            <div className="ui-dialog-header">
+              <h3 id="add-customer-title" className="ui-dialog-title">Ajouter un client</h3>
+              <button type="button" onClick={() => setShowAddModal(false)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <form onSubmit={handleAddCustomer} className="p-6 space-y-4">
+            <div className="ui-dialog-body space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                <label htmlFor="new-customer-name" className="ui-label">Nom <span className="ui-required">*</span></label>
                 <input
+                  id="new-customer-name"
                   type="text"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="ui-input"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  autoComplete="off"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone *</label>
+                <label htmlFor="new-customer-phone" className="ui-label">Téléphone <span className="ui-required">*</span></label>
                 <input
+                  id="new-customer-phone"
                   type="tel"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="ui-input"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  inputMode="tel"
+                  autoComplete="off"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label htmlFor="new-customer-email" className="ui-label">Email</label>
                 <input
+                  id="new-customer-email"
                   type="email"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="ui-input"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  inputMode="email"
+                  autoComplete="off"
                 />
               </div>
+            </div>
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Ajouter le Client
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Annuler
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setShowAddModal(false)} className="ui-btn ui-btn-ghost">
+                Annuler
+              </button>
+              <button type="submit" className="ui-btn ui-btn-primary">
+                Ajouter le client
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
       {showModal && selectedCustomer && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Détails du client</h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+        <div className="ui-dialog-overlay" role="presentation">
+          <div className="ui-dialog max-w-2xl" role="dialog" aria-modal="true" aria-labelledby="customer-details-title">
+            <div className="ui-dialog-header">
+              <h3 id="customer-details-title" className="ui-dialog-title">Détails du client</h3>
+              <button type="button" onClick={() => setShowModal(false)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center">
-                  <span className="text-xl font-medium text-blue-600">
-                    {selectedCustomer.name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <h4 className="text-xl font-semibold text-gray-900">{selectedCustomer.name}</h4>
-                  <p className="text-gray-600">
-                    Client depuis {formatDate(selectedCustomer.createdAt)}
-                  </p>
+            <div className="ui-dialog-body space-y-5">
+              <div className="flex min-w-0 items-center gap-4">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-blue-50 text-lg font-semibold text-blue-700" aria-hidden="true">
+                  {selectedCustomer.name.charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <h4 className="break-words text-lg font-semibold text-slate-950">{selectedCustomer.name}</h4>
+                  <p className="text-sm text-slate-500">Client depuis {formatDate(selectedCustomer.createdAt)}</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Numéro de téléphone</label>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-900">{selectedCustomer.phone}</span>
-                  </div>
+              <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="ui-muted-panel">
+                  <dt className="text-xs font-medium text-slate-500">Téléphone</dt>
+                  <dd className="mt-1 flex items-center gap-2 text-sm tabular-nums text-slate-900"><Phone className="h-4 w-4 text-slate-400" aria-hidden="true" />{selectedCustomer.phone}</dd>
                 </div>
                 {selectedCustomer.email && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-900">{selectedCustomer.email}</span>
-                    </div>
+                  <div className="ui-muted-panel min-w-0">
+                    <dt className="text-xs font-medium text-slate-500">Email</dt>
+                    <dd className="mt-1 flex items-center gap-2 break-all text-sm text-slate-900"><Mail className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />{selectedCustomer.email}</dd>
                   </div>
                 )}
-              </div>
+              </dl>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <div className="flex items-center gap-2">
-                    <ShoppingBag className="w-5 h-5 text-blue-600" />
-                    <div>
-                      <p className="text-sm text-blue-600">Nombre total d'achats</p>
-                      <p className="text-xl font-semibold text-blue-900">{selectedCustomer.totalPurchases}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-green-600" />
-                    <div>
-                      <p className="text-sm text-green-600">Somme dépensée</p>
-                      <p className="text-xl font-semibold text-green-900">
-                        {formatCurrency(selectedCustomer.totalSpent)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-purple-50 rounded-lg p-4">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-purple-600" />
-                    <div>
-                      <p className="text-sm text-purple-600">Premier Achat</p>
-                      <p className="text-sm font-semibold text-purple-900">
-                        {formatDateTime(selectedCustomer.firstPurchaseDate)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-orange-50 rounded-lg p-4">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-orange-600" />
-                    <div>
-                      <p className="text-sm text-orange-600">Dernier Achat</p>
-                      <p className="text-sm font-semibold text-orange-900">
-                        {formatDateTime(selectedCustomer.lastPurchaseDate)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <MetricCard label="Nombre d'achats" value={selectedCustomer.totalPurchases} icon={ShoppingBag} className="shadow-none" />
+                <MetricCard label="Somme dépensée" value={formatCurrency(selectedCustomer.totalSpent)} icon={DollarSign} className="shadow-none" />
+                <MetricCard label="Premier achat" value={<span className="text-sm font-semibold">{formatDateTime(selectedCustomer.firstPurchaseDate)}</span>} icon={Calendar} className="shadow-none" />
+                <MetricCard label="Dernier achat" value={<span className="text-sm font-semibold">{formatDateTime(selectedCustomer.lastPurchaseDate)}</span>} icon={Calendar} className="shadow-none" />
               </div>
+            </div>
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => recalculateCustomerStats(selectedCustomer._id)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Recalculer les Statistiques
-                </button>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="ui-btn ui-btn-ghost">
+                Fermer
+              </button>
+              <button type="button" onClick={() => recalculateCustomerStats(selectedCustomer._id)} className="ui-btn ui-btn-secondary">
+                <RefreshCw />
+                Recalculer les statistiques
+              </button>
             </div>
           </div>
         </div>

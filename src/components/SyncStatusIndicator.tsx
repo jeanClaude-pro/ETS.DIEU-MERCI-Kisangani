@@ -50,13 +50,22 @@ export default function SyncStatusIndicator() {
     tone = "border-blue-200 bg-blue-50 text-blue-700";
   }
 
+  // Phones get the short state (before the "·"), full detail stays in the
+  // accessible label and on wider screens.
+  const [shortLabel, detail] = label.split(" · ");
+  const shortCount = detail?.match(/^\d+(\/\d+)?/)?.[0];
+
   return (
     <Link
       to="/sync-center"
-      className={`inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${tone}`}
+      className={`inline-flex h-9 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${tone}`}
       aria-label={`État de synchronisation : ${label}`}
+      title={label}
     >
-      {icon}<span className="max-w-[16rem] truncate">{label}</span>
+      {icon}
+      <span className="max-w-[7.5rem] truncate sm:hidden">{shortLabel}</span>
+      {shortCount && <span className="rounded-full bg-current/10 px-1.5 text-[11px] tabular-nums sm:hidden">{shortCount}</span>}
+      <span className="hidden max-w-[16rem] truncate sm:inline">{label}</span>
     </Link>
   );
 }

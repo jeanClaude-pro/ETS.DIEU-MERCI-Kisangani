@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, CheckCircle2, HelpCircle, RotateCcw, ScanLine, Server, HardDrive } from "lucide-react";
+import { Camera, CameraOff, CheckCircle2, RotateCcw, ScanLine, Server, HardDrive } from "lucide-react";
+import { Alert, LoadingState, PageHeader } from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
 import { useConnectivity } from "../../context/ConnectivityContext";
 import { useZxingScanner } from "../../hooks/useZxingScanner";
@@ -123,146 +124,135 @@ export default function ScanReceipt() {
   }
 
   return (
-    <div className="flex-1 p-4 sm:p-6 overflow-auto">
-      <div className="max-w-2xl mx-auto space-y-5">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Scanner un reçu</h2>
-          <p className="text-gray-600 mt-1">Utilisez la caméra ou un lecteur USB pour vérifier un reçu à partir de son code-barres.</p>
-        </div>
+    <div className="ui-page max-w-3xl">
+      <PageHeader
+        eyebrow="Contrôle"
+        title="Scanner un reçu"
+        description="Utilisez la caméra ou un lecteur USB pour vérifier un reçu à partir de son code-barres."
+      />
 
+      <section className="ui-card overflow-hidden" aria-label="Lecteur de code-barres">
         {/* Camera viewport */}
-        <div className="rounded-2xl border border-gray-200 bg-gray-900 overflow-hidden relative">
+        <div className="relative bg-slate-900">
           {cameraOn ? (
-            <div className="relative aspect-[4/3] sm:aspect-video">
+            <div className="relative aspect-[4/3] overflow-hidden sm:aspect-video">
               <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-4/5 max-w-xs aspect-[3/1] rounded-lg border-2 border-white/70" />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="aspect-[3/1] w-4/5 max-w-xs rounded-lg border-2 border-white/70 shadow-[0_0_0_9999px_rgb(2_6_23/0.35)]" />
               </div>
               {permission === "requesting" && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm gap-2">
+                <div className="absolute inset-0 flex items-center justify-center gap-2 bg-slate-950/60 text-sm text-white">
                   <Camera className="h-4 w-4 animate-pulse" /> Demande d'accès à la caméra…
                 </div>
               )}
               {permission === "denied" && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-white text-sm gap-2 p-4 text-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 p-4 text-center text-sm text-white">
                   <CameraOff className="h-5 w-5" />
                   Accès à la caméra refusé. Autorisez-le dans les paramètres du navigateur, ou utilisez un lecteur USB ci-dessous.
                 </div>
               )}
               {permission === "unavailable" && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-white text-sm gap-2 p-4 text-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 p-4 text-center text-sm text-white">
                   <CameraOff className="h-5 w-5" />
                   Aucune caméra disponible sur cet appareil. Utilisez un lecteur USB ci-dessous.
                 </div>
               )}
             </div>
           ) : (
-            <div className="aspect-[4/3] sm:aspect-video flex items-center justify-center text-white/70 text-sm gap-2">
-              <CameraOff className="h-4 w-4" /> Caméra désactivée
+            <div className="flex aspect-[16/7] flex-col items-center justify-center gap-2 text-sm text-white/70 sm:aspect-[16/6]">
+              <CameraOff className="h-5 w-5" /> Caméra désactivée
             </div>
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setCameraOn((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]"
-        >
-          {cameraOn ? <CameraOff className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
-          {cameraOn ? "Désactiver la caméra" : "Activer la caméra"}
-        </button>
+        <div className="space-y-4 p-4 sm:p-5">
+          <button
+            type="button"
+            onClick={() => setCameraOn((v) => !v)}
+            className={`ui-btn w-full sm:w-auto ${cameraOn ? "ui-btn-secondary" : "ui-btn-primary"}`}
+            aria-pressed={cameraOn}
+          >
+            {cameraOn ? <CameraOff /> : <Camera />}
+            {cameraOn ? "Désactiver la caméra" : "Activer la caméra"}
+          </button>
 
-        {/* USB scanner / manual entry — same field, same lookup path */}
-        <form onSubmit={handleSubmit} className="space-y-2">
-          <label htmlFor="scan-input" className="block text-sm font-medium text-gray-700">
-            Code du reçu (lecteur USB ou saisie manuelle)
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="scan-input"
-              ref={inputRef}
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Scannez ou saisissez le code"
-              className="flex-1 min-h-[44px] rounded-lg border border-gray-300 px-3 py-2 text-base tracking-wide uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              autoComplete="off"
-              autoFocus
-            />
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 min-h-[44px]"
-            >
-              <ScanLine className="h-4 w-4" /> Vérifier
-            </button>
-          </div>
-          <p className="text-xs text-gray-500">Un lecteur USB tape automatiquement le code puis "Entrée" — il suffit que ce champ soit sélectionné.</p>
-        </form>
+          {/* USB scanner / manual entry — same field, same lookup path */}
+          <form onSubmit={handleSubmit} className="border-t border-slate-100 pt-4">
+            <label htmlFor="scan-input" className="ui-label">
+              Code du reçu <span className="font-normal text-slate-500">(lecteur USB ou saisie manuelle)</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="scan-input"
+                ref={inputRef}
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="Scannez ou saisissez le code"
+                className="ui-input flex-1 uppercase tracking-wide placeholder:normal-case placeholder:tracking-normal"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                autoFocus
+              />
+              <button type="submit" className="ui-btn ui-btn-primary">
+                <ScanLine /> <span className="hidden min-[380px]:inline">Vérifier</span>
+              </button>
+            </div>
+            <p className="ui-help">Un lecteur USB tape automatiquement le code puis « Entrée » — il suffit que ce champ soit sélectionné.</p>
+          </form>
+        </div>
+      </section>
 
-        {/* Result surface */}
+      {/* Result surface */}
+      <div aria-live="polite" className="space-y-4">
         {state === "looking-up" && (
-          <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">Vérification en cours…</div>
+          <div className="ui-card"><LoadingState label="Vérification en cours…" className="py-6" /></div>
         )}
 
         {state === "malformed" && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
-            <HelpCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-amber-900">Code illisible</p>
-              <p className="text-sm text-amber-700">Ce code ne correspond pas au format attendu d'un reçu. Réessayez le scan.</p>
-            </div>
-          </div>
+          <Alert tone="warning" title="Code illisible">
+            Ce code ne correspond pas au format attendu d'un reçu. Réessayez le scan.
+          </Alert>
         )}
 
         {state === "not-found" && (
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex items-start gap-3">
-            <HelpCircle className="h-5 w-5 text-gray-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-gray-800">Reçu introuvable</p>
-              <p className="text-sm text-gray-600">Aucun reçu ne correspond à ce code{connectivity.status === "offline" ? " dans les données locales" : ""}.</p>
-            </div>
-          </div>
+          <Alert tone="info" title="Reçu introuvable">
+            Aucun reçu ne correspond à ce code{connectivity.status === "offline" ? " dans les données locales" : ""}.
+          </Alert>
         )}
 
         {state === "found" && result && (
-          <div className="rounded-xl border border-emerald-200 bg-white overflow-hidden">
-            <div className={`px-4 py-2 text-xs font-semibold flex items-center gap-1.5 ${result.source === "server" ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
+          <section className="ui-card overflow-hidden" aria-label="Reçu trouvé">
+            <div className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold sm:px-5 ${result.source === "server" ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
               {result.source === "server" ? <Server className="h-3.5 w-3.5" /> : <HardDrive className="h-3.5 w-3.5" />}
-              {result.source === "server" ? "Résultat officiel du serveur" : "Résultat local hors-ligne (non vérifié par le serveur)"}
+              {result.source === "server" ? "Résultat officiel du serveur" : "Résultat local hors ligne (non vérifié par le serveur)"}
               {result.pendingSync && " — synchronisation en attente"}
             </div>
-            <div className="p-4 space-y-3">
+            <div className="space-y-4 p-4 sm:p-5">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                <span className="font-semibold text-gray-900">{result.receiptNumber}</span>
+                <span className="text-base font-semibold text-slate-950">{result.receiptNumber}</span>
               </div>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <dt className="text-gray-500">Date</dt>
-                <dd className="text-gray-900">{formatDate(result.occurredAt)}</dd>
-                <dt className="text-gray-500">Client</dt>
-                <dd className="text-gray-900">{result.customerName}</dd>
-                <dt className="text-gray-500">Total</dt>
-                <dd className="text-gray-900 font-semibold">{result.totalUSD.toFixed(2)} USD{result.totalFC ? ` · ${result.totalFC.toLocaleString("fr-FR")} FC` : ""}</dd>
-                <dt className="text-gray-500">Paiement</dt>
-                <dd className="text-gray-900">{result.paymentMethod.toUpperCase()}</dd>
-                <dt className="text-gray-500">Agent</dt>
-                <dd className="text-gray-900">{result.salesPerson}</dd>
-                <dt className="text-gray-500">Articles</dt>
-                <dd className="text-gray-900">{result.itemCount}</dd>
-                <dt className="text-gray-500">Statut</dt>
-                <dd className="text-gray-900">{result.status}</dd>
+              <p className="text-2xl font-semibold tracking-tight tabular-nums text-slate-950">
+                {result.totalUSD.toFixed(2)} USD
+                {result.totalFC ? <span className="ml-2 text-base font-medium text-slate-500">· {result.totalFC.toLocaleString("fr-FR")} FC</span> : null}
+              </p>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+                <div><dt className="text-xs text-slate-500">Date</dt><dd className="text-slate-900">{formatDate(result.occurredAt)}</dd></div>
+                <div className="min-w-0"><dt className="text-xs text-slate-500">Client</dt><dd className="break-words text-slate-900">{result.customerName}</dd></div>
+                <div><dt className="text-xs text-slate-500">Paiement</dt><dd className="text-slate-900">{result.paymentMethod.toUpperCase()}</dd></div>
+                <div><dt className="text-xs text-slate-500">Agent</dt><dd className="text-slate-900">{result.salesPerson}</dd></div>
+                <div><dt className="text-xs text-slate-500">Articles</dt><dd className="tabular-nums text-slate-900">{result.itemCount}</dd></div>
+                <div><dt className="text-xs text-slate-500">Statut</dt><dd className="text-slate-900">{result.status}</dd></div>
               </dl>
             </div>
-          </div>
+          </section>
         )}
 
         {state !== "idle" && (
-          <button
-            type="button"
-            onClick={reset}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]"
-          >
-            <RotateCcw className="h-4 w-4" /> Scanner un autre reçu
+          <button type="button" onClick={reset} className="ui-btn ui-btn-secondary w-full sm:w-auto">
+            <RotateCcw /> Scanner un autre reçu
           </button>
         )}
       </div>

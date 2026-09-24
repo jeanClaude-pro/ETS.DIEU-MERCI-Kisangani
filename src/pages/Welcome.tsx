@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ArrowRight, CalendarDays, ChevronRight, LogOut, Store } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronRight, LogOut } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { permittedNavigationItems, type NavigationItem } from "../components/navigationConfig";
@@ -70,11 +70,11 @@ export default function Welcome() {
   };
 
   return (
-    <main className="welcome-workspace">
+    <div className="welcome-workspace">
       <section className="welcome-hero" aria-labelledby="welcome-title">
         <div className="welcome-hero-topbar">
           <div className="welcome-shop">
-            <span className="welcome-shop-icon" aria-hidden="true"><Store className="h-5 w-5" /></span>
+            <span className="welcome-shop-icon" aria-hidden="true"><img src="/Mrcleanlogo.png" alt="" /></span>
             <div><span>BOUTIQUE</span><strong>C'EST DIEU QUI PARTAGE</strong></div>
           </div>
           <button type="button" className="welcome-signout" onClick={logout}>
@@ -89,7 +89,7 @@ export default function Welcome() {
             <p>{roleDetails.message}. Choisissez une action pour commencer.</p>
           </div>
           <div className="welcome-date" aria-label={`Date : ${today}`}>
-            <CalendarDays className="h-5 w-5" aria-hidden="true" />
+            <CalendarDays className="h-4 w-4" aria-hidden="true" />
             <span>{today}</span>
           </div>
         </div>
@@ -110,7 +110,7 @@ export default function Welcome() {
               const Icon = item.icon;
               return (
                 <Link key={item.id} to={item.path} className={`welcome-primary-card ${index === 0 ? "welcome-primary-card-featured" : ""}`}>
-                  <span className="welcome-primary-icon" aria-hidden="true"><Icon className="h-6 w-6" /></span>
+                  <span className="welcome-primary-icon" aria-hidden="true"><Icon className="h-5 w-5" /></span>
                   <span className="welcome-primary-copy"><strong>{item.label}</strong><small>{item.description}</small></span>
                   <ArrowRight className="welcome-primary-arrow h-5 w-5" aria-hidden="true" />
                 </Link>
@@ -144,6 +144,6 @@ export default function Welcome() {
           </div>
         </section>
       )}
-    </main>
+    </div>
   );
 }

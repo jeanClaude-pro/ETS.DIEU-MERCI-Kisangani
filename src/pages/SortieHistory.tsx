@@ -12,7 +12,7 @@ import {
   Calendar,
   RefreshCw,
   User,
-  DollarSign,
+  Lock,
   Trash2,
   Save,
   X,
@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Shield,
 } from "lucide-react";
+import { Alert, EmptyState, LoadingState, MetricCard, PageHeader } from "../components/ui";
 import RegionFilterPills from "../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../types";
 import {
@@ -361,16 +362,16 @@ export default function SortieHistory() {
           
         } else {
           console.warn("Unexpected expenses data structure:", data);
-          setError("Unexpected response format from server");
+          setError("Format de réponse inattendu du serveur");
         }
       } else {
         console.error("Expenses fetch failed:", res.status);
         const errorText = await res.text();
-        setError(`Failed to load expenses: ${res.status} ${errorText}`);
+        setError(`Échec du chargement des dépenses : ${res.status} ${errorText}`);
       }
     } catch (error) {
       console.error("Error loading expenses:", error);
-      setError("Failed to load expenses. Please check your connection.");
+      setError("Échec du chargement des dépenses. Vérifiez votre connexion.");
     } finally {
       setLoading(false);
     }
@@ -587,11 +588,11 @@ export default function SortieHistory() {
         setExpenseHistory(data.history || []);
         setShowHistoryModal(true);
       } else {
-        setError("Failed to load expense history");
+        setError("Échec du chargement de l'historique de la dépense");
       }
     } catch (error) {
       console.error("Error fetching expense history:", error);
-      setError("Failed to load expense history");
+      setError("Échec du chargement de l'historique de la dépense");
     } finally {
       setHistoryLoading(false);
     }
@@ -617,7 +618,7 @@ export default function SortieHistory() {
         );
 
         if (response.ok) {
-          setMessage("❌ Dépense rejetée et suppression en cours...");
+          setMessage("Dépense rejetée et suppression en cours...");
           closeValidationModal();
 
           // Wait 3 seconds before refreshing
@@ -627,7 +628,7 @@ export default function SortieHistory() {
           }, 3000);
         } else {
           const errorData = await response.json();
-          setError(errorData.error || "Failed to delete expense");
+          setError(errorData.error || "Échec de la suppression de la dépense");
         }
       } else {
         const response = await fetch(
@@ -647,7 +648,7 @@ export default function SortieHistory() {
         );
 
         if (response.ok) {
-          setMessage("✅ Dépense validée avec succès !");
+          setMessage("Dépense validée avec succès !");
           closeValidationModal();
           fetchExpenses();
         } else {
@@ -657,7 +658,7 @@ export default function SortieHistory() {
       }
     } catch (error) {
       console.error("Error processing expense:", error);
-      setError("Failed to process expense");
+      setError("Échec du traitement de la dépense");
     } finally {
       setActionLoading(null);
     }
@@ -700,7 +701,7 @@ export default function SortieHistory() {
 
       if (response.ok) {
         const updatedExpense = await response.json();
-        setMessage("✅ Dépense mise à jour avec succès !");
+        setMessage("Dépense mise à jour avec succès !");
         closeEditModal();
         
         // Update the expense in the local state
@@ -717,11 +718,11 @@ export default function SortieHistory() {
         }
       } else {
         const errorData = await response.json();
-        setError(errorData.error || "Failed to update expense");
+        setError(errorData.error || "Échec de la mise à jour de la dépense");
       }
     } catch (error) {
       console.error("Error updating expense:", error);
-      setError("Failed to update expense");
+      setError("Échec de la mise à jour de la dépense");
     } finally {
       setActionLoading(null);
     }
@@ -751,7 +752,7 @@ export default function SortieHistory() {
 
       if (response.ok) {
         const result = await response.json();
-        setMessage("✅ " + (result.message || "Dépense supprimée avec succès"));
+        setMessage((result.message || "Dépense supprimée avec succès"));
         closeDeleteModal();
         
         // Remove the expense from the local state
@@ -765,11 +766,11 @@ export default function SortieHistory() {
         }
       } else {
         const errorData = await response.json();
-        setError(errorData.error || "Failed to delete expense");
+        setError(errorData.error || "Échec de la suppression de la dépense");
       }
     } catch (error) {
       console.error("Error deleting expense:", error);
-      setError("Failed to delete expense");
+      setError("Échec de la suppression de la dépense");
     } finally {
       setActionLoading(null);
     }
@@ -849,375 +850,288 @@ export default function SortieHistory() {
     return expense.status !== "pending" && (userPermissions.isAdmin || userPermissions.canEditAll);
   };
 
+  // Display-only helpers for statuses and payment methods.
+  const expenseStatusLabel = (status?: string) =>
+    status === "validated" ? "Validé" : status === "rejected" ? "Rejeté" : "En attente";
+  const expenseStatusTone = (status?: string) =>
+    status === "validated" ? "ui-badge-success" : status === "rejected" ? "ui-badge-danger" : "ui-badge-warning";
+  const expensePaymentLabel: Record<string, string> = { cash: "Espèces", card: "Carte", bank: "Banque", mpesa: "M-Pesa", transfer: "Transfert", other: "Autre" };
+  const timeframeLabels = { today: "Aujourd'hui", day: "Jour précis", month: "Mois", year: "Année", custom: "Plage de dates" } as const;
+
   // Summary Statistics component - Only visible to admins
   const SummaryStats = () => {
     if (!summaryStats || !userPermissions.isAdmin) return null;
 
     return (
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
-            <Shield className="w-5 h-5" />
-            Statistiques des Dépenses (Vue Admin)
-          </h3>
+      <section aria-labelledby="expense-summary-title" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="expense-summary-title" className="ui-kicker flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5" />
+            Statistiques des dépenses (vue administrateur)
+          </h2>
           {currentUser && (
-            <span className="text-sm text-blue-700 bg-blue-100 px-3 py-1 rounded-full">
-              Connecté en tant que: {currentUser.name || currentUser.username} ({currentUser.role})
+            <span className="ui-badge ui-badge-neutral max-w-full truncate">
+              Connecté : {currentUser.name || currentUser.username} ({currentUser.role})
             </span>
           )}
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Dépenses</p>
-                <p className="text-2xl font-bold text-blue-600">{summaryStats.totalRecords}</p>
-                <p className="text-sm text-gray-500">{formatCurrency(summaryStats.totalAmount)}</p>
-              </div>
-              <FileText className="w-8 h-8 text-blue-500" />
-            </div>
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Validées</p>
-                <p className="text-2xl font-bold text-green-600">{summaryStats.validated.count}</p>
-                <p className="text-sm text-green-600">{formatCurrency(summaryStats.validated.amount)}</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-500" />
-            </div>
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">En Attente</p>
-                <p className="text-2xl font-bold text-yellow-600">{summaryStats.pending.count}</p>
-                <p className="text-sm text-yellow-600">{formatCurrency(summaryStats.pending.amount)}</p>
-              </div>
-              <AlertCircle className="w-8 h-8 text-yellow-500" />
-            </div>
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Rejetées</p>
-                <p className="text-2xl font-bold text-red-600">{summaryStats.rejected?.count || 0}</p>
-                <p className="text-sm text-red-600">{formatCurrency(summaryStats.rejected?.amount || 0)}</p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-500" />
-            </div>
-          </div>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard label="Total des dépenses" value={formatCurrency(summaryStats.totalAmount)} hint={`${summaryStats.totalRecords} dépense(s)`} icon={FileText} tone="primary" />
+          <MetricCard label="Validées" value={formatCurrency(summaryStats.validated.amount)} hint={`${summaryStats.validated.count} dépense(s)`} icon={CheckCircle} tone="success" />
+          <MetricCard label="En attente" value={formatCurrency(summaryStats.pending.amount)} hint={`${summaryStats.pending.count} dépense(s)`} icon={AlertCircle} tone="warning" />
+          <MetricCard label="Rejetées" value={formatCurrency(summaryStats.rejected?.amount || 0)} hint={`${summaryStats.rejected?.count || 0} dépense(s)`} icon={XCircle} tone="danger" />
         </div>
 
         {/* Detailed statistics */}
-        <div className="mt-4 pt-4 border-t border-blue-200">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-3 rounded-lg border border-gray-200">
-              <div className="text-sm font-medium text-gray-700 mb-2">Répartition par statut</div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Validées:</span>
-                  <div className="text-right">
-                    <span className="font-semibold text-green-600">{summaryStats.validated.count}</span>
-                    <div className="text-xs text-gray-500">{formatCurrency(summaryStats.validated.amount)}</div>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">En attente:</span>
-                  <div className="text-right">
-                    <span className="font-semibold text-yellow-600">{summaryStats.pending.count}</span>
-                    <div className="text-xs text-gray-500">{formatCurrency(summaryStats.pending.amount)}</div>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Rejetées:</span>
-                  <div className="text-right">
-                    <span className="font-semibold text-red-600">{summaryStats.rejected?.count || 0}</span>
-                    <div className="text-xs text-gray-500">{formatCurrency(summaryStats.rejected?.amount || 0)}</div>
-                  </div>
-                </div>
-              </div>
+        <div className="ui-card grid grid-cols-1 divide-y divide-slate-100 text-sm md:grid-cols-3 md:divide-x md:divide-y-0">
+          <dl className="space-y-2 p-4">
+            <dt className="ui-kicker mb-1">Montants</dt>
+            <div className="flex justify-between gap-3">
+              <dd className="text-slate-500">Montant moyen</dd>
+              <dd className="font-medium tabular-nums text-slate-900">
+                {summaryStats.totalRecords > 0
+                  ? formatCurrency(summaryStats.totalAmount / summaryStats.totalRecords)
+                  : formatCurrency(0)
+                }
+              </dd>
             </div>
-
-            <div className="bg-white p-3 rounded-lg border border-gray-200">
-              <div className="text-sm font-medium text-gray-700 mb-2">Montants totaux</div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Total général:</span>
-                  <span className="font-bold text-blue-600">{formatCurrency(summaryStats.totalAmount)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Montant moyen:</span>
-                  <span className="font-medium text-gray-900">
-                    {summaryStats.totalRecords > 0 
-                      ? formatCurrency(summaryStats.totalAmount / summaryStats.totalRecords)
-                      : formatCurrency(0)
-                    }
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Taux de validation:</span>
-                  <span className="font-medium text-green-600">
-                    {summaryStats.totalRecords > 0 
-                      ? `${((summaryStats.validated.count / summaryStats.totalRecords) * 100).toFixed(1)}%`
-                      : '0%'
-                    }
-                  </span>
-                </div>
-              </div>
+            <div className="flex justify-between gap-3">
+              <dd className="text-slate-500">Taux de validation</dd>
+              <dd className="font-medium tabular-nums text-emerald-700">
+                {summaryStats.totalRecords > 0
+                  ? `${((summaryStats.validated.count / summaryStats.totalRecords) * 100).toFixed(1)}%`
+                  : '0%'
+                }
+              </dd>
             </div>
-
-            <div className="bg-white p-3 rounded-lg border border-gray-200">
-              <div className="text-sm font-medium text-gray-700 mb-2">Informations temporelles</div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Période:</span>
-                  <span className="text-sm font-medium text-gray-900">{timeframeDescription}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Dernière mise à jour:</span>
-                  <span className="text-sm text-gray-900">{new Date().toLocaleTimeString('fr-FR')}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Données filtrées:</span>
-                  <span className="text-sm text-gray-900">{filteredExpenses.length} / {expenses.length}</span>
-                </div>
-              </div>
+          </dl>
+          <dl className="space-y-2 p-4">
+            <dt className="ui-kicker mb-1">Période</dt>
+            <div className="flex justify-between gap-3">
+              <dd className="text-slate-500">Période</dd>
+              <dd className="text-right font-medium text-slate-900">{timeframeDescription}</dd>
             </div>
-          </div>
+            <div className="flex justify-between gap-3">
+              <dd className="text-slate-500">Dernière mise à jour</dd>
+              <dd className="tabular-nums text-slate-900">{new Date().toLocaleTimeString('fr-FR')}</dd>
+            </div>
+          </dl>
+          <dl className="space-y-2 p-4">
+            <dt className="ui-kicker mb-1">Affichage</dt>
+            <div className="flex justify-between gap-3">
+              <dd className="text-slate-500">Données filtrées</dd>
+              <dd className="tabular-nums text-slate-900">{filteredExpenses.length} / {expenses.length}</dd>
+            </div>
+          </dl>
         </div>
-      </div>
+      </section>
     );
   };
 
   return (
-    <div className="space-y-6 p-6 flex-1 overflow-auto">
-      <div className="flex items-center justify-between flex-wrap gap-4 overflow-auto">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Historique des Sorties de Caisse
-          </h1>
-          <p className="text-gray-600">
-            {userPermissions.isAdmin
-              ? "Gestion et validation des dépenses"
-              : "Consultation des dépenses du jour"}
-          </p>
-          {!userPermissions.isAdmin && (
-            <div className="mt-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-md inline-block">
-              🔒 Vue limitée aux dépenses d'aujourd'hui uniquement
-            </div>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <RegionFilterPills
-            value={queryParams.region as RegionCodeFilter}
-            onChange={(value) => handleQueryParamChange("region", value)}
-          />
-          <button
-            onClick={fetchExpenses}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+    <div className="ui-page ui-page-wide">
+      <PageHeader
+        eyebrow="Caisse"
+        title="Historique des sorties de caisse"
+        description={userPermissions.isAdmin ? "Gestion et validation des dépenses" : "Consultation des dépenses du jour"}
+        meta={!userPermissions.isAdmin ? (
+          <span className="ui-badge ui-badge-neutral"><Lock className="h-3 w-3" aria-hidden="true" />Vue limitée aux dépenses d'aujourd'hui</span>
+        ) : undefined}
+        actions={
+          <button type="button" onClick={fetchExpenses} disabled={loading} className="ui-btn ui-btn-secondary">
+            <RefreshCw className={loading ? "animate-spin" : ""} />
             Actualiser
           </button>
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Rechercher des dépenses..."
-              className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-            />
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Summary Stats - Only visible to admins */}
       <SummaryStats />
 
-      {/* Timeframe Filter Section */}
-      <div className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-200">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-            Filtre par période ({getTimeframeLabel()})
-          </h3>
-          
-          <div className="flex flex-wrap gap-2">
+      {/* Toolbar */}
+      <section className="ui-card" aria-label="Recherche et filtres">
+        <div className="flex flex-col gap-3 p-4 sm:p-5 xl:flex-row xl:items-center">
+          <div className="relative min-w-0 flex-1">
+            <label htmlFor="expense-search" className="sr-only">Rechercher une dépense</label>
+            <Search className="ui-field-icon" aria-hidden="true" />
+            <input
+              id="expense-search"
+              type="search"
+              placeholder="Rechercher une dépense…"
+              className="ui-input ui-input-icon"
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+            />
+          </div>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <RegionFilterPills
+              value={queryParams.region as RegionCodeFilter}
+              onChange={(value) => handleQueryParamChange("region", value)}
+            />
             <button
+              type="button"
               onClick={() => setShowFilters(!showFilters)}
-              className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center gap-2"
+              aria-expanded={showFilters}
+              aria-controls="expense-filters"
+              className="ui-btn ui-btn-secondary"
             >
-              <Filter className="w-4 h-4" />
-              {showFilters ? "Hide Filters" : "Show Filters"}
-              <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-            </button>
-            
-            <button
-              onClick={clearAllFilters}
-              className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Clear Filters
+              <Filter />
+              Période & filtres
+              <ChevronDown className={`transition-transform duration-150 ${showFilters ? "rotate-180" : ""}`} />
             </button>
           </div>
         </div>
 
+        <div className="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <p className="flex min-w-0 items-center gap-2 text-slate-600">
+            <Calendar className="h-4 w-4 shrink-0 text-slate-400" />
+            <span className="truncate">Période : <span className="font-medium text-slate-900">{getTimeframeLabel()}</span></span>
+          </p>
+          <button type="button" onClick={clearAllFilters} className="ui-btn ui-btn-ghost ui-btn-sm self-start sm:self-auto">
+            <RefreshCw />
+            Réinitialiser les filtres
+          </button>
+        </div>
+
         {/* Timeframe Selection */}
         {showFilters && (
-          <div className="space-y-4">
+          <div id="expense-filters" className="space-y-4 border-t border-slate-100 px-4 py-4 sm:px-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Type de période
-              </label>
-              <div className="flex flex-wrap gap-2">
+              <span className="ui-label">Type de période</span>
+              <div className="ui-segmented w-full sm:w-auto" role="group" aria-label="Type de période">
                 {(["today", "day", "month", "year", "custom"] as const).map((type) => (
                   <button
+                    type="button"
                     key={type}
                     onClick={() => handleTimeframeTypeChange(type)}
                     disabled={!userPermissions.isAdmin && type !== "day"}
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                      timeframeType === type
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    } ${!userPermissions.isAdmin && type !== "day" ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    aria-pressed={timeframeType === type}
+                    className="ui-segment"
                   >
-                    {type === "today" && "Aujourd'hui"}
-                    {type === "day" && "Jour spécifique"}
-                    {type === "month" && "Mois spécifique"}
-                    {type === "year" && "Année spécifique"}
-                    {type === "custom" && "Plage personnalisée"}
+                    {timeframeLabels[type]}
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Specific timeframe inputs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {timeframeType === "day" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    value={queryParams.date}
-                    onChange={(e) => handleQueryParamChange("date", e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg"
-                    disabled={!userPermissions.isAdmin}
-                  />
-                </div>
-              )}
-
-              {timeframeType === "month" && (
-                <>
+            {timeframeType !== "today" && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {timeframeType === "day" && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Année
-                    </label>
+                    <label htmlFor="expense-date" className="ui-label">Date</label>
+                    <input
+                      id="expense-date"
+                      type="date"
+                      value={queryParams.date}
+                      onChange={(e) => handleQueryParamChange("date", e.target.value)}
+                      className="ui-input"
+                      disabled={!userPermissions.isAdmin}
+                    />
+                  </div>
+                )}
+
+                {timeframeType === "month" && (
+                  <>
+                    <div>
+                      <label htmlFor="expense-month-year" className="ui-label">Année</label>
+                      <select
+                        id="expense-month-year"
+                        value={queryParams.year}
+                        onChange={(e) => handleQueryParamChange("year", e.target.value)}
+                        className="ui-input"
+                      >
+                        {getAvailableYears().map(year => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="expense-month" className="ui-label">Mois</label>
+                      <select
+                        id="expense-month"
+                        value={queryParams.month}
+                        onChange={(e) => handleQueryParamChange("month", e.target.value)}
+                        className="ui-input capitalize"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => {
+                          const monthNum = (i + 1).toString().padStart(2, '0');
+                          return (
+                            <option key={monthNum} value={monthNum}>
+                              {new Date(2000, i).toLocaleString('fr-FR', { month: 'long' })} ({monthNum})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {timeframeType === "year" && (
+                  <div>
+                    <label htmlFor="expense-year" className="ui-label">Année</label>
                     <select
+                      id="expense-year"
                       value={queryParams.year}
                       onChange={(e) => handleQueryParamChange("year", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className="ui-input"
                     >
                       {getAvailableYears().map(year => (
                         <option key={year} value={year}>{year}</option>
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Mois
-                    </label>
-                    <select
-                      value={queryParams.month}
-                      onChange={(e) => handleQueryParamChange("month", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    >
-                      {Array.from({ length: 12 }, (_, i) => {
-                        const monthNum = (i + 1).toString().padStart(2, '0');
-                        return (
-                          <option key={monthNum} value={monthNum}>
-                            {new Date(2000, i).toLocaleString('fr-FR', { month: 'long' })} ({monthNum})
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                </>
-              )}
+                )}
 
-              {timeframeType === "year" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Année
-                  </label>
-                  <select
-                    value={queryParams.year}
-                    onChange={(e) => handleQueryParamChange("year", e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg"
-                  >
-                    {getAvailableYears().map(year => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {timeframeType === "custom" && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Date de début
-                    </label>
-                    <input
-                      type="date"
-                      value={queryParams.from}
-                      onChange={(e) => handleQueryParamChange("from", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Date de fin
-                    </label>
-                    <input
-                      type="date"
-                      value={queryParams.to}
-                      onChange={(e) => handleQueryParamChange("to", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
+                {timeframeType === "custom" && (
+                  <>
+                    <div>
+                      <label htmlFor="expense-from" className="ui-label">Date de début</label>
+                      <input
+                        id="expense-from"
+                        type="date"
+                        value={queryParams.from}
+                        onChange={(e) => handleQueryParamChange("from", e.target.value)}
+                        className="ui-input"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="expense-to" className="ui-label">Date de fin</label>
+                      <input
+                        id="expense-to"
+                        type="date"
+                        value={queryParams.to}
+                        onChange={(e) => handleQueryParamChange("to", e.target.value)}
+                        className="ui-input"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Advanced Filters */}
             <div>
               <button
+                type="button"
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                aria-expanded={showAdvancedFilters}
+                className="inline-flex min-h-9 items-center gap-1 rounded-md text-sm font-semibold text-blue-700 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
-                {showAdvancedFilters ? "Hide Advanced Filters" : "Show Advanced Filters"}
-                <ChevronDown className={`w-4 h-4 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
+                {showAdvancedFilters ? "Masquer les filtres avancés" : "Afficher les filtres avancés"}
+                <ChevronDown className={`h-4 w-4 transition-transform duration-150 ${showAdvancedFilters ? "rotate-180" : ""}`} />
               </button>
 
               {showAdvancedFilters && (
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="ui-muted-panel mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Statut
-                    </label>
+                    <label htmlFor="expense-status" className="ui-label">Statut</label>
                     <select
+                      id="expense-status"
                       value={queryParams.status}
                       onChange={(e) => handleQueryParamChange("status", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className="ui-input"
                     >
                       <option value="">Tous les statuts</option>
                       <option value="pending">En attente</option>
@@ -1226,15 +1140,14 @@ export default function SortieHistory() {
                       <option value="all">Toutes</option>
                     </select>
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Méthode de paiement
-                    </label>
+                    <label htmlFor="expense-payment" className="ui-label">Méthode de paiement</label>
                     <select
+                      id="expense-payment"
                       value={queryParams.paymentMethod}
                       onChange={(e) => handleQueryParamChange("paymentMethod", e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className="ui-input"
                     >
                       <option value="">Toutes</option>
                       <option value="cash">Espèces</option>
@@ -1244,210 +1157,122 @@ export default function SortieHistory() {
                       <option value="other">Autre</option>
                     </select>
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Enregistré par
-                    </label>
+                    <label htmlFor="expense-recorded-by" className="ui-label">Enregistré par</label>
                     <input
+                      id="expense-recorded-by"
                       type="text"
                       value={queryParams.recordedBy}
                       onChange={(e) => handleQueryParamChange("recordedBy", e.target.value)}
-                      placeholder="Filtrer par enregistreur..."
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      placeholder="Filtrer par utilisateur…"
+                      className="ui-input"
                     />
                   </div>
                 </div>
               )}
             </div>
-          </div>
-        )}
 
-        {/* Applied Filters Summary */}
-        {appliedFilters && (
-          <div className="mt-4 text-sm text-gray-600">
-            <span className="font-medium">Filtres appliqués:</span>
-            <span className="ml-2">
-              Statut: {appliedFilters.status}, 
-              Paiement: {appliedFilters.paymentMethod}
-              {appliedFilters.recordedBy !== 'none' && `, Enregistreur: ${appliedFilters.recordedBy}`}
-              {appliedFilters.search !== 'none' && `, Recherche: ${appliedFilters.search}`}
-            </span>
+            {/* Applied Filters Summary */}
+            {appliedFilters && (
+              <p className="text-xs text-slate-500">
+                <span className="font-medium text-slate-700">Filtres appliqués :</span>{" "}
+                Statut : {appliedFilters.status}, Paiement : {appliedFilters.paymentMethod}
+                {appliedFilters.recordedBy !== 'none' && `, Enregistreur : ${appliedFilters.recordedBy}`}
+                {appliedFilters.search !== 'none' && `, Recherche : ${appliedFilters.search}`}
+              </p>
+            )}
           </div>
         )}
-      </div>
+      </section>
 
       {/* User restriction notice */}
       {!userPermissions.isAdmin && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <AlertCircle className="h-5 w-5 text-yellow-400" />
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">
-                Accès limité
-              </h3>
-              <div className="mt-1 text-sm text-yellow-700">
-                <p>
-                  Vous ne pouvez voir que les dépenses d'aujourd'hui. Seul
-                  l'administrateur peut accéder à l'historique complet.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <Alert tone="info" title="Accès limité">
+          Vous ne pouvez voir que les dépenses d'aujourd'hui. Seul l'administrateur peut accéder à l'historique complet.
+        </Alert>
       )}
 
-      {message && (
-        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg border border-green-200">
-          {message}
-          <button
-            onClick={() => setMessage(null)}
-            className="float-right text-green-700 hover:text-green-900"
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {message && <Alert tone="success" onDismiss={() => setMessage(null)}>{message}</Alert>}
+      {error && <Alert tone="danger" onDismiss={() => setError(null)}>{error}</Alert>}
 
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg border border-red-200">
-          {error}
-          <button
-            onClick={() => setError(null)}
-            className="float-right text-red-700 hover:text-red-900"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            {userPermissions.isAdmin ? "Dépenses en attente et validées" : "Dépenses du jour"} (
-            {pagination.totalRecords})
+      <section className="ui-card overflow-hidden" aria-labelledby="expenses-table-title">
+        <div className="ui-card-header">
+          <h2 id="expenses-table-title" className="ui-section-title flex items-center gap-2">
+            <FileText className="h-4 w-4 text-blue-700" />
+            {userPermissions.isAdmin ? "Dépenses en attente et validées" : "Dépenses du jour"}
+            <span className="ui-badge ui-badge-neutral tabular-nums">{pagination.totalRecords}</span>
           </h2>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="ui-table-wrap">
           {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-500 mt-2">Chargement des dépenses...</p>
-            </div>
+            <LoadingState label="Chargement des dépenses…" />
           ) : filteredExpenses.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>Aucune dépense trouvée</p>
-              <p className="text-sm">pour la période sélectionnée</p>
-            </div>
+            <EmptyState icon={FileText} title="Aucune dépense trouvée" description="Aucune dépense ne correspond à la période et aux filtres sélectionnés." />
           ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="ui-table min-w-full">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ID Dépense
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Raison
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Bénéficiaire
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Montant
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Paiement
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Région
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Statut
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th scope="col">Dépense</th>
+                  <th scope="col">Raison</th>
+                  <th scope="col">Bénéficiaire</th>
+                  <th scope="col" className="text-right">Montant</th>
+                  <th scope="col">Paiement</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Date</th>
+                  <th scope="col" className="ui-sticky-end text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody>
                 {filteredExpenses.map((expense) => (
-                  <tr key={expense._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {expense.expenseId}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {expense.reason}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {expense.recipientName}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {expense.recipientPhone}
+                  <tr key={expense._id}>
+                    <td className="whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-slate-900">{expense.expenseId}</span>
+                        {expense.regionCode && <span className="ui-tag">{expense.regionCode}</span>}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {formatCurrency(expense.amount)}
+                    <td className="min-w-[12rem] max-w-[20rem]">
+                      <span className="line-clamp-2 text-slate-900" title={expense.reason}>{expense.reason}</span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {expense.paymentMethod}
+                    <td className="min-w-[9rem]">
+                      <div className="flex flex-col">
+                        <span className="text-slate-900">{expense.recipientName}</span>
+                        <span className="text-xs tabular-nums text-slate-500">{expense.recipientPhone}</span>
+                      </div>
+                    </td>
+                    <td className="ui-num whitespace-nowrap font-semibold text-red-700">{formatCurrency(expense.amount)}</td>
+                    <td>
+                      <span className="ui-badge ui-badge-neutral">{expensePaymentLabel[expense.paymentMethod] || expense.paymentMethod}</span>
+                    </td>
+                    <td>
+                      <span className={`ui-badge ${expenseStatusTone(expense.status)}`}>
+                        {expenseStatusLabel(expense.status)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {expense.regionCode ? (
-                        <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                          {expense.regionCode}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                          expense.status === "validated"
-                            ? "bg-green-100 text-green-800"
-                            : expense.status === "rejected"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
-                        {expense.status === "validated"
-                          ? "Validé"
-                          : expense.status === "rejected"
-                          ? "Rejeté"
-                          : "En attente"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(expense.createdAt)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
+                    <td className="whitespace-nowrap text-slate-500">{formatDate(expense.createdAt)}</td>
+                    <td className="ui-sticky-end">
+                      <div className="ui-row-actions">
                         <button
+                          type="button"
                           onClick={() => viewExpenseDetails(expense)}
-                          className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                          className="ui-icon-btn ui-icon-btn-primary"
                           title="Voir les détails"
+                          aria-label={`Voir la dépense ${expense.expenseId}`}
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye />
                         </button>
 
                         {/* History button */}
                         <button
+                          type="button"
                           onClick={() => fetchExpenseHistory(expense._id)}
-                          className="text-gray-600 hover:text-gray-900 p-1 rounded"
+                          className="ui-icon-btn"
                           title="Voir l'historique"
+                          aria-label={`Historique de la dépense ${expense.expenseId}`}
                         >
-                          <History className="w-4 h-4" />
+                          <History />
                         </button>
 
                         {/* Admin-only validation buttons */}
@@ -1456,24 +1281,28 @@ export default function SortieHistory() {
                           expense.status !== "rejected" && (
                             <>
                               <button
+                                type="button"
                                 onClick={() => openValidationModal(expense)}
                                 disabled={
                                   actionLoading === `validating-${expense._id}`
                                 }
-                                className="text-green-600 hover:text-green-900 p-1 rounded disabled:opacity-50"
+                                className="ui-icon-btn ui-icon-btn-success text-emerald-700"
                                 title="Valider la dépense"
+                                aria-label={`Valider la dépense ${expense.expenseId}`}
                               >
-                                <CheckCircle className="w-4 h-4" />
+                                <CheckCircle />
                               </button>
                               <button
+                                type="button"
                                 onClick={() => openValidationModal(expense)}
                                 disabled={
                                   actionLoading === `validating-${expense._id}`
                                 }
-                                className="text-red-600 hover:text-red-900 p-1 rounded disabled:opacity-50"
+                                className="ui-icon-btn ui-icon-btn-danger"
                                 title="Rejeter la dépense"
+                                aria-label={`Rejeter la dépense ${expense.expenseId}`}
                               >
-                                <XCircle className="w-4 h-4" />
+                                <XCircle />
                               </button>
                             </>
                           )}
@@ -1481,33 +1310,39 @@ export default function SortieHistory() {
                         {/* Edit button - show if user has permission */}
                         {canEditExpense(expense) && (
                           <button
+                            type="button"
                             onClick={() => openEditModal(expense)}
-                            className="text-yellow-600 hover:text-yellow-900 p-1 rounded"
+                            className="ui-icon-btn ui-icon-btn-warning"
                             title="Modifier la dépense"
+                            aria-label={`Modifier la dépense ${expense.expenseId}`}
                           >
-                            <Edit className="w-4 h-4" />
+                            <Edit />
                           </button>
                         )}
 
                         {/* Delete button - show if user has permission */}
                         {canDeleteExpense(expense) && (
                           <button
+                            type="button"
                             onClick={() => openDeleteModal(expense)}
-                            className="text-red-600 hover:text-red-900 p-1 rounded"
+                            className="ui-icon-btn ui-icon-btn-danger"
                             title="Supprimer la dépense"
+                            aria-label={`Supprimer la dépense ${expense.expenseId}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 />
                           </button>
                         )}
 
                         {/* Print button - only show for validated expenses */}
                         {expense.status === "validated" && (
                           <button
+                            type="button"
                             onClick={() => printExpenseReceipt(expense)}
-                            className="text-purple-600 hover:text-purple-900 p-1 rounded"
+                            className="ui-icon-btn"
                             title="Imprimer le reçu"
+                            aria-label={`Imprimer le reçu de ${expense.expenseId}`}
                           >
-                            <Printer className="w-4 h-4" />
+                            <Printer />
                           </button>
                         )}
                       </div>
@@ -1519,217 +1354,117 @@ export default function SortieHistory() {
           )}
         </div>
         {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t px-4 py-3">
-            <span className="text-sm text-gray-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
+          <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <span className="text-sm tabular-nums text-slate-600">Page {pagination.currentPage} sur {pagination.totalPages}</span>
             <div className="flex gap-2">
-              <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="px-3 py-1.5 border rounded disabled:opacity-50">Précédent</button>
-              <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="px-3 py-1.5 border rounded disabled:opacity-50">Suivant</button>
+              <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none">Précédent</button>
+              <button type="button" disabled={currentPage >= pagination.totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="ui-btn ui-btn-secondary ui-btn-sm flex-1 sm:flex-none">Suivant</button>
             </div>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Expense Details Modal */}
       {showModal && selectedExpense && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Détails de la Dépense
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="expense-details-title">
+          <div className="ui-dialog max-w-2xl">
+            <div className="ui-dialog-header">
+              <div className="min-w-0">
+                <h3 id="expense-details-title" className="ui-dialog-title">Détails de la dépense</h3>
+                <p className="mt-0.5 truncate text-sm text-slate-500">{selectedExpense.expenseId}</p>
+              </div>
+              <button type="button" onClick={() => setShowModal(false)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {/* Expense Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ID Dépense
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {selectedExpense.expenseId}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {formatDate(selectedExpense.createdAt)}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Méthode de Paiement
-                  </label>
-                  <p className="text-sm text-gray-900 capitalize">
-                    {selectedExpense.paymentMethod}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Statut
-                  </label>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                      selectedExpense.status === "validated"
-                        ? "bg-green-100 text-green-800"
-                        : selectedExpense.status === "rejected"
-                        ? "bg-red-100 text-red-800"
-                        : "bg-yellow-100 text-yellow-800"
-                    }`}
-                  >
-                    {selectedExpense.status === "validated"
-                      ? "Validé"
-                      : selectedExpense.status === "rejected"
-                      ? "Rejeté"
-                      : "En attente"}
-                  </span>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Enregistré par
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {selectedExpense.recordedBy}
-                  </p>
-                </div>
+            <div className="ui-dialog-body space-y-5">
+              <div className="ui-muted-panel">
+                <p className="text-xs font-medium text-slate-500">Raison</p>
+                <p className="mt-0.5 break-words text-sm font-medium text-slate-900">{selectedExpense.reason}</p>
+                <p className="mt-3 text-xs font-medium text-slate-500">Montant</p>
+                <p className="text-2xl font-semibold tabular-nums text-red-700">{formatCurrency(selectedExpense.amount)}</p>
               </div>
 
-              {/* Reason and Amount */}
-              <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Détails de la Dépense
-                </h4>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Raison
-                      </label>
-                      <p className="text-sm text-gray-900">
-                        {selectedExpense.reason}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Montant
-                        </label>
-                        <p className="text-lg font-semibold text-gray-900">
-                          {formatCurrency(selectedExpense.amount)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+              {/* Expense Info */}
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <div>
+                  <dt className="text-xs font-medium text-slate-500">Date</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{formatDate(selectedExpense.createdAt)}</dd>
                 </div>
-              </div>
+                <div>
+                  <dt className="text-xs font-medium text-slate-500">Statut</dt>
+                  <dd className="mt-1"><span className={`ui-badge ${expenseStatusTone(selectedExpense.status)}`}>{expenseStatusLabel(selectedExpense.status)}</span></dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-slate-500">Méthode de paiement</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{expensePaymentLabel[selectedExpense.paymentMethod] || selectedExpense.paymentMethod}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-slate-500">Enregistré par</dt>
+                  <dd className="mt-0.5 text-sm text-slate-900">{selectedExpense.recordedBy}</dd>
+                </div>
+              </dl>
 
               {/* Recipient Information */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Information du Bénéficiaire
-                </h4>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nom
-                      </label>
-                      <p className="text-sm text-gray-900">
-                        {selectedExpense.recipientName}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Téléphone
-                      </label>
-                      <p className="text-sm text-gray-900">
-                        {selectedExpense.recipientPhone}
-                      </p>
-                    </div>
+                <h4 className="ui-kicker mb-2 flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Bénéficiaire</h4>
+                <dl className="ui-muted-panel grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="min-w-0">
+                    <dt className="text-xs font-medium text-slate-500">Nom</dt>
+                    <dd className="mt-0.5 break-words text-sm text-slate-900">{selectedExpense.recipientName}</dd>
                   </div>
-                </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-500">Téléphone</dt>
+                    <dd className="mt-0.5 text-sm tabular-nums text-slate-900">{selectedExpense.recipientPhone}</dd>
+                  </div>
+                </dl>
               </div>
 
               {/* Notes */}
               {selectedExpense.notes && (
                 <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-3">
-                    Notes supplémentaires
-                  </h4>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm text-gray-900 whitespace-pre-line">
-                      {selectedExpense.notes}
-                    </p>
-                  </div>
+                  <h4 className="ui-kicker mb-2">Notes supplémentaires</h4>
+                  <p className="ui-muted-panel whitespace-pre-line text-sm text-slate-900">{selectedExpense.notes}</p>
                 </div>
               )}
+            </div>
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-4">
-                {/* History button */}
-                <button
-                  onClick={() => fetchExpenseHistory(selectedExpense._id)}
-                  className="flex-1 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <History className="w-4 h-4" />
-                  Historique
+            {/* Actions */}
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={() => setShowModal(false)} className="ui-btn ui-btn-ghost">
+                Fermer
+              </button>
+              <button type="button" onClick={() => fetchExpenseHistory(selectedExpense._id)} className="ui-btn ui-btn-secondary">
+                <History />
+                Historique
+              </button>
+              {canDeleteExpense(selectedExpense) && (
+                <button type="button" onClick={() => openDeleteModal(selectedExpense)} className="ui-btn ui-btn-danger-outline">
+                  <Trash2 />
+                  Supprimer
                 </button>
-                
-                {selectedExpense.status === "validated" && (
-                  <button
-                    onClick={() => printExpenseReceipt(selectedExpense)}
-                    className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Printer className="w-4 h-4" />
-                    Imprimer Reçu
-                  </button>
-                )}
-                {userPermissions.canValidate &&
-                  selectedExpense.status !== "validated" &&
-                  selectedExpense.status !== "rejected" && (
-                    <button
-                      onClick={() => openValidationModal(selectedExpense)}
-                      className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Valider/Rejeter
-                    </button>
-                  )}
-                {canEditExpense(selectedExpense) && (
-                  <button
-                    onClick={() => openEditModal(selectedExpense)}
-                    className="flex-1 bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Edit className="w-4 h-4" />
-                    Modifier
-                  </button>
-                )}
-                {canDeleteExpense(selectedExpense) && (
-                  <button
-                    onClick={() => openDeleteModal(selectedExpense)}
-                    className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Supprimer
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Fermer
+              )}
+              {canEditExpense(selectedExpense) && (
+                <button type="button" onClick={() => openEditModal(selectedExpense)} className="ui-btn ui-btn-secondary">
+                  <Edit />
+                  Modifier
                 </button>
-              </div>
+              )}
+              {selectedExpense.status === "validated" && (
+                <button type="button" onClick={() => printExpenseReceipt(selectedExpense)} className="ui-btn ui-btn-primary">
+                  <Printer />
+                  Imprimer le reçu
+                </button>
+              )}
+              {userPermissions.canValidate &&
+                selectedExpense.status !== "validated" &&
+                selectedExpense.status !== "rejected" && (
+                  <button type="button" onClick={() => openValidationModal(selectedExpense)} className="ui-btn ui-btn-primary">
+                    <CheckCircle />
+                    Valider / Rejeter
+                  </button>
+                )}
             </div>
           </div>
         </div>
@@ -1737,84 +1472,59 @@ export default function SortieHistory() {
 
       {/* Validation Modal */}
       {showValidationModal && validatingExpense && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Validation de Dépense
-              </h3>
-              <button
-                onClick={closeValidationModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="validate-expense-title">
+          <div className="ui-dialog max-w-md">
+            <div className="ui-dialog-header">
+              <h3 id="validate-expense-title" className="ui-dialog-title">Validation de la dépense</h3>
+              <button type="button" onClick={closeValidationModal} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6">
-              <div className="text-center mb-6">
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
-                  <DollarSign className="h-6 w-6 text-blue-600" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Confirmer la validation
-                </h3>
-                <p className="text-sm text-gray-500">
-                  Voulez-vous valider ou rejeter cette dépense ?
-                </p>
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm font-medium text-gray-900">
-                    {validatingExpense.reason}
-                  </p>
-                  <p className="text-lg font-bold text-gray-900 mt-1">
-                    {formatCurrency(validatingExpense.amount)}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Pour: {validatingExpense.recipientName}
-                  </p>
-                </div>
+            <div className="ui-dialog-body space-y-4">
+              <p className="text-sm text-slate-600">Voulez-vous valider ou rejeter cette dépense ?</p>
+              <div className="ui-muted-panel">
+                <p className="break-words text-sm font-medium text-slate-900">{validatingExpense.reason}</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{formatCurrency(validatingExpense.amount)}</p>
+                <p className="mt-1 text-sm text-slate-600">Pour : {validatingExpense.recipientName}</p>
               </div>
+              <dl className="space-y-1.5 text-xs text-slate-600">
+                <div><dt className="inline font-semibold text-slate-800">Rejeter : </dt><dd className="inline">la dépense sera supprimée dans 3 secondes.</dd></div>
+                <div><dt className="inline font-semibold text-slate-800">Valider : </dt><dd className="inline">le reçu deviendra disponible pour impression.</dd></div>
+              </dl>
+            </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => validateExpense(false)}
-                  disabled={
-                    actionLoading === `validating-${validatingExpense._id}`
-                  }
-                  className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  {actionLoading === `validating-${validatingExpense._id}` ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <XCircle className="w-4 h-4" />
-                  )}
-                  Rejeter
-                </button>
-                <button
-                  onClick={() => validateExpense(true)}
-                  disabled={
-                    actionLoading === `validating-${validatingExpense._id}`
-                  }
-                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  {actionLoading === `validating-${validatingExpense._id}` ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <CheckCircle className="w-4 h-4" />
-                  )}
-                  Valider
-                </button>
-              </div>
-
-              <div className="mt-4 text-center">
-                <p className="text-xs text-gray-500">
-                  <strong>Rejeter:</strong> La dépense sera supprimée dans 3
-                  secondes
-                  <br />
-                  <strong>Valider:</strong> Le reçu deviendra disponible pour
-                  impression
-                </p>
-              </div>
+            <div className="ui-dialog-footer">
+              <button
+                type="button"
+                onClick={() => validateExpense(false)}
+                disabled={
+                  actionLoading === `validating-${validatingExpense._id}`
+                }
+                className="ui-btn ui-btn-danger-outline"
+              >
+                {actionLoading === `validating-${validatingExpense._id}` ? (
+                  <RefreshCw className="animate-spin" />
+                ) : (
+                  <XCircle />
+                )}
+                Rejeter
+              </button>
+              <button
+                type="button"
+                onClick={() => validateExpense(true)}
+                disabled={
+                  actionLoading === `validating-${validatingExpense._id}`
+                }
+                className="ui-btn ui-btn-success"
+              >
+                {actionLoading === `validating-${validatingExpense._id}` ? (
+                  <RefreshCw className="animate-spin" />
+                ) : (
+                  <CheckCircle />
+                )}
+                Valider
+              </button>
             </div>
           </div>
         </div>
@@ -1822,180 +1532,155 @@ export default function SortieHistory() {
 
       {/* Edit Expense Modal */}
       {showEditModal && editingExpense && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Modifier la Dépense
-              </h3>
-              <button
-                onClick={closeEditModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-expense-title">
+          <div className="ui-dialog max-w-2xl">
+            <div className="ui-dialog-header">
+              <div className="min-w-0">
+                <h3 id="edit-expense-title" className="ui-dialog-title">Modifier la dépense</h3>
+                <p className="mt-0.5 truncate text-sm text-slate-500">{editingExpense.expenseId}</p>
+              </div>
+              <button type="button" onClick={closeEditModal} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="ui-dialog-body space-y-4">
               {requiresUpdateReason(editingExpense) && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-yellow-600" />
-                    <span className="text-sm font-medium text-yellow-800">
-                      Modification d'une dépense {editingExpense.status}
-                    </span>
-                  </div>
-                  <p className="text-sm text-yellow-700 mt-2">
-                    Vous modifiez une dépense {editingExpense.status}. Veuillez
-                    fournir une raison pour cette modification.
-                  </p>
-                </div>
+                <Alert tone="warning" title={`Modification d'une dépense ${expenseStatusLabel(editingExpense.status).toLowerCase()}`}>
+                  Veuillez fournir une raison pour cette modification.
+                </Alert>
               )}
 
-              <div className="space-y-4">
+              <div>
+                <label htmlFor="edit-expense-reason" className="ui-label">Raison de la dépense <span className="ui-required">*</span></label>
+                <input
+                  id="edit-expense-reason"
+                  type="text"
+                  value={editForm.reason}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, reason: e.target.value })
+                  }
+                  className="ui-input"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Raison de la dépense *
-                  </label>
+                  <label htmlFor="edit-expense-recipient" className="ui-label">Nom du bénéficiaire <span className="ui-required">*</span></label>
                   <input
+                    id="edit-expense-recipient"
                     type="text"
-                    value={editForm.reason}
+                    value={editForm.recipientName}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, reason: e.target.value })
+                      setEditForm({ ...editForm, recipientName: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="ui-input"
                     required
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nom du bénéficiaire *
-                    </label>
-                    <input
-                      type="text"
-                      value={editForm.recipientName}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, recipientName: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Téléphone du bénéficiaire *
-                    </label>
-                    <input
-                      type="tel"
-                      value={editForm.recipientPhone}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, recipientPhone: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Montant (USD) *
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={editForm.amount}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, amount: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Méthode de paiement *
-                    </label>
-                    <select
-                      value={editForm.paymentMethod}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, paymentMethod: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="cash">Espèces</option>
-                      <option value="card">Carte</option>
-                      <option value="bank">Virement bancaire</option>
-                      <option value="mpesa">M-Pesa</option>
-                      <option value="other">Autre</option>
-                    </select>
-                  </div>
-                </div>
-
-                {requiresUpdateReason(editingExpense) && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Raison de la modification *
-                    </label>
-                    <textarea
-                      value={editForm.updateReason}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, updateReason: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      rows={3}
-                      placeholder="Expliquez pourquoi vous modifiez cette dépense..."
-                      required
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Cette raison sera enregistrée dans l'historique de la
-                      dépense.
-                    </p>
-                  </div>
-                )}
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes supplémentaires (optionnel)
-                  </label>
-                  <textarea
-                    value={editForm.notes}
+                  <label htmlFor="edit-expense-phone" className="ui-label">Téléphone du bénéficiaire <span className="ui-required">*</span></label>
+                  <input
+                    id="edit-expense-phone"
+                    type="tel"
+                    value={editForm.recipientPhone}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, notes: e.target.value })
+                      setEditForm({ ...editForm, recipientPhone: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
-                    placeholder="Ajoutez des notes supplémentaires..."
+                    className="ui-input"
+                    inputMode="tel"
+                    required
                   />
                 </div>
+
+                <div>
+                  <label htmlFor="edit-expense-amount" className="ui-label">Montant (USD) <span className="ui-required">*</span></label>
+                  <input
+                    id="edit-expense-amount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editForm.amount}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, amount: e.target.value })
+                    }
+                    className="ui-input tabular-nums"
+                    inputMode="decimal"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="edit-expense-payment" className="ui-label">Méthode de paiement <span className="ui-required">*</span></label>
+                  <select
+                    id="edit-expense-payment"
+                    value={editForm.paymentMethod}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, paymentMethod: e.target.value })
+                    }
+                    className="ui-input"
+                  >
+                    <option value="cash">Espèces</option>
+                    <option value="card">Carte</option>
+                    <option value="bank">Virement bancaire</option>
+                    <option value="mpesa">M-Pesa</option>
+                    <option value="other">Autre</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={handleEditExpense}
-                  disabled={actionLoading === `editing-${editingExpense._id}`}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  {actionLoading === `editing-${editingExpense._id}` ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4" />
-                  )}
-                  Enregistrer les modifications
-                </button>
-                <button
-                  onClick={closeEditModal}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Annuler
-                </button>
+              {requiresUpdateReason(editingExpense) && (
+                <div>
+                  <label htmlFor="edit-expense-update-reason" className="ui-label">Raison de la modification <span className="ui-required">*</span></label>
+                  <textarea
+                    id="edit-expense-update-reason"
+                    value={editForm.updateReason}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, updateReason: e.target.value })
+                    }
+                    className="ui-input"
+                    rows={3}
+                    placeholder="Expliquez pourquoi vous modifiez cette dépense…"
+                    required
+                  />
+                  <p className="ui-help">Cette raison sera enregistrée dans l'historique de la dépense.</p>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="edit-expense-notes" className="ui-label">Notes supplémentaires <span className="font-normal text-slate-500">(optionnel)</span></label>
+                <textarea
+                  id="edit-expense-notes"
+                  value={editForm.notes}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, notes: e.target.value })
+                  }
+                  className="ui-input"
+                  rows={3}
+                  placeholder="Ajoutez des notes supplémentaires…"
+                />
               </div>
+            </div>
+
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={closeEditModal} className="ui-btn ui-btn-ghost">
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleEditExpense}
+                disabled={actionLoading === `editing-${editingExpense._id}`}
+                className="ui-btn ui-btn-primary"
+              >
+                {actionLoading === `editing-${editingExpense._id}` ? (
+                  <RefreshCw className="animate-spin" />
+                ) : (
+                  <Save />
+                )}
+                Enregistrer les modifications
+              </button>
             </div>
           </div>
         </div>
@@ -2003,122 +1688,70 @@ export default function SortieHistory() {
 
       {/* Delete Expense Modal */}
       {showDeleteModal && deletingExpense && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Supprimer la Dépense
-              </h3>
-              <button
-                onClick={closeDeleteModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
+        <div className="ui-dialog-overlay" role="alertdialog" aria-modal="true" aria-labelledby="delete-expense-title">
+          <div className="ui-dialog max-w-md">
+            <div className="ui-dialog-header">
+              <h3 id="delete-expense-title" className="ui-dialog-title">Supprimer la dépense</h3>
+              <button type="button" onClick={closeDeleteModal} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6">
-              <div className="text-center mb-6">
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                  <Trash2 className="h-6 w-6 text-red-600" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Confirmer la suppression
-                </h3>
-                <p className="text-sm text-gray-500">
-                  Êtes-vous sûr de vouloir supprimer cette dépense ?
+            <div className="ui-dialog-body space-y-4">
+              <p className="text-sm text-slate-600">Êtes-vous sûr de vouloir supprimer cette dépense ? Cette action ne peut pas être annulée.</p>
+              <div className="ui-muted-panel">
+                <p className="break-words text-sm font-medium text-slate-900">{deletingExpense.reason}</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{formatCurrency(deletingExpense.amount)}</p>
+                <p className="mt-1 text-sm text-slate-600">Pour : {deletingExpense.recipientName}</p>
+                <p className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+                  Statut :
+                  <span className={`ui-badge ${expenseStatusTone(deletingExpense.status)}`}>{expenseStatusLabel(deletingExpense.status)}</span>
                 </p>
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm font-medium text-gray-900">
-                    {deletingExpense.reason}
-                  </p>
-                  <p className="text-lg font-bold text-gray-900 mt-1">
-                    {formatCurrency(deletingExpense.amount)}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Pour: {deletingExpense.recipientName}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Statut:{" "}
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                        deletingExpense.status === "validated"
-                          ? "bg-green-100 text-green-800"
-                          : deletingExpense.status === "rejected"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-yellow-100 text-yellow-800"
-                      }`}
-                    >
-                      {deletingExpense.status === "validated"
-                        ? "Validé"
-                        : deletingExpense.status === "rejected"
-                        ? "Rejeté"
-                        : "En attente"}
-                    </span>
-                  </p>
-                </div>
+              </div>
 
-                {deletingExpense.status !== "pending" && (
-                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-yellow-600" />
-                      <span className="text-sm font-medium text-yellow-800">
-                        Attention: Dépense {deletingExpense.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-yellow-700 mt-1">
-                      Vous êtes sur le point de supprimer une dépense{" "}
-                      {deletingExpense.status}. Cette action est permanente et
-                      enverra une notification aux administrateurs.
-                    </p>
+              {deletingExpense.status !== "pending" && (
+                <Alert tone="warning" title={`Attention : dépense ${expenseStatusLabel(deletingExpense.status).toLowerCase()}`}>
+                  Cette action est permanente et enverra une notification aux administrateurs.
+                </Alert>
+              )}
+
+              {userPermissions.isAdmin &&
+                deletingExpense.status !== "pending" && (
+                  <div>
+                    <label htmlFor="delete-expense-reason" className="ui-label">Raison de la suppression <span className="font-normal text-slate-500">(optionnel)</span></label>
+                    <textarea
+                      id="delete-expense-reason"
+                      value={deleteReason}
+                      onChange={(e) => setDeleteReason(e.target.value)}
+                      className="ui-input"
+                      rows={2}
+                      placeholder="Expliquez pourquoi vous supprimez cette dépense…"
+                    />
                   </div>
                 )}
 
-                {userPermissions.isAdmin &&
-                  deletingExpense.status !== "pending" && (
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Raison de la suppression (optionnel)
-                      </label>
-                      <textarea
-                        value={deleteReason}
-                        onChange={(e) => setDeleteReason(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        rows={2}
-                        placeholder="Expliquez pourquoi vous supprimez cette dépense..."
-                      />
-                    </div>
-                  )}
-              </div>
+              {deletingExpense.status === "validated" && (
+                <p className="text-xs text-slate-500">Les administrateurs seront notifiés par email.</p>
+              )}
+            </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={handleDeleteExpense}
-                  disabled={actionLoading === `deleting-${deletingExpense._id}`}
-                  className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  {actionLoading === `deleting-${deletingExpense._id}` ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4" />
-                  )}
-                  Supprimer définitivement
-                </button>
-                <button
-                  onClick={closeDeleteModal}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Annuler
-                </button>
-              </div>
-
-              <div className="mt-4 text-center">
-                <p className="text-xs text-gray-500">
-                  <strong>Note:</strong> Cette action ne peut pas être annulée.
-                  {deletingExpense.status === "validated" &&
-                    " Les administrateurs seront notifiés par email."}
-                </p>
-              </div>
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={closeDeleteModal} className="ui-btn ui-btn-ghost">
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteExpense}
+                disabled={actionLoading === `deleting-${deletingExpense._id}`}
+                className="ui-btn ui-btn-danger"
+              >
+                {actionLoading === `deleting-${deletingExpense._id}` ? (
+                  <RefreshCw className="animate-spin" />
+                ) : (
+                  <Trash2 />
+                )}
+                Supprimer définitivement
+              </button>
             </div>
           </div>
         </div>
@@ -2126,94 +1759,55 @@ export default function SortieHistory() {
 
       {/* Expense History Modal */}
       {showHistoryModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Historique de la Dépense
-              </h3>
-              <button
-                onClick={closeHistoryModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
+        <div className="ui-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="expense-history-title">
+          <div className="ui-dialog max-w-2xl">
+            <div className="ui-dialog-header">
+              <h3 id="expense-history-title" className="ui-dialog-title">Historique de la dépense</h3>
+              <button type="button" onClick={closeHistoryModal} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
+                <X />
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="ui-dialog-body">
               {historyLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-500 mt-2">Chargement de l'historique...</p>
-                </div>
+                <LoadingState label="Chargement de l'historique…" />
               ) : expenseHistory.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Aucun historique disponible</p>
-                  <p className="text-sm">pour cette dépense</p>
-                </div>
+                <EmptyState icon={History} title="Aucun historique disponible" description="Aucune modification n'a été enregistrée pour cette dépense." />
               ) : (
                 <div className="space-y-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm font-medium text-gray-900">
-                      Dépense: {selectedExpense?.expenseId || "N/A"}
-                    </p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Statut actuel:{" "}
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                          selectedExpense?.status === "validated"
-                            ? "bg-green-100 text-green-800"
-                            : selectedExpense?.status === "rejected"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
-                        {selectedExpense?.status === "validated"
-                          ? "Validé"
-                          : selectedExpense?.status === "rejected"
-                          ? "Rejeté"
-                          : "En attente"}
-                      </span>
-                    </p>
+                  <div className="ui-muted-panel flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span className="font-medium text-slate-900">Dépense : {selectedExpense?.expenseId || "N/A"}</span>
+                    <span className="flex items-center gap-2 text-slate-600">
+                      Statut actuel :
+                      <span className={`ui-badge ${expenseStatusTone(selectedExpense?.status)}`}>{expenseStatusLabel(selectedExpense?.status)}</span>
+                    </span>
                   </div>
 
-                  <div className="space-y-3">
-                    <h4 className="text-md font-medium text-gray-900">
-                      Journal des modifications
-                    </h4>
-                    <div className="space-y-3">
+                  <div>
+                    <h4 className="ui-kicker mb-2">Journal des modifications</h4>
+                    <ol className="space-y-3 border-l border-slate-200 pl-4">
                       {expenseHistory.map((item, index) => (
-                        <div
-                          key={index}
-                          className="border-l-4 border-blue-500 pl-4 py-2"
-                        >
-                          <div className="flex justify-between items-start">
-                            <p className="text-sm text-gray-900 font-medium">
-                              {item.action}
-                            </p>
-                            <span className="text-xs text-gray-500">
-                              {item.formattedDate}
-                            </span>
+                        <li key={index} className="relative">
+                          <span className="absolute -left-[1.3rem] top-1.5 h-2 w-2 rounded-full bg-blue-600 ring-4 ring-white" aria-hidden="true" />
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <p className="text-sm font-medium text-slate-900">{item.action}</p>
+                            <span className="text-xs text-slate-500">{item.formattedDate}</span>
                           </div>
-                          <p className="text-xs text-gray-600 mt-1">
+                          <p className="mt-0.5 text-xs tabular-nums text-slate-500">
                             {new Date(item.timestamp).toLocaleTimeString("fr-FR")}
                           </p>
-                        </div>
+                        </li>
                       ))}
-                    </div>
+                    </ol>
                   </div>
                 </div>
               )}
+            </div>
 
-              <div className="flex gap-3 pt-6">
-                <button
-                  onClick={closeHistoryModal}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
+            <div className="ui-dialog-footer">
+              <button type="button" onClick={closeHistoryModal} className="ui-btn ui-btn-secondary">
+                Fermer
+              </button>
             </div>
           </div>
         </div>
