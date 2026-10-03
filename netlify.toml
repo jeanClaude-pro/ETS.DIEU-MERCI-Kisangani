@@ -29,3 +29,18 @@ Cache-Control = "public, max-age=0, must-revalidate"
 for = "/assets/*"
 [headers.values]
 Cache-Control = "public, max-age=31536000, immutable"
+
+# Security headers for every page. Helmet on the API does not cover these
+# pages, so they are set here. The CSP starts deliberately permissive on
+# connect-src (any https: API) — tighten it to the exact API origin, e.g.
+# "connect-src 'self' https://your-api.onrender.com", once confirmed.
+# style-src needs 'unsafe-inline' for React inline styles and the print window.
+[[headers]]
+for = "/*"
+[headers.values]
+Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https:; worker-src 'self'; manifest-src 'self'; media-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+X-Content-Type-Options = "nosniff"
+X-Frame-Options = "DENY"
+Referrer-Policy = "strict-origin-when-cross-origin"
+Permissions-Policy = "camera=(self), microphone=(), geolocation=(), payment=(), usb=()"
+Strict-Transport-Security = "max-age=31536000; includeSubDomains"

@@ -22,15 +22,30 @@ import {
 } from "../../services/offlinePinService";
 
 type Mode = "login" | "register" | "offline-pin";
-const REMEMBERED_LOGIN_KEY = "erp.rememberedLoginEmail";
+// Older builds remembered the last email here. Terminals are shared, so the
+// login form never stores or pre-fills credentials anymore; the stale key
+// is deleted on load.
+const LEGACY_REMEMBERED_LOGIN_KEY = "erp.rememberedLoginEmail";
+
+// The login password must be typed by hand. Browser/password-manager autofill
+// arrives as a plain `input` event (no inputType) or as `insertReplacementText`;
+// paste and drag-and-drop are refused too.
+const REJECTED_INPUT_TYPES = new Set(["insertReplacementText", "insertFromPaste", "insertFromDrop", "insertFromYank"]);
+const isTypedEdit = (nativeEvent: Event) => {
+  const inputType = (nativeEvent as InputEvent).inputType;
+  return Boolean(inputType) && !REJECTED_INPUT_TYPES.has(inputType);
+};
 
 const LoginPage = () => {
   const [mode, setMode] = React.useState<Mode>("login");
   const [username, setUsername] = React.useState("");
-  const [email, setEmail] = React.useState(() => localStorage.getItem(REMEMBERED_LOGIN_KEY) || "");
+  const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
+  // The password field stays read-only until the person touches it, so the
+  // browser cannot pre-fill it when the page loads.
+  const [passwordUnlocked, setPasswordUnlocked] = React.useState(false);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
@@ -42,6 +57,10 @@ const LoginPage = () => {
   const { setAuth, setOfflineSession } = useAuth();
   const connectivity = useConnectivity();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    try { localStorage.removeItem(LEGACY_REMEMBERED_LOGIN_KEY); } catch { /* storage unavailable */ }
+  }, []);
 
   React.useEffect(() => {
     void listOfflineAuthorizedUsers().then((candidates) => {
@@ -86,6 +105,14 @@ const LoginPage = () => {
 
     try {
       if (mode === "register") {
+        if (password.length < 8) {
+          setError("Le mot de passe doit contenir au moins 8 caractères.");
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError("Les mots de passe ne correspondent pas.");
+          return;
+        }
         const result = await registerApi({ username, email, password });
         toast.success(result.message || "Inscription réussie ! Un administrateur doit approuver votre compte.");
         setPassword("");
@@ -94,9 +121,9 @@ const LoginPage = () => {
         setMode("login");
       } else {
         const { user, token } = await loginApi({ email, password });
-        localStorage.setItem(REMEMBERED_LOGIN_KEY, email.trim());
         setAuth({ token, user });
         setPassword("");
+        setEmail("");
         toast.success("Connexion réussie !");
         navigate("/");
       }
@@ -252,16 +279,30 @@ const LoginPage = () => {
                     <Lock className="ui-field-icon" aria-hidden="true" />
                     <input
                       id="password"
-                      name="password"
+                      // No "password" name in login mode: it is one of the
+                      // hints browsers use to pair the field with a saved login.
+                      name={mode === "login" ? undefined : "password"}
                       type={showPassword ? "text" : "password"}
                       placeholder="Votre mot de passe"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        // Rejected edits are reverted by React to the current state.
+                        if (mode === "login" && !isTypedEdit(e.nativeEvent)) return;
+                        setPassword(e.target.value);
+                      }}
+                      readOnly={mode === "login" && !passwordUnlocked}
+                      // Unlock on pointer down (before focus) so mobile keyboards
+                      // still open on the first tap; onFocus covers keyboard users.
+                      onPointerDown={() => setPasswordUnlocked(true)}
+                      onFocus={() => setPasswordUnlocked(true)}
+                      onPaste={mode === "login" ? (e) => e.preventDefault() : undefined}
+                      onDrop={mode === "login" ? (e) => e.preventDefault() : undefined}
                       className="ui-input ui-input-icon pr-12"
-                      // The password is never persisted by the app; these hints
-                      // also stop keyboards/spellcheck from learning it while it
-                      // is revealed as plain text.
-                      autoComplete={mode === "login" ? "off" : "new-password"}
+                      // The password is never persisted by the app. Browsers ignore
+                      // "off" on password fields but do not fill saved logins into
+                      // "new-password" ones; these hints also stop keyboards and
+                      // spellcheck from learning it while it is revealed.
+                      autoComplete="new-password"
                       autoCapitalize="none"
                       autoCorrect="off"
                       spellCheck={false}

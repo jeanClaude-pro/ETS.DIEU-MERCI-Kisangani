@@ -40,6 +40,8 @@ import {
   type BusinessSale,
 } from "../../services/localBusinessReadModel";
 import { localReportRange } from "../../services/localReportService";
+import { csvRow } from "../../utils/csv";
+import { canEditSale } from "../../utils/salePermissions";
 
 interface SaleItem {
   productId: string;
@@ -760,50 +762,52 @@ export default function SalesHistory() {
         'Region'
       ];
 
+      // Every cell goes through csvRow: quotes are escaped and values that
+      // look like spreadsheet formulas (=, +, -, @) are neutralised.
       const summaryRows = dataToExport.map(sale => {
         const latestEdit = sale.editHistory && sale.editHistory.length > 0
           ? sale.editHistory[sale.editHistory.length - 1]
           : null;
         const regionCodes = getSaleRegionCodes(sale);
 
-        return [
-          `"${sale.saleId}"`,
-          `"${sale.customer.name}"`,
-          `"${sale.customer.phone}"`,
-          `"${sale.customer.email || ''}"`,
-          `"${sale.salesPerson || 'Not specified'}"`,
+        return csvRow([
+          sale.saleId,
+          sale.customer.name,
+          sale.customer.phone,
+          sale.customer.email || '',
+          sale.salesPerson || 'Not specified',
           sale.items.length,
-          `"${regionCodes.length > 1 ? 'Mixte' : regionCodes[0] || ''}"`,
+          regionCodes.length > 1 ? 'Mixte' : regionCodes[0] || '',
           sale.subtotal.toFixed(2),
           sale.total.toFixed(2),
-          `"${sale.paymentMethod}"`,
-          `"${sale.status}"`,
-          `"${formatDate(sale.createdAt)}"`,
-          sale.editedAt ? `"${formatDate(sale.editedAt)}"` : '',
-          latestEdit ? `"${latestEdit.reason}"` : '',
-          latestEdit ? `"${latestEdit.editedBy}"` : ''
-        ].join(',');
+          sale.paymentMethod,
+          sale.status,
+          formatDate(sale.createdAt),
+          sale.editedAt ? formatDate(sale.editedAt) : '',
+          latestEdit ? latestEdit.reason : '',
+          latestEdit ? latestEdit.editedBy : ''
+        ]);
       });
 
       const itemRows = dataToExport.flatMap(sale =>
-        sale.items.map(item => [
-          `"${sale.saleId}"`,
-          `"${item.name}"`,
-          `"${item.productId}"`,
+        sale.items.map(item => csvRow([
+          sale.saleId,
+          item.name,
+          item.productId,
           item.quantity,
           item.price.toFixed(2),
           item.total.toFixed(2),
-          `"${item.regionCode || ''}"`
-        ].join(','))
+          item.regionCode || ''
+        ]))
       );
 
       const summaryContent = [
         '=== SALES SUMMARY ===',
-        summaryHeaders.join(','),
+        csvRow(summaryHeaders),
         ...summaryRows,
         '',
         '=== ITEMS DETAIL ===',
-        itemHeaders.join(','),
+        csvRow(itemHeaders),
         ...itemRows
       ].join('\n');
 
@@ -1611,6 +1615,7 @@ export default function SalesHistory() {
                         </button>
                         {!showEditedSales && (
                           <>
+                            {canEditSale(currentUser?.role, sale) && (
                             <button
                               type="button"
                               onClick={() => openEditModal(sale)}
@@ -1625,6 +1630,7 @@ export default function SalesHistory() {
                             >
                               <Edit />
                             </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => generateReceiptPDF(sale)}
@@ -1791,6 +1797,7 @@ export default function SalesHistory() {
               <button type="button" onClick={() => setShowModal(false)} className="ui-btn ui-btn-ghost">
                 Fermer
               </button>
+              {canEditSale(currentUser?.role, selectedSale) && (
               <button
                 type="button"
                 onClick={() => openEditModal(selectedSale)}
@@ -1803,6 +1810,7 @@ export default function SalesHistory() {
                 <Edit />
                 Modifier
               </button>
+              )}
               <button type="button" onClick={() => generateReceiptPDF(selectedSale)} className="ui-btn ui-btn-secondary">
                 <Download />
                 PDF + souche

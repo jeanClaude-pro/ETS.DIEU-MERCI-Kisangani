@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { Alert, EmptyState, LoadingState, MetricCard, PageHeader } from "../components/ui";
+import { useAuth } from "../hooks/useAuth";
 import {
   normalizeSaleReceipt,
   printCommittedSaleAfterDelay,
@@ -98,7 +99,9 @@ export default function ReservationManagement() {
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('all');
   const [filterRegion, setFilterRegion] = useState<'' | 'Bbbb' | 'Cnnn'>('');
-  const [userRole, setUserRole] = useState<string>('');
+  // The signed-in user's real role (UI only — the server enforces it).
+  const { activeUser } = useAuth();
+  const userRole = activeUser?.role || '';
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({ totalRecords: 0, totalPages: 1, currentPage: 1, limit: 50 });
   const [reservationSummary, setReservationSummary] = useState({ totalReservations: 0, pending: 0, completed: 0, itemCount: 0, totalValue: 0 });
@@ -119,9 +122,6 @@ export default function ReservationManagement() {
 
   useEffect(() => {
     fetchProducts();
-    // Get user role from localStorage or auth context
-    const role = localStorage.getItem('userRole') || 'admin'; // Default to admin for testing
-    setUserRole(role);
   }, []);
 
   useEffect(() => {
@@ -649,9 +649,8 @@ export default function ReservationManagement() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
-        body: JSON.stringify({
-          completedBy: localStorage.getItem("username") || "Admin"
-        }),
+        // completedBy is recorded server-side from the signed-in user.
+        body: JSON.stringify({}),
       });
 
       if (response.ok) {

@@ -14,6 +14,7 @@ import AdaptiveNavigation from "./components/AdaptiveNavigation";
 import AppHeader from "./components/AppHeader";
 import ResponsiveTableEnhancer from "./components/ResponsiveTableEnhancer";
 import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
+import IdleLogout from "./components/IdleLogout";
 import Products from "./pages/products/products";
 import SalesHistory from "./pages/history/SalesHistory";
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -274,6 +275,7 @@ export default function App() {
           <Router>
             <ToastContainer position="top-right" autoClose={3000} newestOnTop closeButton hideProgressBar />
             <PwaUpdatePrompt />
+            <IdleLogout />
             <AppLayout />
           </Router>
         </SidebarProvider>

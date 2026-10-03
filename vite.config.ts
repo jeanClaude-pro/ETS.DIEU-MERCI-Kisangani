@@ -1,10 +1,28 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// A production build must never talk to the API over plain http (tokens
+// and sales would travel unencrypted). Local addresses stay allowed so a
+// developer can still build against http://localhost.
+function assertSecureApiUrl(mode: string) {
+  if (mode !== 'production') return
+  const apiUrl = loadEnv(mode, process.cwd(), 'VITE_').VITE_API_URL || ''
+  const isLocal = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(apiUrl)
+  if (/^http:\/\//i.test(apiUrl) && !isLocal) {
+    throw new Error(`VITE_API_URL must use https:// in production builds (got ${apiUrl}).`)
+  }
+}
+
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  assertSecureApiUrl(mode)
+  return {
+  build: {
+    // Never publish source maps for the production bundle.
+    sourcemap: false,
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -51,4 +69,5 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
+  }
 })
