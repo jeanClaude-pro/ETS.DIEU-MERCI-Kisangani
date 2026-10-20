@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { csvRow, escapeCsvCell } from "./csv.ts";
 import { canEditSale } from "./salePermissions.ts";
-import { idleState, idleTimeoutMs, latestActivity, secondsUntilLogout } from "../services/idleTimer.ts";
+import { idleState, idleTimeoutMs, initialActivity, latestActivity, secondsUntilLogout } from "../services/idleTimer.ts";
 
 test("escapeCsvCell: formula-looking values are neutralised", () => {
   assert.equal(escapeCsvCell("=1+1"), `"'=1+1"`);
@@ -33,25 +33,33 @@ test("canEditSale mirrors the server rules", () => {
   assert.equal(canEditSale("admin", sale), true);
   assert.equal(canEditSale("manager", sale), false);
   assert.equal(canEditSale("staff", sale), false);
-  assert.equal(canEditSale("manager", { type: "reservation", status: "pending" }), true);
-  assert.equal(canEditSale("manager", { type: "reservation", status: "completed" }), false);
+  // Historical reservation records follow the sale rule (admin only).
+  assert.equal(canEditSale("manager", { type: "reservation", status: "pending" }), false);
   assert.equal(canEditSale("admin", { type: "sale", status: "voided" }), false);
 });
 
-test("idle timer: warns in the last minute and expires at the timeout", () => {
-  const timeout = idleTimeoutMs(20);
-  assert.equal(timeout, 20 * 60_000);
-  assert.equal(idleState(0, 10 * 60_000, timeout), "active");
-  assert.equal(idleState(0, 19.5 * 60_000, timeout), "warning");
-  assert.equal(idleState(0, 20 * 60_000, timeout), "expired");
-  assert.equal(secondsUntilLogout(0, 19.5 * 60_000, timeout), 30);
+test("idle timer: 4 minutes without action signs out, warning from 3 minutes", () => {
+  const timeout = idleTimeoutMs(undefined);
+  assert.equal(timeout, 4 * 60_000);
+  assert.equal(idleState(0, 2.9 * 60_000, timeout), "active");
+  assert.equal(idleState(0, 3 * 60_000, timeout), "warning");
+  assert.equal(idleState(0, 4 * 60_000, timeout), "expired");
+  assert.equal(secondsUntilLogout(0, 3.5 * 60_000, timeout), 30);
 });
 
-test("idle timer: invalid configuration falls back to 20 minutes", () => {
-  assert.equal(idleTimeoutMs(undefined), 20 * 60_000);
-  assert.equal(idleTimeoutMs("0"), 20 * 60_000);
-  assert.equal(idleTimeoutMs("abc"), 20 * 60_000);
-  assert.equal(idleTimeoutMs("30"), 30 * 60_000);
+test("idle timer: configuration may shorten the 4 minutes, never lengthen them", () => {
+  assert.equal(idleTimeoutMs("2"), 2 * 60_000);
+  assert.equal(idleTimeoutMs("20"), 4 * 60_000);
+  assert.equal(idleTimeoutMs("0"), 4 * 60_000);
+  assert.equal(idleTimeoutMs("abc"), 4 * 60_000);
+});
+
+test("idle timer: reopening the app resumes from the last recorded action", () => {
+  assert.equal(initialActivity("5000", 900_000), 5000);
+  assert.equal(initialActivity(null, 900_000), 900_000);
+  assert.equal(initialActivity("garbage", 900_000), 900_000);
+  // A clock that moved backwards never yields an activity in the future.
+  assert.equal(initialActivity("999999999", 900_000), 900_000);
 });
 
 test("idle timer: activity in another tab keeps this tab signed in", () => {

@@ -10,6 +10,7 @@ import {
 import { useConnectivity } from "../context/ConnectivityContext";
 import { canSellOffline } from "../services/authorizationService";
 import { generateBarcodeToken, formatReceiptNumber, generateClientSaleId } from "../utils/barcodeId.ts";
+import { saleCodeFor } from "../utils/saleCode.ts";
 import { offlineDb, commitOfflineSale, type OfflineSale } from "../lib/offlineDb";
 import { refreshFromServer, subscribeLocal } from "../services/offlineProductSnapshot";
 import { useOfflineReadiness } from "../hooks/useOfflineReadiness";
@@ -522,6 +523,8 @@ export default function NewSale() {
     // state.
     const receipt = normalizeSaleReceipt({
       _id: clientSaleId,
+      // Same short code the server will store when this sale synchronizes.
+      saleCode: saleCodeFor({ type: "sale", occurredAt, barcodeToken }) ?? undefined,
       receiptNumber,
       barcodeToken,
       createdAt: occurredAt,
@@ -577,10 +580,8 @@ export default function NewSale() {
       ? "Vente conservée en sécurité. Confirmation du serveur en attente; elle sera vérifiée automatiquement sans créer de doublon."
       : "Vente enregistrée hors ligne. Reçu enregistré et ajouté à la file de synchronisation.");
     try {
-      // The ESC/POS implementation is the remote Express endpoint. The
-      // connectivity check already proved it unreachable, so print this
-      // committed IndexedDB snapshot locally without probing Render.
-      await printCommittedSaleAfterDelay(receipt, { directPrintMode: "none" });
+      // Printed from the committed IndexedDB snapshot through the browser.
+      await printCommittedSaleAfterDelay(receipt);
     } catch (printError: unknown) {
       setError(printError instanceof Error
         ? printError.message

@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
-import { KeyRound } from "lucide-react";
+import { Eye, KeyRound, MapPin } from "lucide-react";
+import { REGION_SCOPE_LABELS, regionScopeOf } from "../hooks/useRegionScope";
 import { effectiveModulesForUser, navigationSections } from "./navigationConfig";
 import SyncStatusIndicator from "./SyncStatusIndicator";
 import { useAuth } from "../hooks/useAuth";
@@ -15,6 +16,8 @@ export default function AppHeader() {
   // Only a real online session can configure a device PIN — no value in
   // surfacing the link to a device already running on a PIN session.
   const canConfigureOfflinePin = Boolean(token) && effectiveModulesForUser(user).includes("pos");
+  const scope = regionScopeOf(user);
+  const readOnly = user?.role === "shareholder";
 
   return (
     <header className="app-header">
@@ -26,6 +29,16 @@ export default function AppHeader() {
         </span>
       </Link>
       <div className="flex shrink-0 items-center gap-2">
+        {scope && (
+          <span
+            className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-2.5 text-xs font-semibold text-blue-800"
+            title={readOnly ? "Compte actionnaire : consultation uniquement" : "Votre compte est limité à cette région"}
+          >
+            {readOnly ? <Eye className="h-3.5 w-3.5" aria-hidden="true" /> : <MapPin className="h-3.5 w-3.5" aria-hidden="true" />}
+            {REGION_SCOPE_LABELS[scope]}
+            <span className="hidden md:inline">{readOnly ? "· consultation" : "· votre région"}</span>
+          </span>
+        )}
         {canConfigureOfflinePin && (
           <Link
             to="/offline-pin-setup"

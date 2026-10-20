@@ -7,6 +7,7 @@ import {
   LAST_ACTIVITY_STORAGE_KEY,
   idleState,
   idleTimeoutMs,
+  initialActivity,
   latestActivity,
   secondsUntilLogout,
 } from "../services/idleTimer";
@@ -27,7 +28,8 @@ function writeStoredActivity(value: number) {
 // Signs a shared terminal out after a period without any input. Any key
 // press (including a barcode scanner, which types), tap or click counts as
 // activity, so a cashier actively ringing up a sale is never interrupted;
-// a one-minute warning gives an absent-minded cashier the chance to stay.
+// a one-minute warning (at 3 minutes) gives an absent-minded cashier the
+// chance to stay. Closing the session here also revokes its refresh token.
 export default function IdleLogout() {
   const { isAuthenticated, clearAuth } = useAuth();
   const navigate = useNavigate();
@@ -52,7 +54,9 @@ export default function IdleLogout() {
 
   useEffect(() => {
     if (!isAuthenticated) return undefined;
-    markActive();
+    // Resume from the last recorded action (login writes it), so a tab
+    // reopened after a long absence is signed out instead of renewed.
+    lastActivity.current = initialActivity(readStoredActivity(), Date.now());
 
     const onActivity = () => {
       // While the warning is shown, only the explicit button keeps the

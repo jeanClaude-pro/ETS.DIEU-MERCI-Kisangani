@@ -11,17 +11,16 @@ import { Alert } from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
 import { useConnectivity } from "../../context/ConnectivityContext";
 import { useNavigate } from "react-router-dom";
-import {
-  login as loginApi,
-  register as registerApi,
-} from "../../services/authService";
+import { login as loginApi } from "../../services/authService";
 import {
   listOfflineAuthorizedUsers,
   verifyOfflinePin,
   type OfflineLoginCandidate,
 } from "../../services/offlinePinService";
 
-type Mode = "login" | "register" | "offline-pin";
+// Accounts are created by an administrator (Gestion des utilisateurs);
+// there is no public sign-up.
+type Mode = "login" | "offline-pin";
 // Older builds remembered the last email here. Terminals are shared, so the
 // login form never stores or pre-fills credentials anymore; the stale key
 // is deleted on load.
@@ -38,10 +37,8 @@ const isTypedEdit = (nativeEvent: Event) => {
 
 const LoginPage = () => {
   const [mode, setMode] = React.useState<Mode>("login");
-  const [username, setUsername] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [confirmPassword, setConfirmPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   // The password field stays read-only until the person touches it, so the
   // browser cannot pre-fill it when the page loads.
@@ -104,24 +101,9 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      if (mode === "register") {
-        if (password.length < 8) {
-          setError("Le mot de passe doit contenir au moins 8 caractères.");
-          return;
-        }
-        if (password !== confirmPassword) {
-          setError("Les mots de passe ne correspondent pas.");
-          return;
-        }
-        const result = await registerApi({ username, email, password });
-        toast.success(result.message || "Inscription réussie ! Un administrateur doit approuver votre compte.");
-        setPassword("");
-        setConfirmPassword("");
-        setShowPassword(false);
-        setMode("login");
-      } else {
-        const { user, token } = await loginApi({ email, password });
-        setAuth({ token, user });
+      {
+        const { user, token, refreshToken, accessExpiresAt } = await loginApi({ email, password });
+        setAuth({ token, user, refreshToken, accessExpiresAt });
         setPassword("");
         setEmail("");
         toast.success("Connexion réussie !");
@@ -136,11 +118,9 @@ const LoginPage = () => {
     }
   };
 
-  const heading = mode === "login" ? "Connexion" : mode === "register" ? "Créer un compte" : "Connexion hors ligne";
+  const heading = mode === "login" ? "Connexion" : "Connexion hors ligne";
   const subtitle = mode === "login"
     ? "Connectez-vous à votre espace de travail"
-    : mode === "register"
-    ? "Créez votre accès à la boutique"
     : "Serveur inaccessible — utilisez le code PIN configuré sur cet appareil.";
 
   return (
@@ -235,21 +215,6 @@ const LoginPage = () => {
               </form>
             ) : (
               <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
-                {mode === "register" && (
-                  <div>
-                    <label htmlFor="username" className="ui-label">Nom d'utilisateur</label>
-                    <input
-                      id="username"
-                      type="text"
-                      placeholder="Votre nom d'utilisateur"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      className="ui-input"
-                      autoComplete="name"
-                      required
-                    />
-                  </div>
-                )}
 
                 <div>
                   <label htmlFor="email" className="ui-label">Adresse email</label>
@@ -321,34 +286,14 @@ const LoginPage = () => {
                   </div>
                 </div>
 
-                {mode === "register" && (
-                  <div>
-                    <label htmlFor="confirmPassword" className="ui-label">Confirmer le mot de passe</label>
-                    <input
-                      id="confirmPassword"
-                      type="password"
-                      placeholder="Confirmez votre mot de passe"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="ui-input"
-                      autoComplete="new-password"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      required
-                    />
-                  </div>
-                )}
 
                 {error && <Alert tone="danger">{error}</Alert>}
 
                 <button type="submit" disabled={loading} className="ui-btn ui-btn-primary ui-btn-lg ui-btn-block">
                   {loading ? (
                     <><span className="ui-spinner h-4 w-4 border-white/40 border-t-white" aria-hidden="true" />Traitement en cours…</>
-                  ) : mode === "login" ? (
-                    <>Se connecter<ArrowRight aria-hidden="true" /></>
                   ) : (
-                    "Créer un compte"
+                    <>Se connecter<ArrowRight aria-hidden="true" /></>
                   )}
                 </button>
               </form>
@@ -356,23 +301,7 @@ const LoginPage = () => {
 
             <div className="mt-6 space-y-3 border-t border-slate-100 pt-5 text-center text-sm">
               {mode !== "offline-pin" && (
-                <p className="text-slate-600">
-                  {mode === "login" ? "Vous n'avez pas de compte ? " : "Vous avez déjà un compte ? "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      modeManuallyChosen.current = true;
-                      setMode(mode === "login" ? "register" : "login");
-                      setError("");
-                      setPassword("");
-                      setConfirmPassword("");
-                      setShowPassword(false);
-                    }}
-                    className="rounded font-semibold text-blue-700 underline-offset-4 hover:text-blue-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  >
-                    {mode === "login" ? "S'inscrire" : "Se connecter"}
-                  </button>
-                </p>
+                <p className="text-slate-500">Pas encore de compte ? Demandez à l'administrateur de vous en créer un.</p>
               )}
               <button
                 type="button"
@@ -382,7 +311,6 @@ const LoginPage = () => {
                   setError("");
                   // Never keep a typed password around once its form is gone.
                   setPassword("");
-                  setConfirmPassword("");
                   setShowPassword(false);
                 }}
                 className="ui-btn ui-btn-ghost ui-btn-sm mx-auto"

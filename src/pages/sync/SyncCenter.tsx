@@ -80,12 +80,9 @@ export default function SyncCenter() {
     setPrintingSaleId(sale.clientSaleId);
     try {
       const receipt = reconstructOfflineSaleReceipt(sale);
-      await printSaleReceiptAndStub(receipt, {
-        // This row is authoritative before synchronization. Reprint it from
-        // IndexedDB even if connectivity happens to return meanwhile; never
-        // require a MongoDB lookup for a pending local transaction.
-        directPrintMode: "none",
-      });
+      // This row is authoritative before synchronization: reprint it from
+      // IndexedDB, never from a MongoDB lookup.
+      await printSaleReceiptAndStub(receipt);
       toast.success("Reçu et souche envoyés à l'impression.");
     } catch (error) {
       toast.error(error instanceof Error

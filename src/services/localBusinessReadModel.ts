@@ -1,4 +1,5 @@
 import { liveQuery, type Subscription } from "dexie";
+import { saleCodeFor } from "../utils/saleCode.ts";
 import {
   offlineDb,
   type CachedServerSale,
@@ -33,6 +34,7 @@ export interface BusinessSale {
   saleId: string;
   clientSaleId?: string;
   receiptNumber?: string;
+  saleCode?: string;
   barcodeToken?: string;
   customer: { name: string; phone: string; email: string; isWalkIn?: boolean };
   items: BusinessSaleItem[];
@@ -163,6 +165,7 @@ export function offlineSaleToBusinessSale(row: OfflineSale): BusinessSale {
     saleId: row.receiptNumber,
     clientSaleId: row.clientSaleId,
     receiptNumber: row.receiptNumber,
+    saleCode: saleCodeFor({ type: "sale", occurredAt: row.occurredAt, barcodeToken: row.barcodeToken }) ?? undefined,
     barcodeToken: row.barcodeToken,
     customer: row.payload.customer,
     items,

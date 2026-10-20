@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test src/utils/regionalSales.test.ts src/utils/barcodeId.test.ts src/services/printService.test.ts src/components/navigationConfig.test.ts src/lib/offlineDb.test.ts src/services/authStateMachine.test.ts src/services/offlineProductSnapshot.test.ts src/services/offlineSyncService.test.ts src/services/connectivityService.test.ts src/services/offlineCategorySnapshot.test.ts src/utils/offlinePin.test.ts src/services/offlinePinService.test.ts src/services/authorizationService.test.ts src/services/offlineIntegrityAudit.test.ts src/services/localBusinessReadModel.test.ts src/services/localReportService.test.ts src/services/localCustomerReadModel.test.ts src/utils/csv.test.ts",
+    "test": "node --experimental-strip-types --test src/utils/regionalSales.test.ts src/utils/barcodeId.test.ts src/services/printService.test.ts src/components/navigationConfig.test.ts src/lib/offlineDb.test.ts src/services/authStateMachine.test.ts src/services/offlineProductSnapshot.test.ts src/services/offlineSyncService.test.ts src/services/connectivityService.test.ts src/services/offlineCategorySnapshot.test.ts src/utils/offlinePin.test.ts src/services/offlinePinService.test.ts src/services/authorizationService.test.ts src/services/offlineIntegrityAudit.test.ts src/services/localBusinessReadModel.test.ts src/services/localReportService.test.ts src/services/localCustomerReadModel.test.ts src/utils/csv.test.ts src/services/cashflowInsights.test.ts src/utils/saleCode.test.ts src/services/sessionPolicy.test.ts",
     "test:pwa-lifecycle": "node scripts/pwa-lifecycle-test.mjs",
     "preview": "vite preview"
   },
@@ -25,6 +25,7 @@
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
     "react-toastify": "^11.0.5",
+    "recharts": "^3.10.1",
     "tailwindcss": "^4.2.1",
     "vite-plugin-pwa": "^1.3.0"
   },

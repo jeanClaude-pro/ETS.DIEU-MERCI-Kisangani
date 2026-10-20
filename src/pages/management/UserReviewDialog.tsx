@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "react-toastify";
 import { X } from "lucide-react";
 import { Alert, LoadingState } from "../../components/ui";
-import type { Role } from "../../types/auth";
-import { navigationSections, defaultModulesForRole } from "../../components/navigationConfig";
+import { defaultModulesForRole } from "../../components/navigationConfig";
+import { REGION_SCOPE_LABELS, ROLE_LABELS } from "../../utils/roles";
+import RoleAccessPicker from "./RoleAccessPicker";
+import { accessProblem, type RoleAccess } from "../../utils/roles";
 import {
   approveUser,
   getUser,
@@ -18,26 +20,13 @@ import {
   type UserDetail,
 } from "../../services/userManagementService";
 
-const ROLE_OPTIONS: { value: Role; label: string }[] = [
-  { value: "admin", label: "Administrateur" },
-  { value: "manager", label: "Manager" },
-  { value: "inventory_manager", label: "Gestionnaire de stock" },
-  { value: "cashier_supervisor", label: "Superviseur caisse" },
-  { value: "staff", label: "Personnel" },
-];
-
-// Everything except the "management" module itself: only admins ever have
-// that, and admins bypass this checklist entirely (full access by design).
-const ASSIGNABLE_SECTIONS = navigationSections
-  .map((section) => ({ ...section, items: section.items.filter((item) => item.id !== "management") }))
-  .filter((section) => section.items.length > 0);
-
 const ACTION_LABELS: Record<string, string> = {
   requested: "Demande d'inscription",
   approved: "Compte approuvé",
   rejected: "Compte refusé",
   role_changed: "Rôle modifié",
   permissions_changed: "Permissions modifiées",
+  region_changed: "Région modifiée",
   suspended: "Compte suspendu",
   reactivated: "Compte réactivé",
 };
@@ -46,8 +35,7 @@ export default function UserReviewDialog({ userId, onClose }: { userId: string; 
   const [user, setUser] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [role, setRole] = useState<Role>("staff");
-  const [modules, setModules] = useState<string[]>([]);
+  const [access, setAccess] = useState<RoleAccess>({ role: "staff", regionScope: "all", modules: [] });
   const [changed, setChanged] = useState(false);
 
   useEffect(() => {
@@ -55,11 +43,14 @@ export default function UserReviewDialog({ userId, onClose }: { userId: string; 
     getUser(userId).then((detail) => {
       if (cancelled) return;
       setUser(detail);
-      setRole(detail.role);
       // A never-customized user has no stored modulePermissions; pre-check
       // their role's current default set as a helpful starting point rather
       // than an empty checklist. Saving always writes an explicit array.
-      setModules(Array.isArray(detail.modulePermissions) ? detail.modulePermissions : defaultModulesForRole(detail.role));
+      setAccess({
+        role: detail.role,
+        regionScope: detail.role === "admin" ? "all" : detail.regionScope || "all",
+        modules: Array.isArray(detail.modulePermissions) ? detail.modulePermissions : defaultModulesForRole(detail.role),
+      });
       setLoading(false);
     }).catch((error) => {
       toast.error(error?.message || "Impossible de charger cet utilisateur");
@@ -68,19 +59,6 @@ export default function UserReviewDialog({ userId, onClose }: { userId: string; 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
-
-  const summaryLabels = useMemo(
-    () => ASSIGNABLE_SECTIONS.flatMap((s) => s.items).filter((item) => modules.includes(item.id)).map((item) => item.label),
-    [modules]
-  );
-
-  const toggleModule = (id: string) => {
-    setModules((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
-  };
-
-  const toggleSection = (ids: string[], allSelected: boolean) => {
-    setModules((prev) => (allSelected ? prev.filter((m) => !ids.includes(m)) : [...new Set([...prev, ...ids])]));
-  };
 
   async function withSaving<T>(fn: () => Promise<T>) {
     setSaving(true);
@@ -99,7 +77,9 @@ export default function UserReviewDialog({ userId, onClose }: { userId: string; 
   const handleApprove = async () => {
     if (!user) return;
     try {
-      const updated = await withSaving(() => approveUser(user.id, { role, modulePermissions: modules }));
+      const problem = accessProblem(access);
+      if (problem) { toast.error(problem); return; }
+      const updated = await withSaving(() => approveUser(user.id, { role: access.role, regionScope: access.regionScope, modulePermissions: access.modules }));
       toast.success("Compte approuvé");
       setUser((u) => (u ? { ...u, ...updated } : u));
     } catch {
@@ -121,9 +101,14 @@ export default function UserReviewDialog({ userId, onClose }: { userId: string; 
   const handleSave = async () => {
     if (!user) return;
     try {
+      const problem = accessProblem(access);
+      if (problem) { toast.error(problem); return; }
       let updated = user;
-      if (role !== user.role) updated = { ...updated, ...(await withSaving(() => updateUserRole(user.id, role))) };
-      if (role !== "admin") updated = { ...updated, ...(await withSaving(() => updateUserModules(user.id, modules))) };
+      const currentScope = user.role === "admin" ? "all" : user.regionScope || "all";
+      if (access.role !== user.role || access.regionScope !== currentScope) {
+        updated = { ...updated, ...(await withSaving(() => updateUserRole(user.id, access.role, access.regionScope))) };
+      }
+      if (access.role !== "admin") updated = { ...updated, ...(await withSaving(() => updateUserModules(user.id, access.modules))) };
       toast.success("Modifications enregistrées");
       setUser(updated);
     } catch {
@@ -163,7 +148,7 @@ export default function UserReviewDialog({ userId, onClose }: { userId: string; 
         onClick={() => onClose(changed)}
       >
         <motion.div
-          className="ui-dialog max-w-lg"
+          className="ui-dialog max-w-3xl"
           initial={{ y: 24, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 24, opacity: 0 }}
@@ -193,70 +178,21 @@ export default function UserReviewDialog({ userId, onClose }: { userId: string; 
                     <p className="break-words font-semibold text-slate-900">{user.username}</p>
                     <p className="break-all text-sm text-slate-500">{user.email}</p>
                     <p className="mt-0.5 text-xs text-slate-400">
-                      Inscrit le {user.createdAt ? new Date(user.createdAt).toLocaleDateString("fr-FR") : "—"}
+                      Créé le {user.createdAt ? new Date(user.createdAt).toLocaleDateString("fr-FR") : "—"}
                     </p>
                   </div>
                 </div>
 
-                <div>
-                  <label htmlFor="user-review-role" className="ui-label">Rôle</label>
-                  <select
-                    id="user-review-role"
-                    className="ui-input"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as Role)}
-                  >
-                    {ROLE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
+                <p className="text-xs text-slate-500">
+                  Actuellement : <strong className="font-semibold text-slate-700">{ROLE_LABELS[user.role]}</strong> · {REGION_SCOPE_LABELS[user.role === "admin" ? "all" : user.regionScope || "all"]}
+                </p>
 
-                {role === "admin" ? (
+                <RoleAccessPicker value={access} onChange={setAccess} disabled={saving || user.status === "rejected"} />
+
+                {access.role === "admin" && (
                   <Alert tone="info">
-                    Accès complet (Administrateur) — les administrateurs ont accès à tous les modules et ne peuvent pas être restreints.
+                    Accès complet (Administrateur) — les administrateurs ont accès à tous les modules et aux deux régions.
                   </Alert>
-                ) : (
-                  <fieldset>
-                    <legend className="ui-label">Modules autorisés</legend>
-                    <div className="max-h-72 space-y-4 overflow-y-auto rounded-lg border border-slate-200 p-3">
-                      {ASSIGNABLE_SECTIONS.map((section) => {
-                        const ids = section.items.map((i) => i.id);
-                        const allSelected = ids.every((id) => modules.includes(id));
-                        return (
-                          <div key={section.title}>
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="ui-kicker">{section.title}</p>
-                              <button
-                                type="button"
-                                className="rounded px-1 text-xs font-semibold text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                                onClick={() => toggleSection(ids, allSelected)}
-                              >
-                                {allSelected ? "Tout désélectionner" : "Tout sélectionner"}
-                              </button>
-                            </div>
-                            <div className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2">
-                              {section.items.map((item) => (
-                                <label key={item.id} className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-md px-2 text-sm text-slate-700 hover:bg-slate-50">
-                                  <input
-                                    type="checkbox"
-                                    className="ui-checkbox"
-                                    checked={modules.includes(item.id)}
-                                    onChange={() => toggleModule(item.id)}
-                                  />
-                                  {item.label}
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <p className="ui-help">
-                      Résumé — Rôle : <strong className="font-semibold text-slate-700">{ROLE_OPTIONS.find((r) => r.value === role)?.label}</strong>
-                      {" · "}Modules autorisés : {summaryLabels.length ? summaryLabels.join(", ") : "aucun"}
-                    </p>
-                  </fieldset>
                 )}
 
                 {!!user.history?.length && (

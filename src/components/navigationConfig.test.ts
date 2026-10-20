@@ -31,23 +31,28 @@ test("permission-aware navigation always exposes Home but never leaks restricted
   assert.equal(items.find((item) => item.id === "sales")?.path, "/sales");
 });
 
-test("the point-of-sale module opens after the welcome route", () => {
+test("the point-of-sale module has its own route", () => {
   const items = permittedNavigationItems({ role: "cashier_supervisor", modulePermissions: ["pos"] });
   assert.equal(items.find((item) => item.id === "pos")?.path, "/new-sale");
 });
 
 test("default frontend roles mirror the server module registry", () => {
   assert.deepEqual(defaultModulesForRole("manager"), [
-    "dashboard", "rate", "pos", "reservation", "entry", "sortie", "products",
-    "sales", "sync", "scanner", "reservations", "entryhistory", "sortiehistory", "customers",
+    "dashboard", "rate", "pos", "entry", "sortie", "products",
+    "sales", "sync", "scanner", "entryhistory", "sortiehistory", "customers",
   ]);
   assert.deepEqual(defaultModulesForRole("inventory_manager"), [
-    "pos", "reservation", "entry", "sortie", "products", "sales", "sync", "scanner",
-    "reservations", "entryhistory", "sortiehistory",
+    "pos", "entry", "sortie", "products", "sales", "sync", "scanner",
+    "entryhistory", "sortiehistory",
   ]);
   assert.deepEqual(defaultModulesForRole("cashier_supervisor"), [
-    "pos", "reservation", "entry", "sortie", "sales", "sync", "scanner", "reservations",
+    "pos", "entry", "sortie", "sales", "sync", "scanner",
     "entryhistory", "sortiehistory", "customers",
   ]);
   assert.deepEqual(defaultModulesForRole("staff"), ["sales", "scanner"]);
+});
+
+test("a shareholder consults one region's history and reports, never operations", () => {
+  assert.deepEqual(defaultModulesForRole("shareholder"), ["dashboard", "products", "sales", "entryhistory", "sortiehistory", "reports"]);
+  assert.deepEqual(effectiveModulesForUser({ role: "shareholder", modulePermissions: ["pos", "sales", "management"] }), ["sales"]);
 });

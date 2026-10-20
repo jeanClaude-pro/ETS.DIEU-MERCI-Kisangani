@@ -7,6 +7,7 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -15,31 +16,33 @@ import AppHeader from "./components/AppHeader";
 import ResponsiveTableEnhancer from "./components/ResponsiveTableEnhancer";
 import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import IdleLogout from "./components/IdleLogout";
-import Products from "./pages/products/products";
-import SalesHistory from "./pages/history/SalesHistory";
-import Dashboard from "./pages/dashboard/Dashboard";
-import Analytics from "./pages/analytics/Analytics";
-import Customers from "./pages/customers/Customers";
 import LoginPage from "./pages/login/page";
 import NewSale from "./pages/NewSale";
-import Reservation from "./pages/Reservation";
-import ReservationHistory from "./pages/ReservationHistory";
 import Sortie from "./pages/Sortie";
-import SortieHistory from "./pages/SortieHistory";
-import Rate from "./pages/Rate";
 import Entry from "./pages/Entry";
-import EntryHistory from "./pages/EntryHistory";
 import { RequireAuth } from "./components/RequireAuth";
 import { RequireModule } from "./components/RequireModule";
 import { AuthProvider } from "./context/AuthProvider";
 import { SidebarProvider, useSidebar } from "./context/SidebarContext";
 import { ConnectivityProvider } from "./context/ConnectivityContext";
-import Management from "./pages/management/Management";
-import Welcome from "./pages/Welcome";
+import Landing from "./pages/Landing";
 import { useAuth } from "./hooks/useAuth";
-import ScanReceipt from "./pages/scanner/ScanReceipt";
-import SyncCenter from "./pages/sync/SyncCenter";
-import OfflinePinSetup from "./pages/security/OfflinePinSetup";
+
+// Back-office screens load on demand (Recharts, jsPDF tables…). They are
+// still precached by the service worker, so they open offline too. The POS,
+// and login screens stay in the main bundle for instant start.
+const Products = lazy(() => import("./pages/products/products"));
+const SalesHistory = lazy(() => import("./pages/history/SalesHistory"));
+const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
+const Analytics = lazy(() => import("./pages/analytics/Analytics"));
+const Customers = lazy(() => import("./pages/customers/Customers"));
+const SortieHistory = lazy(() => import("./pages/SortieHistory"));
+const Rate = lazy(() => import("./pages/Rate"));
+const EntryHistory = lazy(() => import("./pages/EntryHistory"));
+const Management = lazy(() => import("./pages/management/Management"));
+const ScanReceipt = lazy(() => import("./pages/scanner/ScanReceipt"));
+const SyncCenter = lazy(() => import("./pages/sync/SyncCenter"));
+const OfflinePinSetup = lazy(() => import("./pages/security/OfflinePinSetup"));
 
 function AppLayout() {
   const { isAuthenticated, loading } = useAuth();
@@ -65,6 +68,7 @@ function AppLayout() {
       >
         <ResponsiveTableEnhancer />
         {showWorkspaceNavigation && <AppHeader />}
+        <Suspense fallback={<div className="app-loading" role="status" aria-live="polite"><span className="app-loading-spinner" />Chargement…</div>}>
         <Routes>
           <Route
             path="/products"
@@ -137,26 +141,6 @@ function AppLayout() {
             }
           />
           <Route
-            path="/reservation"
-            element={
-              <RequireAuth>
-                <RequireModule moduleId="reservation">
-                  <Reservation />
-                </RequireModule>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/reservationhistory"
-            element={
-              <RequireAuth>
-                <RequireModule moduleId="reservations">
-                  <ReservationHistory />
-                </RequireModule>
-              </RequireAuth>
-            }
-          />
-          <Route
             path="/sortiehistory"
             element={
               <RequireAuth>
@@ -170,7 +154,7 @@ function AppLayout() {
             path="/"
             element={
               <RequireAuth>
-                <Welcome />
+                <Landing />
               </RequireAuth>
             }
           />
@@ -262,6 +246,7 @@ function AppLayout() {
           />
           <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} replace />} />
         </Routes>
+        </Suspense>
       </main>
     </div>
   );

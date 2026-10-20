@@ -5,10 +5,12 @@ import { RefreshCw, FileText, User, Wallet } from "lucide-react";
 import { Alert, CurrencyToggle, ExchangeRateChip, PageHeader } from "../components/ui";
 import { REGION_CODE_MAP } from "../utils/constants";
 import { useConnectivity } from "../context/ConnectivityContext";
+import { REGION_SCOPE_LABELS, useRegionScope } from "../hooks/useRegionScope";
 import {
   printHtmlDocumentsSequentially,
   buildCashEntryReceiptHtml,
   buildCashEntryStubHtml,
+  formatReceiptDate,
   type CashEntryReceiptData,
 } from "../services/printService";
 
@@ -82,6 +84,11 @@ export default function Entry() {
     currencyMode: "usd" as "usd" | "fc",
     region: "China" as "Butembo" | "China"
   });
+  // A region-limited account always records in its own region.
+  const regionScope = useRegionScope();
+  useEffect(() => {
+    if (regionScope) setForm((previous) => ({ ...previous, region: REGION_SCOPE_LABELS[regionScope] as "Butembo" | "China" }));
+  }, [regionScope, form.region]);
 
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -205,7 +212,7 @@ export default function Entry() {
   };
 
   // Printing reuses the shared canonical thermal document builder (same
-  // architecture as sale/reservation receipts) instead of a duplicated inline
+  // architecture as sale receipts) instead of a duplicated inline
   // HTML/CSS document.
   useEffect(() => {
     if (!receiptData) return;
@@ -287,14 +294,10 @@ export default function Entry() {
           email: form.receivedFromEmail,
         },
         agent: currentUser?.username || "Agent",
-        date: new Date().toLocaleString('fr-FR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        }),
-        exchangeRate: exchangeRate?.rate
+        // The committed server timestamp, in business time like every receipt.
+        date: formatReceiptDate(data.createdAt ?? new Date().toISOString()),
+        exchangeRate: exchangeRate?.rate,
+        region: form.region
       };
 
       setReceiptData(newReceiptData);
@@ -460,6 +463,8 @@ export default function Entry() {
                     onChange={handleChange}
                     className="ui-input"
                     required
+                  disabled={Boolean(regionScope)}
+                  title={regionScope ? "Votre compte est limité à cette région" : undefined}
                   >
                     <option value="Butembo">Butembo (Bbbb)</option>
                     <option value="China">China (Cnnn)</option>

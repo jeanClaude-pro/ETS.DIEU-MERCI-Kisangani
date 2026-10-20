@@ -31,6 +31,7 @@ import {
   normalizeSaleReceipt,
   printSaleReceiptAndStub,
 } from "../../services/printService";
+import { saleCodeMatches } from "../../utils/saleCode";
 import { useConnectivity } from "../../context/ConnectivityContext";
 import {
   cacheServerSales,
@@ -100,6 +101,7 @@ interface Sale {
   type?: string;
   clientSaleId?: string;
   receiptNumber?: string;
+  saleCode?: string;
   barcodeToken?: string;
   localSyncState?: string;
   isLocalOnly?: boolean;
@@ -375,7 +377,7 @@ export default function SalesHistory() {
       if (queryParams.status && sale.status !== queryParams.status) return false;
       if (queryParams.customerPhone && sale.customer.phone !== queryParams.customerPhone) return false;
       if (showEditedSales && !sale.editedBy && !Array.isArray(sale.editHistory)) return false;
-      return !term || [sale.saleId, sale.receiptNumber, sale.customer.name, sale.customer.phone, sale.salesPerson]
+      return !term || saleCodeMatches(sale.saleCode, term) || [sale.saleId, sale.saleCode, sale.receiptNumber, sale.customer.name, sale.customer.phone, sale.salesPerson]
         .some((value) => String(value || "").toLocaleLowerCase("fr").includes(term));
     });
     rows = projectSalesToRegion(rows, queryParams.region as RegionCodeFilter);
@@ -587,6 +589,8 @@ export default function SalesHistory() {
     );
     return source.filter(sale =>
       sale.saleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      saleCodeMatches(sale.saleCode, searchTerm) ||
+      String(sale.receiptNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.customer.phone.includes(searchTerm) ||
       (sale.salesPerson && sale.salesPerson.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -880,13 +884,9 @@ export default function SalesHistory() {
 
   const printSavedSale = (sale: Sale) => {
     const receipt = normalizeSaleReceipt(getCompleteSaleForReceipt(sale), { type: "sale" });
-    void printSaleReceiptAndStub(receipt, { directPrintMode: sale.localSyncState ? "none" : "remote" })
-      .then((destination) => {
-        setMessage(
-          destination === "usb"
-            ? "Reçu et souche envoyés à l'imprimante thermique."
-            : "Reçu et souche imprimés successivement dans le navigateur.",
-        );
+    void printSaleReceiptAndStub(receipt)
+      .then(() => {
+        setMessage("Reçu et souche imprimés successivement dans le navigateur.");
       })
       .catch((printError: unknown) => {
         setError(printError instanceof Error ? printError.message : "Échec de l'impression.");
@@ -1438,20 +1438,7 @@ export default function SalesHistory() {
               </button>
 
               {showAdvancedFilters && (
-                <div className="ui-muted-panel mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <div>
-                    <label htmlFor="sales-type" className="ui-label">Type</label>
-                    <select
-                      id="sales-type"
-                      value={queryParams.type}
-                      onChange={(e) => handleQueryParamChange("type", e.target.value)}
-                      className="ui-input"
-                    >
-                      <option value="">Ventes et réservations</option>
-                      <option value="sale">Ventes</option>
-                      <option value="reservation">Réservations</option>
-                    </select>
-                  </div>
+                <div className="ui-muted-panel mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
 
                   <div>
                     <label htmlFor="sales-status" className="ui-label">Statut</label>
@@ -1536,7 +1523,7 @@ export default function SalesHistory() {
                 {filteredSales.map((sale) => (
                   <tr key={sale._id}>
                     <td className="whitespace-nowrap font-medium text-slate-900">
-                      {sale.saleId}
+                      <span className="font-mono tracking-tight">{sale.saleCode || sale.receiptNumber || sale.saleId}</span>
                     </td>
                     <td className="max-w-[12rem]">
                       <div className="flex flex-col">
@@ -1680,7 +1667,7 @@ export default function SalesHistory() {
             <div className="ui-dialog-header">
               <div className="min-w-0">
                 <h3 id="sale-details-title" className="ui-dialog-title">Détails de la vente</h3>
-                <p className="mt-0.5 truncate text-sm text-slate-500">{selectedSale.saleId}</p>
+                <p className="mt-0.5 truncate font-mono text-sm text-slate-500">{selectedSale.saleCode || selectedSale.receiptNumber || selectedSale.saleId}</p>
               </div>
               <button type="button" onClick={() => setShowModal(false)} className="ui-icon-btn -mr-2 -mt-1" aria-label="Fermer">
                 <X />

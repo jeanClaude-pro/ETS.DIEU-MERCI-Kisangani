@@ -1,9 +1,7 @@
 import type React from "react";
 import {
   BarChart3,
-  CalendarClock,
   CloudOff,
-  ClipboardList,
   Gauge,
   Home,
   Package,
@@ -32,6 +30,9 @@ export type NavigationSection = { title: string; items: NavigationItem[] };
 
 const operationalRoles = ["admin", "manager", "cashier_supervisor", "inventory_manager"];
 const historyRoles = [...operationalRoles, "staff"];
+// Read-only consultation of one region (mirrors server SHAREHOLDER_MODULES).
+const shareholder = "shareholder";
+export const SHAREHOLDER_MODULES = ["dashboard", "products", "sales", "entryhistory", "sortiehistory", "reports"];
 
 export const homeNavigationItem: NavigationItem = {
   id: "home",
@@ -49,10 +50,9 @@ export const navigationSections: NavigationSection[] = [
   {
     title: "Menu principal",
     items: [
-      { id: "dashboard", label: "Tableau de bord", shortLabel: "Tableau", icon: Gauge, path: "/dashboard", roles: ["admin", "manager"], description: "Suivre les principaux indicateurs de la boutique" },
+      { id: "dashboard", label: "Tableau de bord", shortLabel: "Tableau", icon: Gauge, path: "/dashboard", roles: ["admin", "manager", shareholder], description: "Suivre les principaux indicateurs de la boutique" },
       { id: "rate", label: "Taux d’échange", shortLabel: "Taux", icon: BarChart3, path: "/rate", roles: ["admin", "manager"], description: "Consulter et actualiser le taux USD/FC" },
       { id: "pos", label: "Nouvelle vente", shortLabel: "Vente", icon: ShoppingCart, path: "/new-sale", roles: operationalRoles, phonePriority: 2, description: "Enregistrer une vente rapidement" },
-      { id: "reservation", label: "Nouvelle réservation", shortLabel: "Réserver", icon: CalendarClock, path: "/reservation", roles: operationalRoles, description: "Préparer une commande à retirer plus tard" },
       { id: "entry", label: "Entrée de caisse", shortLabel: "Entrée", icon: WalletCards, path: "/entry", roles: operationalRoles, description: "Enregistrer une entrée d’argent" },
       { id: "sortie", label: "Sortie de caisse", shortLabel: "Sortie", icon: WalletCards, path: "/sortie", roles: operationalRoles, description: "Enregistrer une dépense ou une sortie" },
     ],
@@ -60,19 +60,18 @@ export const navigationSections: NavigationSection[] = [
   {
     title: "Stock",
     items: [
-      { id: "products", label: "Articles & stock", shortLabel: "Stock", icon: Package, path: "/products", roles: ["admin", "manager", "inventory_manager"], phonePriority: 4, description: "Gérer les articles, les prix et le stock" },
+      { id: "products", label: "Articles & stock", shortLabel: "Stock", icon: Package, path: "/products", roles: ["admin", "manager", "inventory_manager", shareholder], phonePriority: 4, description: "Gérer les articles, les prix et le stock" },
     ],
   },
   {
     title: "Ventes & rapports",
     items: [
-      { id: "sales", label: "Historique des ventes", shortLabel: "Ventes", icon: TrendingUp, path: "/sales", roles: historyRoles, phonePriority: 3, description: "Retrouver, consulter et réimprimer les ventes" },
+      { id: "sales", label: "Historique des ventes", shortLabel: "Ventes", icon: TrendingUp, path: "/sales", roles: [...historyRoles, shareholder], phonePriority: 3, description: "Retrouver, consulter et réimprimer les ventes" },
       { id: "sync", label: "Ventes non synchronisées", shortLabel: "À synchroniser", icon: CloudOff, path: "/sync-center", roles: operationalRoles, description: "Suivre les ventes conservées sur cet appareil" },
-      { id: "scanner", label: "Scanner un reçu", shortLabel: "Scanner", icon: ScanLine, path: "/scan", roles: historyRoles, description: "Vérifier un reçu à partir de son code-barres" },
-      { id: "reservations", label: "Historique des réservations", shortLabel: "Réserv.", icon: ClipboardList, path: "/reservationhistory", roles: operationalRoles, description: "Suivre les réservations enregistrées" },
-      { id: "entryhistory", label: "Historique des entrées", shortLabel: "Entrées", icon: WalletCards, path: "/EntryHistory", roles: operationalRoles, description: "Consulter les mouvements d’entrée" },
-      { id: "sortiehistory", label: "Historique des sorties", shortLabel: "Sorties", icon: WalletCards, path: "/sortiehistory", roles: operationalRoles, description: "Consulter les dépenses et sorties" },
-      { id: "reports", label: "Rapports & analyses", shortLabel: "Rapports", icon: BarChart3, path: "/reports", roles: ["admin"], description: "Analyser l’activité commerciale" },
+      { id: "scanner", label: "Scanner un reçu", shortLabel: "Scanner", icon: ScanLine, path: "/scan", roles: historyRoles, description: "Retrouver un reçu à partir de son numéro" },
+      { id: "entryhistory", label: "Historique des entrées", shortLabel: "Entrées", icon: WalletCards, path: "/EntryHistory", roles: [...operationalRoles, shareholder], description: "Consulter les mouvements d’entrée" },
+      { id: "sortiehistory", label: "Historique des sorties", shortLabel: "Sorties", icon: WalletCards, path: "/sortiehistory", roles: [...operationalRoles, shareholder], description: "Consulter les dépenses et sorties" },
+      { id: "reports", label: "Rapports & analyses", shortLabel: "Rapports", icon: BarChart3, path: "/reports", roles: ["admin", shareholder], description: "Analyser l’activité commerciale" },
     ],
   },
   {
@@ -103,6 +102,11 @@ export const defaultModulesForRole = (role?: string): string[] =>
 export const effectiveModulesForUser = (user?: Pick<User, "role" | "modulePermissions"> | null): string[] => {
   if (!user) return [];
   if (user.role === "admin") return ALL_MODULE_IDS;
+  // Mirrors the server: a shareholder only ever consults these modules.
+  if (user.role === "shareholder") {
+    const chosen = Array.isArray(user.modulePermissions) ? user.modulePermissions : defaultModulesForRole("shareholder");
+    return chosen.filter((id) => SHAREHOLDER_MODULES.includes(id));
+  }
   if (Array.isArray(user.modulePermissions)) {
     // Sync Center is an operational safety companion to POS. Existing
     // customized users who already have POS access must not lose access just

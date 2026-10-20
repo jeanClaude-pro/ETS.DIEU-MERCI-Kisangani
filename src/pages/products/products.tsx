@@ -1,5 +1,6 @@
 "use client";
 
+import { useRegionScope } from "../../hooks/useRegionScope";
 import type React from "react";
 import { useState, useEffect, useMemo } from "react";
 import { Package, Plus, Search, Edit, Trash2, Eye, X } from "lucide-react";
@@ -19,6 +20,7 @@ interface User {
 }
 
 export default function Products() {
+  const regionScope = useRegionScope();
   const connectivity = useConnectivity();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -340,8 +342,8 @@ export default function Products() {
 
       {/* Filters */}
       <section className="ui-card p-4 sm:p-5" aria-label="Filtres des articles">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem_12rem] md:items-start">
-          <div className="relative">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-[minmax(0,1fr)_14rem_12rem] md:items-start">
+          <div className="relative col-span-2 md:col-span-1">
             <label htmlFor="product-search" className="sr-only">Rechercher un article</label>
             <Search className="ui-field-icon" aria-hidden="true" />
             <input
@@ -366,8 +368,8 @@ export default function Products() {
               onChange={(e) => setSelectedRegion(e.target.value)}
               className="ui-input"
             >
-              <option value="">Toutes les régions</option>
-              {REGIONS.map((r) => (
+              {!regionScope && <option value="">Toutes les régions</option>}
+              {REGIONS.filter((r) => !regionScope || r.regionCode === regionScope).map((r) => (
                 <option key={r.regionCode} value={r.region}>
                   {r.region} ({r.regionCode})
                 </option>

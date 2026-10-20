@@ -1,4 +1,6 @@
-export type Role = "admin" | "manager" | "inventory_manager" | "cashier_supervisor" | "staff";
+export type Role = "admin" | "manager" | "inventory_manager" | "cashier_supervisor" | "staff" | "shareholder";
+/** "all" = both regions; Bbbb = Butembo only; Cnnn = China only. */
+export type RegionScope = "all" | "Bbbb" | "Cnnn";
 export type AccountStatus = "pending" | "active" | "suspended" | "rejected";
 
 export interface User {
@@ -6,6 +8,7 @@ export interface User {
   username: string;
   email: string;
   role: Role;
+  regionScope?: RegionScope;
   status?: AccountStatus;
   isActive?: boolean;
   modulePermissions?: string[];
@@ -52,13 +55,11 @@ export interface LoginPayload {
   password: string;
 }
 
-export interface RegisterPayload {
-  username: string;
-  email: string;
-  password: string;
-}
-
 export interface LoginResponse {
   user: User;
+  /** Access token, valid 15 minutes and renewed silently. */
   token: string;
+  /** Single-use token that renews the access token while the user is active. */
+  refreshToken?: string;
+  accessExpiresAt?: string;
 }

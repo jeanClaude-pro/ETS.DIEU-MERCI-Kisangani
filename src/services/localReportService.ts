@@ -139,7 +139,7 @@ export function buildLocalAnalytics(
     totalValidatedExpenseCount?: number;
     validatedExpenses?: LocalAnalyticsData["validatedExpenses"];
   } = {},
-): { data: LocalAnalyticsData; reservations: { count: number; value: number; pendingCount: number; pendingValue: number } } {
+): { data: LocalAnalyticsData } {
   const sales = reportable(allSales, range, region);
   const duration = range.end.getTime() - range.start.getTime() + 1;
   const previousRange = {
@@ -185,8 +185,6 @@ export function buildLocalAnalytics(
   const totalValidatedExpenses = roundCurrency(extras.totalValidatedExpenses || 0);
   const monthRows = [...months].sort(([a], [b]) => a.localeCompare(b)).map(([month, value]) => ({ month, monthName: month, ...value }));
   const selectedYear = String(localParts(range.start.toISOString()).year);
-  const reservations = sales.filter((sale) => sale.type === "reservation");
-  const pendingReservations = reservations.filter((sale) => sale.status === "pending");
 
   return {
     data: {
@@ -211,12 +209,6 @@ export function buildLocalAnalytics(
         revenueGrowth: percentChange(currentTotals.revenue, previousTotals.revenue),
         customerGrowth: percentChange(currentTotals.customers, previousTotals.customers),
       },
-    },
-    reservations: {
-      count: reservations.length,
-      value: roundCurrency(reservations.reduce((sum, sale) => sum + sale.total, 0)),
-      pendingCount: pendingReservations.length,
-      pendingValue: roundCurrency(pendingReservations.reduce((sum, sale) => sum + sale.total, 0)),
     },
   };
 }

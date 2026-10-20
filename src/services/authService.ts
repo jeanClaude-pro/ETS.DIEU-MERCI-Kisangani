@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { LoginPayload, RegisterPayload, LoginResponse, User } from "../types/auth";
+import type { LoginPayload, LoginResponse, User } from "../types/auth";
 import { serverUrl } from "../utils/constants";
 
 const API_BASE =
@@ -35,7 +35,9 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}) {
   }
 
   const data = (await res.json().catch(() => ({}))) as any;
-  if (res.status === 401 && typeof window !== "undefined" && localStorage.getItem("token")) {
+  // TOKEN_EXPIRED was already renewed-and-retried by the session keeper;
+    // if renewal is temporarily impossible the session is kept, not ended.
+    if (res.status === 401 && data?.code !== "TOKEN_EXPIRED" && typeof window !== "undefined" && localStorage.getItem("token")) {
     window.dispatchEvent(new CustomEvent("auth-required"));
   }
   if (!res.ok) throw new HttpError(data?.message || `Request failed (${res.status})`, res.status);
@@ -49,12 +51,6 @@ export function login(payload: LoginPayload) {
   });
 }
 
-export function register(payload: RegisterPayload) {
-  return apiFetch<{ message: string }>("/auth/register", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-}
 
 // Only if you implement it on the server:
 export function fetchMe() {

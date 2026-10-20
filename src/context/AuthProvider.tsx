@@ -5,8 +5,16 @@ import { AuthContext } from "./auth-context";
 import { fetchMe, HttpError, NetworkError } from "../services/authService";
 import { isOfflineSessionExpired } from "../services/authorizationService";
 import { authenticationStatus, userFromOfflineSession } from "../services/authStateMachine";
+import { clearSessionTokens, revokeSession, storeSessionTokens } from "../services/session";
+import { LAST_ACTIVITY_STORAGE_KEY } from "../services/idleTimer";
 
 const OFFLINE_SESSION_STORAGE_KEY = "offlineSession";
+
+// A new session starts its inactivity clock now (IdleLogout resumes from
+// this value, so it must never be left over from an earlier session).
+function startActivityClock() {
+  try { localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now())); } catch { /* storage unavailable */ }
+}
 
 function readStoredOfflineSession(): OfflineSession | null {
   try {
@@ -54,7 +62,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
     let user: User | null = null;
     try { user = userRaw ? JSON.parse(userRaw) as User : null; } catch { localStorage.removeItem("user"); }
     if (!user) {
-      localStorage.removeItem("token");
+      clearSessionTokens();
       setState({ token: null, user: null, loading: false, authRequired: false, verified: false, offlineSession });
       return;
     }
@@ -79,7 +87,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
           setState((s) => ({ ...s, verified: false }));
           return;
         }
-        localStorage.removeItem("token");
+        clearSessionTokens();
         localStorage.removeItem("user");
         setState((s) => ({ token: null, user: null, loading: false, authRequired: true, verified: false, offlineSession: s.offlineSession }));
       });
@@ -90,9 +98,13 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
   }, []);
 
   const setAuth = React.useCallback(
-    ({ token, user }: { token: string | null; user: User | null }) => {
-      if (token) localStorage.setItem("token", token);
-      else localStorage.removeItem("token");
+    ({ token, user, refreshToken, accessExpiresAt }: { token: string | null; user: User | null; refreshToken?: string | null; accessExpiresAt?: string | null }) => {
+      if (token) {
+        storeSessionTokens({ token, refreshToken: refreshToken ?? null, accessExpiresAt: accessExpiresAt ?? null });
+        startActivityClock();
+      } else {
+        clearSessionTokens();
+      }
 
       if (user) localStorage.setItem("user", JSON.stringify(user));
       else localStorage.removeItem("user");
@@ -106,14 +118,17 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
   );
 
   const clearAuth = React.useCallback(() => {
-    localStorage.removeItem("token");
+    // Revokes the refresh token on the server so this session can't be
+    // renewed from a copy, then forgets every local credential.
+    revokeSession();
     localStorage.removeItem("user");
     sessionStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);
     setState({ token: null, user: null, loading: false, authRequired: false, verified: false, offlineSession: null });
   }, []);
 
   const setOfflineSession = React.useCallback((session: OfflineSession) => {
-    localStorage.removeItem("token");
+    clearSessionTokens();
+    startActivityClock();
     localStorage.removeItem("user");
     sessionStorage.setItem(OFFLINE_SESSION_STORAGE_KEY, JSON.stringify(session));
     setState({ token: null, user: null, loading: false, authRequired: false, verified: false, offlineSession: session });
@@ -126,13 +141,27 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
 
   React.useEffect(() => {
     const requireAuthentication = () => {
-      localStorage.removeItem("token");
+      clearSessionTokens();
       localStorage.removeItem("user");
       sessionStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);
       setState({ token: null, user: null, loading: false, authRequired: true, verified: false, offlineSession: null });
     };
+    // A silent renewal brings the user's current role, status and
+    // permissions. The new token itself is NOT pushed into React state:
+    // that would re-run every effect keyed on it (refetching each page every
+    // renewal). Requests always go out with the current stored token — the
+    // session keeper substitutes it for any older one a component captured.
+    const renewed = (event: Event) => {
+      const fresh = (event as CustomEvent<{ token: string; user?: User }>).detail?.user;
+      if (!fresh) return;
+      setState((s) => (s.token && JSON.stringify(s.user) !== JSON.stringify(fresh) ? { ...s, user: fresh, verified: true } : s));
+    };
     window.addEventListener("auth-required", requireAuthentication);
-    return () => window.removeEventListener("auth-required", requireAuthentication);
+    window.addEventListener("session-renewed", renewed);
+    return () => {
+      window.removeEventListener("auth-required", requireAuthentication);
+      window.removeEventListener("session-renewed", renewed);
+    };
   }, []);
 
   const activeOfflineSession = state.offlineSession && !isOfflineSessionExpired(state.offlineSession)

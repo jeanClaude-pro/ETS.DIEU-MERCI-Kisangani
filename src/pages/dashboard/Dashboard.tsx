@@ -211,7 +211,7 @@ export default function Dashboard() {
                     </span>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-900">
-                        Vente #{sale.saleId?.slice(-6) || sale._id?.slice(-6) || "N/A"}
+                        {sale.saleCode ? sale.saleCode : `Vente #${sale.saleId?.slice(-6) || sale._id?.slice(-6) || "N/A"}`}
                       </p>
                       <p className="truncate text-xs text-slate-500">
                         {sale.customer?.name || "Inconnu"} · {formatDate(sale.createdAt || sale.date || sale.saleDate)}

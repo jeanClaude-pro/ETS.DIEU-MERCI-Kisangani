@@ -28,6 +28,7 @@ import type { RegionCodeFilter } from "../types";
 import {
   printHtmlDocumentsSequentially,
   buildCashExpenseReceiptHtml,
+  formatReceiptDate,
 } from "../services/printService";
 
 interface ExpenseItem {
@@ -777,39 +778,22 @@ export default function SortieHistory() {
   };
 
   // Print function for expense receipt. Uses the shared canonical thermal
-  // document builder (same architecture as sale/reservation receipts)
+  // document builder (same architecture as sale receipts)
   // instead of a duplicated inline HTML/CSS document.
   const printExpenseReceipt = (expense: ExpenseItem) => {
-      const formattedDate = new Date(expense.createdAt).toLocaleString("fr-FR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Africa/Lubumbashi",
-      });
-
-      const validatedDate = expense.validatedAt
-        ? new Date(expense.validatedAt).toLocaleString("fr-FR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: "Africa/Lubumbashi",
-          })
-        : formattedDate;
-
       const html = buildCashExpenseReceiptHtml({
         expenseId: expense.expenseId,
-        date: formattedDate,
-        validatedDate,
+        date: formatReceiptDate(expense.createdAt),
+        validatedDate: formatReceiptDate(expense.validatedAt || expense.createdAt),
         reason: expense.reason,
         recipientName: expense.recipientName,
         recipientPhone: expense.recipientPhone,
         amount: expense.amount,
         paymentMethod: expense.paymentMethod,
         validatedBy: expense.validatedBy || "ADMIN",
+        recordedBy: expense.recordedBy,
+        notes: expense.notes,
+        region: expense.region,
       });
       void printHtmlDocumentsSequentially([html]).catch((printError: unknown) => {
         setError(printError instanceof Error ? printError.message : "Échec de l'impression.");

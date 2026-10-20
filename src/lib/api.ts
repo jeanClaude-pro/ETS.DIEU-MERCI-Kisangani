@@ -19,7 +19,9 @@ export async function apiFetch<T>(
 
     const data = (await res.json().catch(() => ({}))) as any;
 
-    if (res.status === 401 && typeof window !== 'undefined' && localStorage.getItem('token')) {
+    // TOKEN_EXPIRED was already renewed-and-retried by the session keeper;
+    // if renewal is temporarily impossible the session is kept, not ended.
+    if (res.status === 401 && data?.code !== 'TOKEN_EXPIRED' && typeof window !== 'undefined' && localStorage.getItem('token')) {
         window.dispatchEvent(new CustomEvent('auth-required'));
     }
 

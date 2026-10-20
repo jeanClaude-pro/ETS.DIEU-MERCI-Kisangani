@@ -5,6 +5,7 @@ import { Receipt, RefreshCw, UserRound } from "lucide-react";
 import { Alert, CurrencyToggle, ExchangeRateChip, PageHeader } from "../components/ui";
 import { REGION_CODE_MAP } from "../utils/constants";
 import { useConnectivity } from "../context/ConnectivityContext";
+import { REGION_SCOPE_LABELS, useRegionScope } from "../hooks/useRegionScope";
 
 interface SortieForm {
   reason: string;
@@ -55,6 +56,11 @@ export default function Sortie() {
     currencyMode: "usd",
     region: "China",
   });
+  // A region-limited account always records in its own region.
+  const regionScope = useRegionScope();
+  useEffect(() => {
+    if (regionScope) setForm((previous) => ({ ...previous, region: REGION_SCOPE_LABELS[regionScope] as "Butembo" | "China" }));
+  }, [regionScope, form.region]);
 
   // Load exchange rate
   const loadExchangeRate = async () => {
@@ -328,6 +334,8 @@ export default function Sortie() {
                   onChange={handleChange}
                   className="ui-input"
                   required
+                  disabled={Boolean(regionScope)}
+                  title={regionScope ? "Votre compte est limité à cette région" : undefined}
                 >
                   <option value="Butembo">Butembo (Bbbb)</option>
                   <option value="China">China (Cnnn)</option>

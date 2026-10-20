@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Search, ShieldCheck, UserCheck, UserX, Users } from "lucide-react";
+import { RefreshCw, Search, ShieldCheck, UserCheck, UserPlus, UserX, Users } from "lucide-react";
 import type { AccountStatus, Role } from "../../types/auth";
 import {
   getUserStats,
@@ -10,21 +10,18 @@ import {
   type UserStats,
 } from "../../services/userManagementService";
 import UserReviewDialog from "./UserReviewDialog";
+import CreateUserDialog from "./CreateUserDialog";
+import { REGION_SCOPE_LABELS, ROLE_LABELS } from "../../utils/roles";
 import { EmptyState, LoadingState, MetricCard, PageHeader } from "../../components/ui";
 
+// Accounts are created by administrators; "pending" only holds requests
+// left over from the former public sign-up.
 const TABS: { id: AccountStatus | "suspended_rejected"; label: string }[] = [
-  { id: "pending", label: "Demandes en attente" },
   { id: "active", label: "Utilisateurs actifs" },
+  { id: "pending", label: "Anciennes demandes" },
   { id: "suspended_rejected", label: "Suspendus / refusés" },
 ];
 
-const ROLE_LABELS: Record<Role, string> = {
-  admin: "Administrateur",
-  manager: "Manager",
-  inventory_manager: "Gestionnaire de stock",
-  cashier_supervisor: "Superviseur caisse",
-  staff: "Personnel",
-};
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "ui-badge-warning",
@@ -50,7 +47,8 @@ function formatDate(value?: string) {
 }
 
 export default function Management() {
-  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("pending");
+  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("active");
+  const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "">("");
   const [page, setPage] = useState(1);
@@ -102,18 +100,23 @@ export default function Management() {
       <PageHeader
         eyebrow="Administration"
         title="Gestion des utilisateurs"
-        description="Approbation des comptes, rôles et permissions par module."
+        description="Créez les comptes, attribuez un rôle et la région visible."
         actions={
-          <button type="button" onClick={() => load()} disabled={loading} className="ui-btn ui-btn-secondary">
-            <RefreshCw className={loading ? "animate-spin" : ""} />
-            Actualiser
-          </button>
+          <>
+            <button type="button" onClick={() => load()} disabled={loading} className="ui-btn ui-btn-secondary">
+              <RefreshCw className={loading ? "animate-spin" : ""} />
+              Actualiser
+            </button>
+            <button type="button" onClick={() => setCreating(true)} className="ui-btn ui-btn-primary">
+              <UserPlus /> Créer un compte
+            </button>
+          </>
         }
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard label="En attente" value={stats?.pending ?? "—"} icon={Users} tone="warning" />
         <MetricCard label="Actifs" value={stats?.active ?? "—"} icon={UserCheck} tone="success" />
+        <MetricCard label="Anciennes demandes" value={stats?.pending ?? "—"} icon={Users} tone="warning" />
         <MetricCard label="Suspendus" value={stats?.suspended ?? "—"} icon={UserX} tone="danger" />
         <MetricCard label="Refusés" value={stats?.rejected ?? "—"} icon={ShieldCheck} />
       </div>
@@ -188,8 +191,9 @@ export default function Management() {
                 <tr>
                   <th scope="col">Utilisateur</th>
                   <th scope="col">Rôle</th>
+                  <th scope="col">Région</th>
                   <th scope="col">Statut</th>
-                  <th scope="col">Inscrit le</th>
+                  <th scope="col">Créé le</th>
                   <th scope="col" className="text-right">Actions</th>
                 </tr>
               </thead>
@@ -207,7 +211,8 @@ export default function Management() {
                         </span>
                       </div>
                     </td>
-                    <td className="whitespace-nowrap">{ROLE_LABELS[user.role]}</td>
+                    <td className="whitespace-nowrap">{ROLE_LABELS[user.role] ?? user.role}</td>
+                    <td className="whitespace-nowrap">{REGION_SCOPE_LABELS[user.role === "admin" ? "all" : user.regionScope || "all"]}</td>
                     <td>
                       <span className={`ui-badge ${STATUS_BADGE[user.status || "active"]}`}>
                         {STATUS_LABEL[user.status || "active"]}
@@ -253,6 +258,7 @@ export default function Management() {
       </section>
 
       {selectedUserId && <UserReviewDialog userId={selectedUserId} onClose={closeDialog} />}
+      {creating && <CreateUserDialog onClose={(created) => { setCreating(false); if (created) { setTab("active"); load(); } }} />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { apiFetch } from "../lib/api";
-import type { AccountStatus, Role, User } from "../types/auth";
+import type { AccountStatus, RegionScope, Role, User } from "../types/auth";
 
 export interface UserHistoryEntry {
   action: string;
@@ -63,11 +63,18 @@ export function getUser(userId: string) {
   return apiFetch<UserDetail>(`users/${userId}`);
 }
 
-export function createUser(payload: { username: string; email: string; password: string; role: Role }) {
+export function createUser(payload: {
+  username: string;
+  email: string;
+  password: string;
+  role: Role;
+  regionScope: RegionScope;
+  modulePermissions?: string[];
+}) {
   return apiFetch<ManagedUser>("users", { method: "POST", body: JSON.stringify(payload) });
 }
 
-export function approveUser(userId: string, payload: { role: Role; modulePermissions: string[] }) {
+export function approveUser(userId: string, payload: { role: Role; regionScope: RegionScope; modulePermissions: string[] }) {
   return apiFetch<ManagedUser>(`users/${userId}/approve`, { method: "PATCH", body: JSON.stringify(payload) });
 }
 
@@ -83,8 +90,13 @@ export function reactivateUser(userId: string) {
   return apiFetch<ManagedUser>(`users/${userId}/reactivate`, { method: "PATCH" });
 }
 
-export function updateUserRole(userId: string, role: Role) {
-  return apiFetch<ManagedUser>(`users/${userId}/role`, { method: "PUT", body: JSON.stringify({ role }) });
+/** Role and region are changed together: a shareholder always needs one region. */
+export function updateUserRole(userId: string, role: Role, regionScope: RegionScope) {
+  return apiFetch<ManagedUser>(`users/${userId}/role`, { method: "PUT", body: JSON.stringify({ role, regionScope }) });
+}
+
+export function updateUserRegion(userId: string, regionScope: RegionScope) {
+  return apiFetch<ManagedUser>(`users/${userId}/region`, { method: "PUT", body: JSON.stringify({ regionScope }) });
 }
 
 export function updateUserModules(userId: string, modulePermissions: string[]) {

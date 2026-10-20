@@ -23,7 +23,13 @@ import { Alert, EmptyState, LoadingState, MetricCard, PageHeader } from "../comp
 import jsPDF from "jspdf";
 import RegionFilterPills from "../components/RegionFilterPills";
 import type { RegionCodeFilter } from "../types";
-import { printHtmlDocumentsSequentially } from "../services/printService";
+import {
+  buildCashEntryReceiptHtml,
+  buildCashEntryStubHtml,
+  formatReceiptDate,
+  printHtmlDocumentsSequentially,
+  type CashEntryReceiptData,
+} from "../services/printService";
 
 interface EditHistoryEntry {
   editedBy: string;
@@ -468,123 +474,30 @@ export default function EntryHistory() {
     );
   };
 
-  // Print function for entry receipt
+  // Reprints use the same shared thermal receipt + stub as a new entry.
+  // Entries store no exchange-rate snapshot, so no FC equivalent is printed
+  // here (today's rate would misstate a historical entry).
   const printEntryReceipt = (entry: Entry) => {
-    const html = `
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Reçu d'Entrée d'Argent</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { 
-        font-family: 'Courier New', Courier, monospace; 
-        margin: 0; padding: 0; 
-        font-size: 13px; font-weight: normal; line-height: 1.2;
-        width: 72mm; background-color: white;
-        -webkit-print-color-adjust: exact; print-color-adjust: exact;
-        display: flex; justify-content: center;
-      }
-      .receipt-container { width: 70mm; margin: 0 auto; padding: 0.5mm; border: none; text-align: center; }
-      .header { text-align: center; margin-bottom: 1mm; padding-bottom: 1mm; border-bottom: 2px double #000; }
-      .shop-name { font-size: 15px; font-weight: bold; margin-bottom: 0.5mm; text-transform: uppercase; }
-      .shop-details { font-size: 11px; margin-bottom: 0.3mm; line-height: 1; font-weight: bold; }
-      .receipt-info { margin: 1mm 0; padding: 1mm; background-color: #f8f8f8; border-left: 3px solid #000; }
-      .receipt-title { font-size: 13px; font-weight: bold; margin: 1mm 0; text-transform: uppercase; background-color: #000; color: white; padding: 1mm; border-radius: 2px; }
-      .entry-badge { background-color: #000; color: white; padding: 2mm; font-weight: bold; text-align: center; margin: 1mm 0; font-size: 14px; border-radius: 3px; }
-      .details-section { margin: 1mm 0; padding: 1mm; background-color: #fafafa; border: 1px solid #eee; }
-      .detail-row { display: flex; justify-content: space-between; margin-bottom: 0.5mm; padding: 0 1mm; border-bottom: 1px dotted #ddd; }
-      .detail-label { text-align: left; font-weight: bold; font-size: 12px; flex: 1; }
-      .detail-value { text-align: right; font-weight: bold; font-size: 12px; flex: 1; }
-      .amount-section { font-weight: bold; margin-top: 1mm; padding: 1mm; background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 3px; }
-      .amount-row { display: flex; justify-content: space-between; margin-bottom: 0.3mm; font-size: 13px; padding: 0 1mm; }
-      .payment-method { text-transform: uppercase; font-weight: bold; font-size: 13px; color: #000; }
-      .footer { text-align: center; margin-top: 1mm; font-size: 11px; font-weight: bold; padding: 1mm; background-color: #f8f8f8; border-top: 1px dashed #000; }
-      .agent-info { margin-top: 1mm; text-align: center; font-weight: bold; font-size: 12px; padding: 1mm; background-color: #e8e8e8; border: 1px solid #ccc; border-radius: 2px; }
-      .sender-info { margin: 1mm 0; padding: 1mm; font-weight: bold; text-align: center; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; }
-      .sender-field { margin-bottom: 0.3mm; font-size: 12px; }
-      .cut-line { text-align: center; margin: 1mm 0; font-weight: bold; font-size: 11px; color: #000; letter-spacing: 1px; }
-      .thank-you { font-weight: bold; margin: 0.5mm 0; font-size: 12px; }
-      .warning { font-size: 10px; color: #000; margin: 0.3mm 0; font-weight: bold; }
-      .description { margin: 1mm 0; padding: 1mm; background-color: #f5f5f5; border-left: 3px solid #ccc; font-size: 11px; font-weight: bold; border-radius: 2px; }
-      .section-divider { height: 2px; background: linear-gradient(to right, transparent, #000, transparent); margin: 1mm 0; }
-      @media print {
-        @page { margin: 0 !important; size: 72mm auto !important; }
-        body { margin: 0 !important; padding: 0 !important; width: 72mm !important; min-height: 0 !important; font-size: 13px !important; background: white !important; font-weight: normal !important; height: auto !important; overflow: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: flex !important; justify-content: center !important; }
-        .receipt-container { border: none !important; box-shadow: none !important; margin: 0 auto !important; padding: 0.5mm !important; width: 70mm !important; page-break-after: avoid !important; page-break-inside: avoid !important; }
-        .cut-line { display: none !important; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="receipt-container">
-      <div class="header">
-        <div class="shop-name"><strong>Boutique C'EST DIEU QUI PARTAGE</strong></div>
-        <div class="shop-details"><strong>Av du 1er Janvier N°13, C. Makiso, Kisangani</strong></div>
-        <div class="shop-details">TEL: <strong>0839336794</strong></div>
-        <div class="shop-details"><strong>RCCM/KIS : 22-A-267</strong></div>
-      </div>
-      
-      <div class="section-divider"></div>
-      
-      <div class="receipt-info">
-        <div class="shop-details">DATE: <strong>${formatDate(entry.createdAt)}</strong></div>
-        <div class="shop-details">REÇU #: <strong>${entry.entryId}</strong></div>
-      </div>
-      
-      <div class="entry-badge">
-        <strong>💰 ENTRÉE D'ARGENT CONFIRMÉE 💰</strong>
-      </div>
-      
-      <div class="sender-info">
-        <div class="sender-field">REÇU DE: <strong>${entry.receivedFrom.name.toUpperCase()}</strong></div>
-        <div class="sender-field">TÉLÉPHONE: <strong>${entry.receivedFrom.phone}</strong></div>
-        ${entry.receivedFrom.email ? `<div class="sender-field">EMAIL: <strong>${entry.receivedFrom.email}</strong></div>` : ""}
-      </div>
-      
-      ${entry.description ? `<div class="description"><strong>DESCRIPTION:</strong> <strong>${entry.description}</strong></div>` : ''}
-      
-      <div class="receipt-title">DÉTAILS DE L'ENTRÉE</div>
-      
-      <div class="details-section">
-        <div class="detail-row">
-          <div class="detail-label"><strong>SOURCE:</strong></div>
-          <div class="detail-value"><strong>${entry.source}</strong></div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label"><strong>CATÉGORIE:</strong></div>
-          <div class="detail-value"><strong>${entry.category}</strong></div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label"><strong>MÉTHODE PAIEMENT:</strong></div>
-          <div class="detail-value"><strong>${entry.paymentMethod.toUpperCase()}</strong></div>
-        </div>
-      </div>
-      
-      <div class="amount-section">
-        <div class="amount-row">
-          <div><strong>MONTANT REÇU:</strong></div>
-          <div><strong>$${entry.amount.toFixed(2)}</strong></div>
-        </div>
-      </div>
-      
-      <div class="agent-info">
-        Enregistré par: <strong>${(entry.createdBy?.username || 'Non spécifié').toUpperCase()}</strong>
-      </div>
-      
-      <div class="footer">
-        <div class="thank-you"><strong>ENTRÉE ENREGISTRÉE AVEC SUCCÈS !</strong></div>
-        <div class="warning"><strong>Conserver ce reçu comme preuve</strong></div>
-        <div class="warning"><strong>Merci pour votre confiance</strong></div>
-        <div class="thank-you"><strong>À BIENTÔT !</strong></div>
-      </div>
-
-    </div>
-  </body>
-</html>
-`;
-    void printHtmlDocumentsSequentially([html]).catch((printError: unknown) => {
+    const receipt: CashEntryReceiptData = {
+      entryId: entry.entryId,
+      date: formatReceiptDate(entry.createdAt),
+      source: entry.source,
+      category: entry.category,
+      paymentMethod: entry.paymentMethod,
+      description: entry.description,
+      receivedFrom: {
+        name: entry.receivedFrom?.name || "—",
+        phone: entry.receivedFrom?.phone || "",
+        email: entry.receivedFrom?.email || "",
+      },
+      agent: entry.createdBy?.username || "Non spécifié",
+      amount: entry.amount,
+      region: entry.region,
+    };
+    void printHtmlDocumentsSequentially([
+      buildCashEntryReceiptHtml(receipt),
+      buildCashEntryStubHtml(receipt),
+    ]).catch((printError: unknown) => {
       setError(printError instanceof Error ? printError.message : "Échec de l'impression.");
     });
   };

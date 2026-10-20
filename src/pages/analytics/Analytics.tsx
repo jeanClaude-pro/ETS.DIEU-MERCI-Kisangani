@@ -5,25 +5,21 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   BarChart3,
-  TrendingUp,
-  DollarSign,
   Users,
   Package,
   ArrowUp,
   ArrowDown,
-  Calendar,
   ChevronLeft,
   ChevronRight,
   Receipt,
-  Calculator,
   Shield,
-  FileText,
   RefreshCw,
   Download,
   ArrowRight,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import RegionFilterPills from "../../components/RegionFilterPills";
+import CashflowOverview from "../../components/analytics/CashflowOverview";
 import { PageHeader } from "../../components/ui";
 import type { RegionCodeFilter } from "../../types";
 import { useConnectivity } from "../../context/ConnectivityContext";
@@ -58,6 +54,7 @@ interface AnalyticsData {
   }[];
   totalEntries: number;
   netRevenue: number;
+  averageSale?: number;
   salesByDay: {
     date: string;
     dayName: string;
@@ -159,11 +156,15 @@ const getTimeframeParams = (
       break;
       
     case "week": {
+      // The whole calendar week, Monday to Sunday; days still to come are
+      // shown on the chart but carry no data yet.
       const weekStart = new Date(today);
       const daysSinceMonday = (weekStart.getUTCDay() + 6) % 7;
       weekStart.setUTCDate(weekStart.getUTCDate() - daysSinceMonday);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
       params.set("from", weekStart.toISOString().split('T')[0]);
-      params.set("to", today.toISOString().split('T')[0]);
+      params.set("to", weekEnd.toISOString().split('T')[0]);
       break;
     }
       
@@ -205,7 +206,7 @@ export default function Analytics() {
   const [timeframeData, setTimeframeData] = useState<TimeframeData | null>(null);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [regionFilter, setRegionFilter] = useState<RegionFilter>("");
-  const [reservationsStats, setReservationsStats] = useState<{ count: number; value: number }>({ count: 0, value: 0 });
+  const [chartRefreshKey, setChartRefreshKey] = useState(0);
 
   useEffect(() => {
     if (shouldSeeOnlyTodayData() && timeframe !== "day") {
@@ -256,7 +257,6 @@ export default function Analytics() {
       validatedExpenses: cachedData?.validatedExpenses,
     });
     setAnalytics(local.data);
-    setReservationsStats({ count: local.reservations.count, value: local.reservations.value });
     setTimeframeData({ description: range.description, start: range.start.toISOString(), end: range.end.toISOString() });
     setAvailableYears([...new Set(sales.map((sale) => Number(new Date(new Date(sale.createdAt).getTime() + 7_200_000).toISOString().slice(0, 4))))].sort((a, b) => b - a));
     setUsingLocalData(true);
@@ -282,10 +282,6 @@ export default function Analytics() {
       setAnalytics(payload.data);
       setUsingLocalData(false);
       setLocalNotice("");
-      setReservationsStats({
-        count: Number(payload.reservations?.count || 0),
-        value: Number(payload.reservations?.value || 0),
-      });
       setTimeframeData(payload.timeframe || null);
       const years = Array.isArray(payload.availableYears) ? payload.availableYears : [];
       setAvailableYears(years);
@@ -449,7 +445,6 @@ export default function Analytics() {
       { label: 'Revenu Net (USD)', value: formatCurrency(analytics.netRevenue), highlight: true },
       { label: 'Clients Servis', value: analytics.totalCustomers.toString(), highlight: false },
       { label: 'Produits Distincts', value: analytics.totalProducts.toString(), highlight: false },
-      { label: 'Réservations', value: `${reservationsStats.count} (${formatCurrency(reservationsStats.value)})`, highlight: false },
     ];
 
     metrics.forEach((m, i) => {
@@ -669,8 +664,6 @@ export default function Analytics() {
     );
   }
 
-  const chartData = getChartDataForTimeframe();
-  const maxRevenue = Math.max(...chartData.map((d: any) => d.revenue), 1);
 
   function getChartDataForTimeframe() {
     if (!analytics) return [];
@@ -718,7 +711,7 @@ export default function Analytics() {
           ) : undefined}
           actions={
             <>
-              <button type="button" onClick={fetchAnalytics} disabled={loading} className="ui-btn ui-btn-secondary">
+              <button type="button" onClick={() => { setChartRefreshKey((value) => value + 1); void fetchAnalytics(); }} disabled={loading} className="ui-btn ui-btn-secondary">
                 <RefreshCw className={loading ? "animate-spin" : ""} /> Actualiser
               </button>
               <button type="button" onClick={generatePDF} disabled={loading || !analytics} className="ui-btn ui-btn-primary">
@@ -792,128 +785,34 @@ export default function Analytics() {
           </div>
         </section>
 
-        {/* Key Metrics */}
-        <section aria-labelledby="financial-overview-title">
-          <h2 id="financial-overview-title" className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Aperçu financier</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Cash-flow chart: sales (green), money entries (yellow), validated
+            expenses (red), with headline figures and automatic insights. */}
+        <CashflowOverview
+          params={reportParams().toString()}
+          online={connectivity.status === "online"}
+          refreshKey={chartRefreshKey}
+        />
+
+        {/* Additional Metrics */}
+        <section aria-labelledby="operational-indicators-title">
+          <h2 id="operational-indicators-title" className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Indicateurs opérationnels</h2>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1">
           <Link to="/sales" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-slate-500">
-                  Ventes Totales
-                </p>
+                <p className="text-xs font-medium text-slate-500">Nombre de ventes</p>
                 <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
                   {analytics.totalSales}
                 </p>
-                <div className="mt-2 flex items-center">
-                  {analytics.recentTrends.salesGrowth >= 0 ? (
-                    <ArrowUp className="h-3.5 w-3.5 text-emerald-600" />
-                  ) : (
-                    <ArrowDown className="h-3.5 w-3.5 text-red-600" />
-                  )}
-                  <span
-                    className={`ml-1 text-xs font-semibold tabular-nums ${
-                      analytics.recentTrends.salesGrowth >= 0
-                        ? "text-emerald-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {Math.abs(analytics.recentTrends.salesGrowth)}%
-                  </span>
-                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Panier moyen <span className="font-semibold tabular-nums text-slate-700">{formatCurrency(analytics.averageSale || 0)}</span>
+                </p>
               </div>
               <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
                 <BarChart3 className="h-5 w-5" />
               </div>
             </div>
           </Link>
-
-          <Link to="/sales" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-500">Revenu Total</p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
-                  {formatCurrency(analytics.totalRevenue)}
-                </p>
-                <div className="mt-2 flex items-center">
-                  {analytics.recentTrends.revenueGrowth >= 0 ? (
-                    <ArrowUp className="h-3.5 w-3.5 text-emerald-600" />
-                  ) : (
-                    <ArrowDown className="h-3.5 w-3.5 text-red-600" />
-                  )}
-                  <span
-                    className={`ml-1 text-xs font-semibold tabular-nums ${
-                      analytics.recentTrends.revenueGrowth >= 0
-                        ? "text-emerald-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {Math.abs(analytics.recentTrends.revenueGrowth)}%
-                  </span>
-                </div>
-              </div>
-              <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
-                <DollarSign className="h-5 w-5" />
-              </div>
-            </div>
-          </Link>
-
-          <Link to="/entryhistory" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-500">
-                  Entrées d'Argent
-                </p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
-                  {formatCurrency(analytics.totalEntries)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Total reçu</p>
-              </div>
-              <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
-                <FileText className="h-5 w-5" />
-              </div>
-            </div>
-          </Link>
-
-          <Link to="/sortiehistory" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-red-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-500">
-                  Dépenses Validées
-                </p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-red-700 lg:text-3xl">
-                  {formatCurrency(analytics.totalValidatedExpenses)}
-                </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  {analytics.totalValidatedExpenseCount} dépense{analytics.totalValidatedExpenseCount === 1 ? "" : "s"} dans ce rapport
-                </p>
-              </div>
-              <div className="rounded-lg bg-red-50 p-2 text-red-700">
-                <Receipt className="h-5 w-5" />
-              </div>
-            </div>
-          </Link>
-        </div>
-        </section>
-
-        {/* Additional Metrics */}
-        <section aria-labelledby="operational-indicators-title">
-          <h2 id="operational-indicators-title" className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Indicateurs opérationnels</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-500">Revenu Net</p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
-                  {formatCurrency(analytics.netRevenue)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">(Ventes + Entrées) - Dépenses</p>
-              </div>
-              <div className="rounded-lg bg-blue-50 p-2 text-blue-700">
-                <Calculator className="h-5 w-5" />
-              </div>
-            </div>
-          </div>
 
           <Link to="/customers" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
             <div className="flex items-center justify-between">
@@ -958,24 +857,6 @@ export default function Analytics() {
             </div>
           </Link>
 
-          <Link to="/reservationhistory" className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-blue-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-500">
-                  Réservations
-                </p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-950 lg:text-3xl">
-                  {reservationsStats.count}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {formatCurrency(reservationsStats.value)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
-                <Calendar className="h-5 w-5" />
-              </div>
-            </div>
-          </Link>
         </div>
         </section>
 
@@ -1049,121 +930,6 @@ export default function Analytics() {
           )}
         </section>
         )}
-
-        {/* Sales Chart */}
-        <section className="order-1 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="sales-performance-title">
-          <div className="mb-5 flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Performance des ventes</p>
-              <h2 id="sales-performance-title" className="mt-1 flex items-center gap-2 text-base font-semibold text-slate-950">
-                <TrendingUp className="h-4 w-4 text-blue-700" /> Tendances des ventes
-              </h2>
-            </div>
-            <span className="text-sm font-medium text-slate-500">{getTimeframeLabel()}</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            {chartData.length === 0 ? (
-              <div className="py-10 text-center">
-                <span className="mx-auto grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-slate-400"><TrendingUp className="h-5 w-5" /></span>
-                <p className="mt-3 text-sm font-semibold text-slate-700">Aucune vente sur cette période</p>
-                <p className="mt-1 text-xs text-slate-500">Les tendances apparaîtront dès qu'une vente sera enregistrée.</p>
-              </div>
-            ) : timeframe === "year" ? (
-              // Yearly view with months for selected year
-              <div className="mb-2">
-                <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <Calendar className="h-4 w-4 text-slate-400" />
-                  Année {selectedYear}
-                </h3>
-                <div className="min-w-[300px] space-y-4">
-                  {chartData.map((month: any, index: number) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-3 sm:gap-4"
-                    >
-                      <div className="w-28 text-xs font-medium capitalize text-slate-600 sm:w-40 sm:text-sm">
-                        {month.monthName}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="truncate text-xs text-slate-700 sm:text-sm">
-                            {month.sales} ventes
-                          </span>
-                          <span className="ml-2 whitespace-nowrap text-xs font-semibold tabular-nums text-slate-900 sm:text-sm">
-                            {formatCurrency(month.revenue)}
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full rounded-full bg-slate-100">
-                          <div
-                            className="h-1.5 rounded-full bg-blue-700 transition-[width] duration-300"
-                            style={{
-                              width: `${(month.revenue / maxRevenue) * 100}%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              // Daily, Weekly, Monthly view
-              chartData.map((item: any, index: number) => (
-                <div
-                  key={index}
-                  className="flex min-w-[300px] items-center gap-3 border-b border-slate-100 py-3 last:border-b-0 sm:gap-4"
-                >
-                  <div className="w-32 text-xs font-medium text-slate-600 sm:w-48 sm:text-sm">
-                    {timeframe === "day" ? (
-                      <div>
-                        <div className="capitalize">
-                          {item.dayName}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {item.date}
-                        </div>
-                      </div>
-                    ) : timeframe === "week" ? (
-                      <div>
-                        <div className="text-xs sm:text-sm">
-                          {item.week}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          Du {item.startDate} au {item.endDate}
-                        </div>
-                      </div>
-                    ) : timeframe === "month" ? (
-                      <div className="capitalize">
-                        {item.monthName}
-                      </div>
-                    ) : (
-                      item.monthName
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-slate-700 sm:text-sm">
-                        {item.sales} ventes
-                      </span>
-                      <span className="ml-2 whitespace-nowrap text-xs font-semibold tabular-nums text-slate-900 sm:text-sm">
-                        {formatCurrency(item.revenue)}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-slate-100">
-                      <div
-                        className="h-1.5 rounded-full bg-blue-700 transition-[width] duration-300"
-                        style={{
-                          width: `${(item.revenue / maxRevenue) * 100}%`,
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
 
         {/* Top Products */}
         <section className="order-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-labelledby="sold-items-title">

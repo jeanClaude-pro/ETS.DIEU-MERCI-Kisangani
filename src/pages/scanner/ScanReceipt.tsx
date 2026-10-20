@@ -5,6 +5,8 @@ import { useAuth } from "../../hooks/useAuth";
 import { useConnectivity } from "../../context/ConnectivityContext";
 import { useZxingScanner } from "../../hooks/useZxingScanner";
 import { isValidBarcodeToken } from "../../utils/barcodeId";
+import { canonicalSaleCode, saleCodeFor } from "../../utils/saleCode";
+import { offlineDb } from "../../lib/offlineDb";
 import { getOfflineSaleByBarcode } from "../../lib/offlineDb";
 import { serverUrl } from "../../utils/constants";
 
@@ -41,9 +43,12 @@ export default function ScanReceipt() {
   const [inputValue, setInputValue] = useState("");
 
   const lookup = useCallback(async (rawValue: string) => {
-    const value = rawValue.trim().toUpperCase();
-    if (!value) return;
-    if (!isValidBarcodeToken(value)) {
+    const typed = rawValue.trim().toUpperCase();
+    if (!typed) return;
+    // A printed sale code (V-261020-K7QM3) or an older receipt's barcode.
+    const saleCode = canonicalSaleCode(typed);
+    const value = saleCode ?? typed.replace(/-/g, "");
+    if (!saleCode && !isValidBarcodeToken(value)) {
       setState("malformed");
       setResult(null);
       return;
@@ -74,7 +79,10 @@ export default function ScanReceipt() {
 
     // Offline, or the server lookup itself failed — fall back to this
     // device's own local records and say so clearly (Part M/N).
-    const localSale = await getOfflineSaleByBarcode(value);
+    const localSale = saleCode
+      ? (await offlineDb.offlineSales.toArray()).find((row) =>
+          saleCodeFor({ type: "sale", occurredAt: row.occurredAt, barcodeToken: row.barcodeToken }) === saleCode)
+      : await getOfflineSaleByBarcode(value);
     if (!localSale) {
       setState("not-found");
       setResult(null);
@@ -83,7 +91,7 @@ export default function ScanReceipt() {
     const itemCount = localSale.payload.items.reduce((sum, item) => sum + item.quantity, 0);
     const rate = localSale.payload.exchangeRateSnapshot?.rate;
     setResult({
-      receiptNumber: localSale.receiptNumber,
+      receiptNumber: saleCodeFor({ type: "sale", occurredAt: localSale.occurredAt, barcodeToken: localSale.barcodeToken }) || localSale.receiptNumber,
       occurredAt: localSale.occurredAt,
       customerName: localSale.payload.customer.isWalkIn ? "Walk-in Customer" : localSale.payload.customer.name,
       totalUSD: localSale.payload.total,
@@ -188,7 +196,7 @@ export default function ScanReceipt() {
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Scannez ou saisissez le code"
+                placeholder="Ex. V-261020-K7QM3 ou code-barres"
                 className="ui-input flex-1 uppercase tracking-wide placeholder:normal-case placeholder:tracking-normal"
                 autoComplete="off"
                 autoCapitalize="characters"
