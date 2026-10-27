@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Search, ShieldCheck, UserCheck, UserPlus, UserX, Users } from "lucide-react";
+import { KeyRound, RefreshCw, Search, ShieldCheck, UserCheck, UserPlus, UserX, Users } from "lucide-react";
 import type { AccountStatus, Role } from "../../types/auth";
 import {
   getUserStats,
@@ -11,6 +11,7 @@ import {
 } from "../../services/userManagementService";
 import UserReviewDialog from "./UserReviewDialog";
 import CreateUserDialog from "./CreateUserDialog";
+import ChangePasswordDialog from "./ChangePasswordDialog";
 import { REGION_SCOPE_LABELS, ROLE_LABELS } from "../../utils/roles";
 import { EmptyState, LoadingState, MetricCard, PageHeader } from "../../components/ui";
 
@@ -49,6 +50,7 @@ function formatDate(value?: string) {
 export default function Management() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("active");
   const [creating, setCreating] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "">("");
   const [page, setPage] = useState(1);
@@ -103,6 +105,9 @@ export default function Management() {
         description="Créez les comptes, attribuez un rôle et la région visible."
         actions={
           <>
+            <button type="button" onClick={() => setChangingPassword(true)} className="ui-btn ui-btn-secondary">
+              <KeyRound /> Modifier mon mot de passe
+            </button>
             <button type="button" onClick={() => load()} disabled={loading} className="ui-btn ui-btn-secondary">
               <RefreshCw className={loading ? "animate-spin" : ""} />
               Actualiser
@@ -259,6 +264,7 @@ export default function Management() {
 
       {selectedUserId && <UserReviewDialog userId={selectedUserId} onClose={closeDialog} />}
       {creating && <CreateUserDialog onClose={(created) => { setCreating(false); if (created) { setTab("active"); load(); } }} />}
+      {changingPassword && <ChangePasswordDialog onClose={() => setChangingPassword(false)} />}
     </div>
   );
 }

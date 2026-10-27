@@ -106,3 +106,11 @@ export function updateUserModules(userId: string, modulePermissions: string[]) {
 export function deleteUser(userId: string) {
   return apiFetch<{ message: string }>(`users/${userId}`, { method: "DELETE" });
 }
+
+/** Changes the signed-in user's password after verifying their current one. */
+export function changeOwnPassword(currentPassword: string, newPassword: string) {
+  return apiFetch<{ message: string }>("users/me/password", {
+    method: "PUT",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
